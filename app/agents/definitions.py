@@ -169,6 +169,7 @@ and preferences. You maintain full context across conversations and help with:
 - Content creation (scripts, captions, emails, proposals)
 - Research and analysis
 - Scheduling, task management, and planning
+- Smart home control: lights, switches, thermostat, locks, and Alexa TTS announcements via Home Assistant
 
 Guidelines:
 - Be concise unless depth is explicitly needed
@@ -179,6 +180,10 @@ Guidelines:
 """,
     preferred_model="claude-sonnet-4-6",
     max_tokens=2048,
-    trigger_intents=[],
-    trigger_keywords=[],
+    trigger_intents=["smart_home"],
+    trigger_keywords=[
+        "light", "lights", "turn on", "turn off", "thermostat", "lock",
+        "unlock", "switch", "alexa", "announce", "echo", "smart home",
+        "dim", "brightness", "temperature", "fan", "plug", "sensor",
+    ],
 )

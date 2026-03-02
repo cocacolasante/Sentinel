@@ -92,6 +92,21 @@ services:
     networks:
       - brain-net
 
+  # ── Home Assistant (Smart Home Controller) ───────────────────
+  home-assistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: ai-homeassistant
+    restart: unless-stopped
+    privileged: true
+    environment:
+      TZ: ${TIMEZONE}
+    volumes:
+      - ha-config:/config
+    networks:
+      - brain-net
+    # Port 8123 is internal only — Brain reaches HA at http://home-assistant:8123
+    # To access HA UI locally: ssh -L 8123:localhost:8123 user@server
+
   # ── Nginx (Reverse Proxy + SSL Termination) ───────────────────
   nginx:
     image: nginx:alpine
@@ -250,3 +265,4 @@ volumes:
   celery-beat-data:
   prometheus-data:
   grafana-data:
+  ha-config:
