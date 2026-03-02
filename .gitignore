@@ -37,6 +37,9 @@ logs/
 setup.md
 slack_setup.md
 
+# Local dev overrides — never deploy to production
+docker-compose.override.yml
+
 google_credentials.json
 google_token.json
 ALEXA_HA_SETUP_CLOUD.md

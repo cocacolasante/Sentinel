@@ -129,14 +129,29 @@ class LLMRouter:
             system=system,
             messages=messages,
         )
-        latency_ms = round((time.monotonic() - t0) * 1000, 1)
+        latency_s  = time.monotonic() - t0
 
         input_tok  = getattr(response.usage, "input_tokens",  0)
         output_tok = getattr(response.usage, "output_tokens", 0)
 
         # ── Record actual usage (always after a successful call) ──────────────
-        cost_tracker.record(model, input_tok, output_tok)
+        call_cost = cost_tracker.record(model, input_tok, output_tok)
 
+        # ── Prometheus metrics ────────────────────────────────────────────────
+        try:
+            from app.observability.prometheus_metrics import (
+                LLM_REQUESTS, LLM_COST_USD, LLM_TOKENS, LLM_LATENCY,
+            )
+            agent_name = agent.name if agent else "default"
+            LLM_REQUESTS.labels(model=model, agent=agent_name, source="chat", intent="default").inc()
+            LLM_COST_USD.labels(model=model, agent=agent_name).inc(call_cost.call_cost_usd)
+            LLM_TOKENS.labels(model=model, direction="input").inc(input_tok)
+            LLM_TOKENS.labels(model=model, direction="output").inc(output_tok)
+            LLM_LATENCY.labels(model=model, agent=agent_name).observe(latency_s)
+        except Exception:
+            pass
+
+        latency_ms = round(latency_s * 1000, 1)
         logger.info(
             "LLM | model={model} | in={in_tok} | out={out_tok} | {ms}ms",
             model=model, in_tok=input_tok, out_tok=output_tok, ms=latency_ms,

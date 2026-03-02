@@ -99,12 +99,13 @@ def _sentry_before_send(event, hint):
 _init_loguru()
 _init_sentry()
 
-from app.router import chat                                           # noqa: E402
-from app.router.integrations   import router as integrations_router  # noqa: E402
-from app.router.feedback       import router as feedback_router      # noqa: E402
-from app.router.observability  import router as observe_router       # noqa: E402
-from app.router.costs          import router as costs_router         # noqa: E402
-from app.router.slack          import start_socket_mode              # noqa: E402
+from app.router import chat                                               # noqa: E402
+from app.router.integrations   import router as integrations_router      # noqa: E402
+from app.router.feedback       import router as feedback_router          # noqa: E402
+from app.router.observability  import router as observe_router           # noqa: E402
+from app.router.costs          import router as costs_router             # noqa: E402
+from app.router.tasks_control  import router as tasks_control_router     # noqa: E402
+from app.router.slack          import start_socket_mode                  # noqa: E402
 from app.observability.event_bus import event_bus                    # noqa: E402
 from prometheus_fastapi_instrumentator import Instrumentator          # noqa: E402
 
@@ -168,11 +169,12 @@ Instrumentator(
     excluded_handlers=["/metrics", "/", "/api/v1/health"],
 ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
-app.include_router(chat.router,         prefix="/api/v1", tags=["chat"])
-app.include_router(integrations_router, prefix="/api/v1", tags=["integrations"])
-app.include_router(feedback_router,     prefix="/api/v1", tags=["feedback"])
-app.include_router(observe_router,      prefix="/api/v1", tags=["observability"])
-app.include_router(costs_router,        prefix="/api/v1", tags=["costs"])
+app.include_router(chat.router,          prefix="/api/v1", tags=["chat"])
+app.include_router(integrations_router,  prefix="/api/v1", tags=["integrations"])
+app.include_router(feedback_router,      prefix="/api/v1", tags=["feedback"])
+app.include_router(observe_router,       prefix="/api/v1", tags=["observability"])
+app.include_router(costs_router,         prefix="/api/v1", tags=["costs"])
+app.include_router(tasks_control_router, prefix="/api/v1", tags=["tasks"])
 
 
 @app.get("/", tags=["root"])

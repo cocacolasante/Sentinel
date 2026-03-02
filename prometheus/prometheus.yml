@@ -22,6 +22,28 @@ scrape_configs:
     static_configs:
       - targets: ["celery-exporter:9808"]
 
+  # Flower — Celery task monitoring
+  - job_name: flower
+    static_configs:
+      - targets: ["flower:5555"]
+    metrics_path: /metrics
+
+  # n8n — workflow executor
+  - job_name: n8n
+    static_configs:
+      - targets: ["n8n:5678"]
+    metrics_path: /metrics
+
+  # PostgreSQL — connection pool, query stats
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  # Host — CPU, memory, disk, network
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
   # Prometheus self-metrics
   - job_name: prometheus
     static_configs:

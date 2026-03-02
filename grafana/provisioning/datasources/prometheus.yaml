@@ -11,3 +11,23 @@ datasources:
     jsonData:
       httpMethod: POST
       timeInterval: 15s
+
+  - name: Loki
+    type: loki
+    uid: loki
+    url: http://loki:3100
+    access: proxy
+    editable: false
+
+  - name: PostgreSQL
+    type: postgres
+    uid: postgres
+    url: postgres:5432
+    user: ${POSTGRES_USER}
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD}
+    jsonData:
+      database: ${POSTGRES_DB}
+      sslmode: disable
+      postgresVersion: 1600
+    editable: false

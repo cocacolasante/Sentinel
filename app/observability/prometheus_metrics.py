@@ -38,8 +38,20 @@ LLM_TOKENS = Counter(
 LLM_LATENCY = Histogram(
     "brain_llm_latency_seconds",
     "LLM API round-trip latency",
-    ["model"],
+    ["model", "agent"],
     buckets=[0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 20.0, float("inf")],
+)
+
+LLM_REQUESTS = Counter(
+    "brain_llm_requests_total",
+    "Total LLM requests routed",
+    ["model", "agent", "source", "intent"],
+)
+
+LLM_COST_USD = Counter(
+    "brain_llm_cost_usd_total",
+    "Cumulative LLM cost in USD",
+    ["model", "agent"],
 )
 
 # ── Skills ────────────────────────────────────────────────────────────────────
@@ -72,4 +84,9 @@ RATE_LIMITED_TOTAL = Counter(
     "brain_rate_limited_total",
     "Number of requests blocked by per-session rate limiter",
     ["window"],  # window: minute | hour
+)
+
+ACTIVE_SESSIONS = Gauge(
+    "brain_active_sessions",
+    "Number of sessions with activity in the last 4 hours (Redis hot memory)",
 )
