@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     # ── Timezone ───────────────────────────────────────────────
     timezone: str = "America/Chicago"
 
+    # ── TELOS ──────────────────────────────────────────────────
+    telos_dir: str = "/home/ubuntu/ai-brain/telos"
+    telos_cache_ttl_seconds: int = 300
+
+    # ── Memory ─────────────────────────────────────────────────
+    openai_embedding_model: str = "text-embedding-3-small"
+    qdrant_collection: str = "brain_memories"
+    qdrant_vector_size: int = 1536
+    memory_flush_interval_turns: int = 10
+
     @property
     def postgres_dsn(self) -> str:
         return (

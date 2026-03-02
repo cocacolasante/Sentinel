@@ -23,6 +23,7 @@ from fastapi import FastAPI
 
 from app.router import chat
 from app.router.integrations import router as integrations_router
+from app.router.feedback     import router as feedback_router
 from app.router.slack        import start_socket_mode
 from app.config              import get_settings
 
@@ -46,6 +47,19 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error("PostgreSQL init failed -- check POSTGRES_* env vars: %s", exc)
 
+    # Initialise Qdrant collection
+    try:
+        from app.memory.qdrant_client import QdrantMemory
+        qm = QdrantMemory(
+            host=settings.qdrant_host,
+            port=settings.qdrant_port,
+            collection=settings.qdrant_collection,
+        )
+        await qm.init_collection()
+        logger.info("Qdrant ready")
+    except Exception as exc:
+        logger.error("Qdrant init failed (non-fatal): %s", exc)
+
     # Launch Slack Socket Mode in the background (non-blocking)
     asyncio.create_task(start_socket_mode())
 
@@ -65,6 +79,7 @@ app = FastAPI(
 
 app.include_router(chat.router,         prefix="/api/v1", tags=["chat"])
 app.include_router(integrations_router, prefix="/api/v1", tags=["integrations"])
+app.include_router(feedback_router,     prefix="/api/v1", tags=["feedback"])
 
 
 @app.get("/", tags=["root"])

@@ -73,3 +73,39 @@ CREATE TABLE IF NOT EXISTS user_profile (
     value       TEXT        NOT NULL,
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ── PAI: Session summaries (warm memory tier) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS session_summaries (
+    id          BIGSERIAL   PRIMARY KEY,
+    session_id  TEXT        NOT NULL,
+    summary     TEXT        NOT NULL,
+    turn_count  INT         NOT NULL DEFAULT 0,
+    intent_mix  TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_session_summaries_session ON session_summaries (session_id, created_at DESC);
+
+-- ── PAI: Qdrant cross-reference (cold memory tier) ────────────────────────────
+CREATE TABLE IF NOT EXISTS interaction_embeddings (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id   TEXT        NOT NULL,
+    qdrant_id    TEXT        NOT NULL,
+    content_hash TEXT        NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_embeddings_session ON interaction_embeddings (session_id);
+
+-- ── PAI: Interaction ratings (learning tier) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS interaction_ratings (
+    id             BIGSERIAL   PRIMARY KEY,
+    session_id     TEXT        NOT NULL,
+    message_index  INT         NOT NULL DEFAULT 0,
+    rating         SMALLINT    NOT NULL CHECK (rating BETWEEN 1 AND 10),
+    comment        TEXT,
+    intent         TEXT,
+    source         TEXT        DEFAULT 'api',
+    qdrant_stored  BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ratings_session ON interaction_ratings (session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ratings_intent  ON interaction_ratings (intent, rating DESC);

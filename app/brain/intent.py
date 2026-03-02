@@ -36,15 +36,7 @@ _SYSTEM = (
 
 _USER_TEMPLATE = """Classify this message into one of these intents:
 
-gmail_read    — read, check, or search emails
-gmail_send    — compose, send, or draft an email
-calendar_read — check schedule, events, or availability
-calendar_write — create, update, reschedule, or cancel a calendar event
-github_read   — check issues, PRs, notifications, or repo info
-github_write  — create an issue, comment on a PR, close an issue
-smart_home    — control or query a smart home device (lights, thermostat, locks, etc.)
-n8n_execute   — run a specific n8n workflow by name
-chat          — anything else: analysis, writing, code, questions, conversation
+{available_skills}
 
 Return ONLY valid JSON matching this schema exactly:
 {{
@@ -68,6 +60,16 @@ Intent-specific param examples:
 
 Message: {message}"""
 
+_DEFAULT_SKILLS = """gmail_read    — read, check, or search emails
+gmail_send    — compose, send, or draft an email
+calendar_read — check schedule, events, or availability
+calendar_write — create, update, reschedule, or cancel a calendar event
+github_read   — check issues, PRs, notifications, or repo info
+github_write  — create an issue, comment on a PR, close an issue
+smart_home    — control or query a smart home device (lights, thermostat, locks, etc.)
+n8n_execute   — run a specific n8n workflow by name
+chat          — anything else: analysis, writing, code, questions, conversation"""
+
 
 # ── Classifier ────────────────────────────────────────────────────────────────
 
@@ -81,20 +83,24 @@ class IntentClassifier:
             self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         return self._client
 
-    def classify(self, message: str) -> dict:
+    def classify(self, message: str, available_skills: str = "") -> dict:
         """
         Classify a message and return a dict with keys:
           intent (str), confidence (float), params (dict)
         Falls back to {"intent": "chat", "confidence": 0.5, "params": {}} on any error.
         """
         try:
+            skill_list = available_skills.strip() if available_skills.strip() else _DEFAULT_SKILLS
             response = self.client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=300,
                 system=_SYSTEM,
                 messages=[{
                     "role": "user",
-                    "content": _USER_TEMPLATE.format(message=message),
+                    "content": _USER_TEMPLATE.format(
+                        message=message,
+                        available_skills=skill_list,
+                    ),
                 }],
             )
             raw = response.content[0].text.strip()

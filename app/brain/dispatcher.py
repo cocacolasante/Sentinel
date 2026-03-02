@@ -1,43 +1,31 @@
 """
-Brain Dispatcher — the central orchestrator for Phase 2.
+Brain Dispatcher — the central orchestrator.
 
 Flow for each incoming message:
-  1. Check Redis for a pending write-action awaiting confirmation
-  2. If confirming/cancelling → execute or abort pending action
-  3. Otherwise classify intent via IntentClassifier (Haiku)
-  4. If integration intent → call integration, build context string
-  5. Augment the message with context → call LLM router
-  6. Store (user, assistant) exchange in Redis hot memory
-  7. Return reply to caller (REST or Slack)
-
-Write actions that need confirmation (email send) store a PendingAction in
-Redis with a 5-minute TTL. The user says "send it", "confirm", "yes", etc.
-Reversible or low-risk writes (calendar, smart home, GitHub issues) execute
-immediately.
+  1. Fire PRE_PROCESS hooks (security check, logging)
+  2. Check Redis for a pending write-action awaiting confirmation
+  3. If confirming/cancelling → execute or abort pending action
+  4. Otherwise classify intent via IntentClassifier (Haiku, registry-driven)
+  5. Select Agent personality for the classified intent
+  6. Dispatch to SkillRegistry → execute skill → SkillResult
+  7. Augment the message with context → call LLM router (with agent)
+  8. Persist turn to MemoryManager (Redis hot + Postgres flush + Qdrant)
+  9. Fire POST_PROCESS hooks (logging)
+  10. Return DispatchResult to caller (REST or Slack)
 """
 
+from __future__ import annotations
+
 import asyncio
-import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from app.brain.intent      import IntentClassifier
 from app.brain.llm_router  import LLMRouter
-from app.memory.redis_client import RedisMemory
 from app.config            import get_settings
 
 logger   = logging.getLogger(__name__)
 settings = get_settings()
-
-# Lazy-import integrations so missing deps don't crash the whole app
-def _load_integrations():
-    from app.integrations.gmail            import GmailClient
-    from app.integrations.google_calendar  import CalendarClient
-    from app.integrations.github           import GitHubClient
-    from app.integrations.n8n_bridge       import N8nBridge
-    from app.integrations.home_assistant   import HomeAssistantClient
-    return GmailClient(), CalendarClient(), GitHubClient(), N8nBridge(), HomeAssistantClient()
-
 
 # ── Confirmation trigger words ────────────────────────────────────────────────
 _CONFIRM_WORDS = {"confirm", "send", "yes", "do it", "proceed", "go ahead", "send it"}
@@ -48,199 +36,200 @@ PENDING_TTL = 300  # 5 minutes
 
 @dataclass
 class DispatchResult:
-    reply:   str
-    intent:  str
+    reply:      str
+    intent:     str
     session_id: str
+    agent:      str = "default"
+
+
+def _build_skill_registry():
+    """Construct and return a fully-populated SkillRegistry."""
+    from app.skills.registry        import SkillRegistry
+    from app.skills.chat_skill      import ChatSkill
+    from app.skills.gmail_skill     import GmailReadSkill, GmailSendSkill
+    from app.skills.calendar_skill  import CalendarReadSkill, CalendarWriteSkill
+    from app.skills.github_skill    import GitHubReadSkill, GitHubWriteSkill
+    from app.skills.smart_home_skill import SmartHomeSkill
+    from app.skills.n8n_skill       import N8nSkill
+    from app.skills.research_skill          import ResearchSkill
+    from app.skills.code_skill             import CodeSkill
+    from app.skills.content_draft_skill    import ContentDraftSkill
+    from app.skills.social_caption_skill   import SocialCaptionSkill
+    from app.skills.ad_copy_skill          import AdCopySkill
+    from app.skills.content_repurpose_skill import ContentRepurposeSkill
+    from app.skills.content_calendar_skill import ContentCalendarSkill
+
+    reg = SkillRegistry()
+    reg.register(ChatSkill())
+    reg.register(GmailReadSkill())
+    reg.register(GmailSendSkill())
+    reg.register(CalendarReadSkill())
+    reg.register(CalendarWriteSkill())
+    reg.register(GitHubReadSkill())
+    reg.register(GitHubWriteSkill())
+    reg.register(SmartHomeSkill())
+    reg.register(N8nSkill())
+    reg.register(ResearchSkill())
+    reg.register(CodeSkill())
+    reg.register(ContentDraftSkill())
+    reg.register(SocialCaptionSkill())
+    reg.register(AdCopySkill())
+    reg.register(ContentRepurposeSkill())
+    reg.register(ContentCalendarSkill())
+    return reg
+
+
+def _build_hook_registry():
+    """Construct and return a fully-populated HookRegistry."""
+    from app.hooks.registry       import HookRegistry
+    from app.hooks.security_hook  import SecurityHook
+    from app.hooks.logging_hook   import LoggingHook
+    from app.hooks.session_hook   import SessionHook
+
+    reg = HookRegistry()
+    reg.register(SecurityHook())
+    reg.register(LoggingHook())
+    reg.register(SessionHook())
+    return reg
 
 
 class Dispatcher:
     def __init__(self) -> None:
         self.llm    = LLMRouter()
         self.intent = IntentClassifier()
-        self.memory = RedisMemory()
-        self._gmail, self._calendar, self._github, self._n8n, self._ha = _load_integrations()
+        self.skills = _build_skill_registry()
+        self.hooks  = _build_hook_registry()
+
+        from app.agents.registry import AgentRegistry
+        self.agents = AgentRegistry()
+
+        from app.memory.memory_manager import MemoryManager
+        self.memory = MemoryManager(
+            redis_host=settings.redis_host,
+            redis_port=settings.redis_port,
+            redis_password=settings.redis_password,
+            postgres_dsn=settings.postgres_dsn,
+            qdrant_host=settings.qdrant_host,
+            qdrant_port=settings.qdrant_port,
+            qdrant_collection=settings.qdrant_collection,
+            flush_interval_turns=settings.memory_flush_interval_turns,
+        )
 
     # ── Public entry point ────────────────────────────────────────────────────
 
     async def process(self, message: str, session_id: str) -> DispatchResult:
-        history = self.memory.get_history(session_id)
+        from app.hooks.base import HookEvent, HookContext
 
-        # 1. Pending action confirmation check
-        pending = self.memory.get_pending_action(session_id)
+        # 1. PRE_PROCESS hooks (security, logging)
+        ctx = HookContext(
+            session_id=session_id,
+            message=message,
+            event=HookEvent.PRE_PROCESS,
+        )
+        ctx = await self.hooks.fire(HookEvent.PRE_PROCESS, ctx)
+        if ctx.metadata.get("blocked"):
+            reply = ctx.metadata.get(
+                "blocked_reply",
+                "I can't process that request.",
+            )
+            return DispatchResult(reply=reply, intent="blocked", session_id=session_id)
+
+        # 2. Get multi-tier memory context
+        mem_ctx = await self.memory.get_full_context(session_id, message)
+        history = mem_ctx.hot_history
+
+        # 3. Pending action confirmation check
+        pending = self.memory.redis.get_pending_action(session_id)
         if pending:
             lower = message.lower().strip()
             words = set(lower.split())
             if words & _CONFIRM_WORDS:
                 reply = await self._execute_pending(pending, session_id)
-                self.memory.clear_pending_action(session_id)
-                self.memory.append_turn(session_id, message, reply)
+                self.memory.redis.clear_pending_action(session_id)
+                await self.memory.persist_turn(session_id, message, reply, intent=pending["intent"])
                 return DispatchResult(reply=reply, intent=pending["intent"], session_id=session_id)
             elif words & _CANCEL_WORDS:
-                self.memory.clear_pending_action(session_id)
+                self.memory.redis.clear_pending_action(session_id)
                 reply = "Got it — cancelled."
-                self.memory.append_turn(session_id, message, reply)
+                await self.memory.persist_turn(session_id, message, reply, intent="cancel")
                 return DispatchResult(reply=reply, intent="cancel", session_id=session_id)
 
-        # 2. Classify intent
-        classified = self.intent.classify(message)
+        # 4. Classify intent (with registry-driven skill descriptions)
+        available_skills = self.skills.list_all_descriptions()
+        classified = self.intent.classify(message, available_skills=available_skills)
         intent     = classified.get("intent", "chat")
         params     = classified.get("params", {})
 
-        # 3. Dispatch to integration or pure LLM
-        context_data, pending_action = await self._dispatch(intent, params, message)
+        # 5. Select agent
+        agent = self.agents.select(intent, message)
 
-        # 4. Build augmented prompt
+        # 6. Execute skill
+        skill  = self.skills.get(intent)
+        result = await skill.execute(params, message)
+
+        # 7. Build augmented prompt
+        augmented = self._build_augmented(
+            message, intent, result.context_data,
+            mem_ctx.warm_summary, mem_ctx.cold_matches,
+        )
+
+        # 8. Call LLM
+        reply = await asyncio.to_thread(self.llm.route, augmented, history, agent)
+
+        # 9. Append confirmation instructions if needed
+        if result.pending_action:
+            reply = f"{reply}\n\n_Reply **confirm** to proceed or **cancel** to abort._"
+            self.memory.redis.set_pending_action(session_id, result.pending_action)
+
+        # 10. Persist turn
+        await self.memory.persist_turn(session_id, message, reply, intent=intent)
+
+        # 11. POST_PROCESS hooks
+        post_ctx = HookContext(
+            session_id=session_id,
+            message=message,
+            reply=reply,
+            intent=intent,
+            agent_name=agent.name if agent else "default",
+            event=HookEvent.POST_PROCESS,
+        )
+        await self.hooks.fire(HookEvent.POST_PROCESS, post_ctx)
+
+        return DispatchResult(
+            reply=reply,
+            intent=intent,
+            session_id=session_id,
+            agent=agent.name if agent else "default",
+        )
+
+    # ── Prompt assembly ───────────────────────────────────────────────────────
+
+    def _build_augmented(
+        self,
+        message: str,
+        intent: str,
+        context_data: str,
+        warm_summary: str,
+        cold_matches: list[dict],
+    ) -> str:
+        parts: list[str] = []
+
+        if warm_summary:
+            parts.append(f"[Session summary from prior conversations]:\n{warm_summary}")
+
+        if cold_matches:
+            import json
+            parts.append(f"[Relevant past context]:\n{json.dumps(cold_matches, indent=2)}")
+
         if context_data:
-            augmented = (
+            parts.append(
                 f"[Live data from {intent}]:\n{context_data}\n\n"
-                f"User message: {message}\n\n"
                 "Respond to the user naturally using the data above. "
                 "Format clearly — use bullet points or short paragraphs as appropriate."
             )
-        else:
-            augmented = message
 
-        # 5. Call LLM
-        reply = await asyncio.to_thread(self.llm.route, augmented, history)
-
-        # 6. If write action needs confirmation, append instructions and store pending
-        if pending_action:
-            reply = f"{reply}\n\n_Reply **confirm** to proceed or **cancel** to abort._"
-            self.memory.set_pending_action(session_id, pending_action)
-
-        # 7. Persist to Redis
-        self.memory.append_turn(session_id, message, reply)
-
-        return DispatchResult(reply=reply, intent=intent, session_id=session_id)
-
-    # ── Intent dispatch table ─────────────────────────────────────────────────
-
-    async def _dispatch(
-        self,
-        intent: str,
-        params: dict,
-        original_message: str,
-    ) -> tuple[str, dict | None]:
-        """
-        Returns (context_data, pending_action).
-        context_data:   string injected into the LLM prompt (empty for pure chat)
-        pending_action: dict stored in Redis pending confirmation (None if not needed)
-        """
-        handlers = {
-            "gmail_read":     self._gmail_read,
-            "gmail_send":     self._gmail_send,
-            "calendar_read":  self._calendar_read,
-            "calendar_write": self._calendar_write,
-            "github_read":    self._github_read,
-            "github_write":   self._github_write,
-            "smart_home":     self._smart_home,
-            "n8n_execute":    self._n8n_execute,
-        }
-        handler = handlers.get(intent)
-        if handler:
-            try:
-                return await handler(params, original_message)
-            except Exception as exc:
-                logger.error("Integration handler %s failed: %s", intent, exc)
-                return (
-                    f"[Error fetching {intent} data: {exc}. "
-                    "Inform the user there was an issue and suggest they check the integration config.]",
-                    None,
-                )
-        return "", None  # chat intent
-
-    # ── Integration handlers ──────────────────────────────────────────────────
-
-    async def _gmail_read(self, params: dict, _msg: str) -> tuple[str, None]:
-        if not self._gmail.is_configured():
-            return "[Gmail not configured — GOOGLE_REFRESH_TOKEN missing in .env]", None
-        query       = params.get("query", "is:unread")
-        max_results = int(params.get("max_results", 10))
-        emails = await self._gmail.list_emails(query=query, max_results=max_results)
-        return json.dumps(emails, indent=2), None
-
-    async def _gmail_send(self, params: dict, original_message: str) -> tuple[str, dict]:
-        if not self._gmail.is_configured():
-            return "[Gmail not configured]", None
-        # Store params + original message in pending — LLM will draft the body
-        pending = {
-            "intent":   "gmail_send",
-            "action":   "send_email",
-            "params":   params,
-            "original": original_message,
-        }
-        context = (
-            f"Draft an email based on the user's request. "
-            f"Recipient: {params.get('to', 'unknown')}. "
-            f"Subject hint: {params.get('subject', '')}. "
-            f"Content hint: {params.get('body_hint', original_message)}. "
-            "Show the full draft (To, Subject, Body) formatted clearly. "
-            "Explain that the user must confirm before it is sent."
-        )
-        return context, pending
-
-    async def _calendar_read(self, params: dict, _msg: str) -> tuple[str, None]:
-        if not self._calendar.is_configured():
-            return "[Google Calendar not configured — GOOGLE_REFRESH_TOKEN missing]", None
-        period = params.get("period", "this week")
-        events = await self._calendar.list_events(period=period)
-        return json.dumps(events, indent=2), None
-
-    async def _calendar_write(self, params: dict, _msg: str) -> tuple[str, None]:
-        if not self._calendar.is_configured():
-            return "[Google Calendar not configured]", None
-        result = await self._calendar.create_event(params)
-        return json.dumps(result, indent=2), None
-
-    async def _github_read(self, params: dict, _msg: str) -> tuple[str, None]:
-        if not self._github.is_configured():
-            return "[GitHub not configured — GITHUB_TOKEN missing]", None
-        resource = params.get("resource", "notifications")
-        repo     = params.get("repo", "")
-        if resource == "issues":
-            data = await self._github.list_issues(repo)
-        elif resource == "prs":
-            data = await self._github.list_prs(repo)
-        else:
-            data = await self._github.list_notifications()
-        return json.dumps(data, indent=2), None
-
-    async def _github_write(self, params: dict, _msg: str) -> tuple[str, None]:
-        if not self._github.is_configured():
-            return "[GitHub not configured]", None
-        action = params.get("action", "create_issue")
-        if action == "create_issue":
-            result = await self._github.create_issue(
-                repo  = params.get("repo", settings.github_default_repo),
-                title = params.get("title", "New issue"),
-                body  = params.get("body", ""),
-            )
-            return json.dumps(result, indent=2), None
-        return f"[GitHub action '{action}' not yet implemented]", None
-
-    async def _smart_home(self, params: dict, _msg: str) -> tuple[str, None]:
-        if not self._ha.is_configured():
-            return "[Home Assistant not configured — HOME_ASSISTANT_URL or HOME_ASSISTANT_TOKEN missing]", None
-        action = params.get("action", "status")
-        entity = params.get("entity", "")
-        if action == "status":
-            data = await self._ha.get_entity(entity) if entity else await self._ha.get_all_states()
-        else:
-            # Map action to HA service call
-            domain  = entity.split(".")[0] if "." in entity else "homeassistant"
-            service = action  # e.g. "turn_on", "turn_off", "toggle"
-            value   = params.get("value")
-            svc_data = {"entity_id": entity}
-            if value is not None:
-                svc_data["value"] = value
-            data = await self._ha.call_service(domain, service, svc_data)
-        return json.dumps(data, indent=2), None
-
-    async def _n8n_execute(self, params: dict, _msg: str) -> tuple[str, None]:
-        workflow = params.get("workflow", "")
-        payload  = params.get("payload", {})
-        result   = await self._n8n.trigger(workflow, payload)
-        return json.dumps(result, indent=2), None
+        parts.append(f"User message: {message}")
+        return "\n\n".join(parts)
 
     # ── Pending action execution ──────────────────────────────────────────────
 
@@ -250,7 +239,8 @@ class Dispatcher:
 
         try:
             if action == "send_email":
-                result = await self._gmail.send_email(
+                from app.integrations.gmail import GmailClient
+                result = await GmailClient().send_email(
                     to      = params.get("to", ""),
                     subject = params.get("subject", ""),
                     body    = params.get("drafted_body", params.get("body_hint", "")),

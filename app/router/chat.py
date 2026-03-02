@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.brain.dispatcher  import Dispatcher
+from app.brain.llm_router  import get_telos_loader
 from app.memory.redis_client import RedisMemory
 
 router   = APIRouter()
@@ -27,6 +28,7 @@ class ChatResponse(BaseModel):
     reply:      str
     session_id: str
     intent:     str
+    agent:      str = "default"
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -42,6 +44,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         reply=result.reply,
         session_id=result.session_id,
         intent=result.intent,
+        agent=result.agent,
     )
 
 
@@ -51,6 +54,22 @@ async def clear_session(session_id: str):
     memory.clear_session(session_id)
     memory.clear_pending_action(session_id)
     return {"cleared": session_id}
+
+
+@router.post("/telos/reload")
+async def telos_reload():
+    """Force reload of TELOS personal context files from disk."""
+    loader = get_telos_loader()
+    files = loader.reload()
+    return {"reloaded": files}
+
+
+@router.get("/agents")
+async def list_agents():
+    """List all registered agent personalities."""
+    from app.agents.registry import AgentRegistry
+    registry = AgentRegistry()
+    return {"agents": registry.list_agents()}
 
 
 @router.get("/health")

@@ -3,7 +3,10 @@
     "allow": [
       "Bash(python3:*)",
       "Bash(pip3 install:*)",
-      "Bash(chmod +x:*)"
+      "Bash(chmod +x:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)"
     ]
   }
 }
