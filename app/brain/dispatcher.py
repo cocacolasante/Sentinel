@@ -17,14 +17,16 @@ Flow for each incoming message:
 from __future__ import annotations
 
 import asyncio
-import logging
+import time
 from dataclasses import dataclass
+
+from loguru import logger
 
 from app.brain.intent      import IntentClassifier
 from app.brain.llm_router  import LLMRouter
 from app.config            import get_settings
+from app.observability.event_bus import event_bus
 
-logger   = logging.getLogger(__name__)
 settings = get_settings()
 
 # ── Confirmation trigger words ────────────────────────────────────────────────
@@ -32,6 +34,19 @@ _CONFIRM_WORDS = {"confirm", "send", "yes", "do it", "proceed", "go ahead", "sen
 _CANCEL_WORDS  = {"cancel", "no", "stop", "abort", "nevermind", "never mind", "don't"}
 
 PENDING_TTL = 300  # 5 minutes
+
+
+def _capture_error(exc: Exception, context: dict | None = None) -> None:
+    """Send exception to Sentry if configured, otherwise log it."""
+    try:
+        import sentry_sdk
+        with sentry_sdk.push_scope() as scope:
+            if context:
+                for k, v in context.items():
+                    scope.set_extra(k, v)
+            sentry_sdk.capture_exception(exc)
+    except Exception:
+        pass  # Sentry not installed or not configured — already logged by caller
 
 
 @dataclass
@@ -164,8 +179,31 @@ class Dispatcher:
         agent = self.agents.select(intent, message)
 
         # 6. Execute skill
-        skill  = self.skills.get(intent)
-        result = await skill.execute(params, message)
+        skill   = self.skills.get(intent)
+        sk_t0   = time.monotonic()
+        try:
+            result = await skill.execute(params, message)
+        except Exception as exc:
+            _capture_error(exc, context={"intent": intent, "skill": skill.name, "session_id": session_id})
+            logger.error("Skill {} failed for intent {}: {}", skill.name, intent, exc)
+            result_context = f"[Skill error — {skill.name} failed: {exc}. Inform the user gracefully.]"
+            from app.skills.base import SkillResult
+            result = SkillResult(context_data=result_context, skill_name=skill.name)
+
+        sk_latency = round((time.monotonic() - sk_t0) * 1000, 1)
+        await event_bus.publish({
+            "event":        "skill_dispatched",
+            "session_id":   session_id,
+            "intent":       intent,
+            "skill":        skill.name,
+            "has_context":  bool(result.context_data),
+            "needs_confirm": bool(result.pending_action),
+            "latency_ms":   sk_latency,
+        })
+        logger.debug(
+            "SKILL | {} | intent={} | ctx={} | {}ms",
+            skill.name, intent, bool(result.context_data), sk_latency,
+        )
 
         # 7. Build augmented prompt
         augmented = self._build_augmented(
@@ -174,7 +212,12 @@ class Dispatcher:
         )
 
         # 8. Call LLM
-        reply = await asyncio.to_thread(self.llm.route, augmented, history, agent)
+        try:
+            reply = await asyncio.to_thread(self.llm.route, augmented, history, agent)
+        except Exception as exc:
+            _capture_error(exc, context={"intent": intent, "agent": agent.name if agent else "default", "session_id": session_id})
+            logger.error("LLM routing failed for session {}: {}", session_id, exc)
+            raise
 
         # 9. Append confirmation instructions if needed
         if result.pending_action:
@@ -192,6 +235,7 @@ class Dispatcher:
             intent=intent,
             agent_name=agent.name if agent else "default",
             event=HookEvent.POST_PROCESS,
+            metadata={"source": ctx.metadata.get("source", "unknown")},
         )
         await self.hooks.fire(HookEvent.POST_PROCESS, post_ctx)
 

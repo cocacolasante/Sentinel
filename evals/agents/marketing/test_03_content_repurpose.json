@@ -1,0 +1,14 @@
+{
+  "input": "Repurpose this LinkedIn post into a Twitter/X thread:\n\n'Most founders I talk to are still writing every email, caption, and proposal by hand.\n\nI was too — until I built an AI assistant that handles the first draft of everything.\n\nHere's what changed:\n→ Client proposals: 4 hours → 20 minutes\n→ Email replies: 30 min/day → 5 min\n→ Instagram captions: 45 min → 8 min\n\nThe tool doesn't replace my voice. It removes the blank page.\n\nIf you're a founder spending more than 2 hours/week on writing tasks, you're leaving leverage on the table.\n\nDM me \"AI\" and I'll show you the setup.'",
+  "criteria": [
+    "tweet 1 is the hook — captures the most compelling idea in under 280 characters",
+    "tweet 1 does NOT start with 'I' or simply copy the LinkedIn opener verbatim",
+    "each tweet is numbered (1/N format)",
+    "the specific time savings (4h→20min, etc.) are preserved",
+    "final tweet includes the DM CTA",
+    "each tweet is under 280 characters",
+    "thread has 5-10 tweets total — not too short, not padded"
+  ],
+  "judge_prompt": "You are evaluating a content repurposing task by an AI marketing assistant. Score 0-10. Full marks: numbered thread 5-10 tweets, tweet 1 is a new hook (not copied from LinkedIn), time savings data preserved, each tweet under 280 chars, DM CTA in final tweet. Deduct 3 if tweet 1 copies the LinkedIn opener. Deduct 2 if any tweet exceeds 280 characters. Deduct 2 if thread is under 5 tweets.",
+  "threshold": 7
+}

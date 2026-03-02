@@ -1,0 +1,12 @@
+{
+  "input": "Rewrite this paragraph to be clear and direct. Remove all filler:\n\n'In today's rapidly evolving technological landscape, it is becoming increasingly apparent that organizations that wish to remain competitive in their respective industries must leverage cutting-edge artificial intelligence solutions in order to optimize their operational efficiencies and enhance their overall value proposition to their target demographic.'",
+  "criteria": [
+    "under 20 words in the rewritten version",
+    "preserves the core meaning (companies need AI to stay competitive)",
+    "removes all filler phrases ('increasingly apparent', 'rapidly evolving', 'respective industries')",
+    "uses active voice",
+    "a reader can understand it in one pass without rereading"
+  ],
+  "judge_prompt": "You are evaluating a rewrite task performed by an AI writing assistant. Score 0-10. The original sentence is 53 words of pure corporate filler. Full marks: rewritten version is under 20 words, retains full meaning, zero filler, active voice. Deduct 3 points if over 25 words. Deduct 2 points for any surviving filler phrase. Deduct 2 if meaning is lost or changed.",
+  "threshold": 8
+}

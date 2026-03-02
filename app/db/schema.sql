@@ -109,3 +109,31 @@ CREATE TABLE IF NOT EXISTS interaction_ratings (
 );
 CREATE INDEX IF NOT EXISTS idx_ratings_session ON interaction_ratings (session_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ratings_intent  ON interaction_ratings (intent, rating DESC);
+
+-- ── Eval system: per-test results (agent quality evals) ───────────────────────
+CREATE TABLE IF NOT EXISTS eval_results (
+    id          BIGSERIAL   PRIMARY KEY,
+    run_id      TEXT        NOT NULL,
+    agent_name  TEXT        NOT NULL,
+    test_name   TEXT        NOT NULL,
+    score       NUMERIC(4,2) NOT NULL,
+    passed      BOOLEAN     NOT NULL,
+    threshold   INT         NOT NULL DEFAULT 7,
+    reasoning   TEXT,
+    latency_ms  NUMERIC(10,1),
+    error       TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_eval_results_agent   ON eval_results (agent_name, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_eval_results_run     ON eval_results (run_id);
+
+-- ── Eval system: nightly integration reliability checks ───────────────────────
+CREATE TABLE IF NOT EXISTS integration_eval_results (
+    id           BIGSERIAL   PRIMARY KEY,
+    integration  TEXT        NOT NULL,
+    passed       BOOLEAN     NOT NULL,
+    latency_ms   NUMERIC(10,1),
+    error_message TEXT,
+    checked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_integration_eval_integration ON integration_eval_results (integration, checked_at DESC);

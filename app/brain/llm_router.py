@@ -11,7 +11,10 @@ Phase 2+: GPT-4o (multimodal/fallback) and Gemini Pro (large context/research)
 
 from __future__ import annotations
 
+import time
+
 import anthropic
+from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import get_settings
@@ -115,11 +118,33 @@ class LLMRouter:
             messages.extend(history[-40:])
         messages.append({"role": "user", "content": message})
 
+        t0 = time.monotonic()
         response = self.client.messages.create(
             model=model,
             max_tokens=max_tokens,
             system=system,
             messages=messages,
         )
+        latency_ms = round((time.monotonic() - t0) * 1000, 1)
+
+        input_tok  = getattr(response.usage, "input_tokens",  0)
+        output_tok = getattr(response.usage, "output_tokens", 0)
+
+        logger.info(
+            "LLM | model={model} | in={in_tok} | out={out_tok} | {ms}ms",
+            model=model, in_tok=input_tok, out_tok=output_tok, ms=latency_ms,
+        )
+
+        # Thread-safe publish (route() runs in asyncio.to_thread)
+        from app.observability.event_bus import event_bus
+        event_bus.publish_sync({
+            "event":        "llm_called",
+            "model":        model,
+            "agent":        agent.name if agent else "default",
+            "input_tokens": input_tok,
+            "output_tokens": output_tok,
+            "latency_ms":   latency_ms,
+            "max_tokens":   max_tokens,
+        })
 
         return response.content[0].text

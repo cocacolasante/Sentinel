@@ -1,0 +1,14 @@
+{
+  "input": "Write 3 LinkedIn post variations about launching a new AI consulting service for small businesses. Goal: get founders to DM me.",
+  "criteria": [
+    "produces exactly 3 labeled variations (A, B, C or 1, 2, 3)",
+    "each variation has a strong hook on the first line (not starting with 'I am excited to announce')",
+    "at least one variation uses a personal story or specific result",
+    "at least one variation uses a numbered list or bullet format",
+    "each variation ends with a CTA that drives DMs (not just 'follow me')",
+    "no variation exceeds 300 words",
+    "no corporate filler or cliche opener in any variation"
+  ],
+  "judge_prompt": "You are evaluating LinkedIn post variations written by an AI writing assistant. Score 0-10. Full marks: all 3 variations present, each with a scroll-stopping hook, at least one story-based and one list-based, each with a DM-driving CTA, all under 300 words. Deduct 2 points if fewer than 3 variations. Deduct 1 per variation with a weak opener. Deduct 1 per variation missing a CTA.",
+  "threshold": 7
+}

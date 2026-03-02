@@ -1,0 +1,14 @@
+{
+  "input": "Write 3 Instagram caption variations for a post about how AI helped me cut my client proposal time from 4 hours to 20 minutes. Target: founders and consultants. Goal: engagement.",
+  "criteria": [
+    "exactly 3 variations, clearly labeled",
+    "first line of each variation is a scroll-stopping hook (not 'I used AI to...' or 'Excited to share')",
+    "at least one variation leads with the specific result (4 hours → 20 minutes) in the first line",
+    "at least one variation asks a question to drive comments",
+    "each variation ends with a CTA (save, comment, follow, DM)",
+    "includes 5-10 hashtags after each caption",
+    "no variation exceeds 2,200 characters"
+  ],
+  "judge_prompt": "You are evaluating Instagram captions written by an AI marketing assistant. Score 0-10. Full marks: all 3 labeled variations, each with a strong hook that stops the scroll, result-led and question-led variations present, CTA in each, hashtags included per variation. Deduct 2 if fewer than 3 variations. Deduct 1 per weak opener that starts with 'I' or a generic opener. Deduct 2 if hashtags missing from all variations.",
+  "threshold": 7
+}

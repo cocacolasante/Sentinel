@@ -1,0 +1,13 @@
+{
+  "input": "I'm launching an AI tool for real estate agents that automatically drafts property listings from photos and specs. How should I get my first 10 paying customers?",
+  "criteria": [
+    "recommends a specific first channel — not a list of 10 channels",
+    "the recommended channel is realistic for a solo founder with no existing audience",
+    "includes a specific outreach or distribution tactic (not just 'do content marketing')",
+    "sets a realistic timeline for first 10 customers",
+    "addresses why real estate agents specifically would pay vs use ChatGPT themselves",
+    "no generic startup advice that would apply to any product"
+  ],
+  "judge_prompt": "You are evaluating a go-to-market strategy from an AI strategy assistant. Score 0-10. This tests specificity and realism. Full marks: one focused channel with a concrete tactic, timeline given, real estate agent buying behavior addressed, no generic advice that could apply to any product. Deduct 3 if 10+ channels listed with no priority. Deduct 2 for generic advice ('build in public', 'SEO'). Deduct 2 if no specific outreach tactic.",
+  "threshold": 7
+}

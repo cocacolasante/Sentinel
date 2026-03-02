@@ -28,3 +28,17 @@ python-dotenv==1.0.1
 tenacity==9.0.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+
+# Observability
+loguru==0.7.3
+sentry-sdk[fastapi]==2.19.2
+
+# Eval scheduler (kept as fallback; Celery Beat is primary)
+apscheduler==3.10.4
+
+# Celery task queue + Flower UI
+celery[redis]==5.4.0
+flower==2.0.1
+
+# Prometheus metrics
+prometheus-fastapi-instrumentator==7.0.0

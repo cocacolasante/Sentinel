@@ -1,0 +1,14 @@
+{
+  "input": "Write Meta ad copy for a $97/month AI writing tool targeting e-commerce founders who write their own product descriptions. Primary text, headline, and description. Goal: conversions.",
+  "criteria": [
+    "provides all three components: primary text, headline, description",
+    "primary text first 125 characters work as a standalone hook",
+    "headline is 40 characters or under",
+    "description is 30 characters or under",
+    "character counts are shown next to each component",
+    "headline leads with a benefit or outcome — not the product name",
+    "at least 2 headline variants provided for A/B testing"
+  ],
+  "judge_prompt": "You are evaluating Meta ad copy written by an AI marketing assistant. Score 0-10. This is a hard technical eval — character limits are non-negotiable. Full marks: all 3 components present with character counts shown, headline ≤40 chars, description ≤30 chars, primary text hook works in first 125 chars, 2 headline variants, benefit-led headline. Deduct 3 if character counts not shown. Deduct 2 if headline exceeds 40 chars. Deduct 2 if fewer than 2 headline variants.",
+  "threshold": 8
+}

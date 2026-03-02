@@ -105,8 +105,138 @@ services:
       - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
       - brain
+      - flower
+      - grafana
     networks:
       - brain-net
+
+  # ── Celery Worker ─────────────────────────────────────────────
+  celery-worker:
+    build: .
+    container_name: ai-celery-worker
+    command: >
+      celery -A app.worker.celery_app worker
+      --loglevel=info
+      --concurrency=2
+      -E
+      -Q evals,celery
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - brain-net
+    restart: unless-stopped
+
+  # ── Celery Beat (scheduler) ───────────────────────────────────
+  # Owns the cron schedule — replaces APScheduler in the brain process.
+  celery-beat:
+    build: .
+    container_name: ai-celery-beat
+    command: >
+      celery -A app.worker.celery_app beat
+      --loglevel=info
+      --schedule /app/celerybeat-data/celerybeat-schedule
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - celery-beat-data:/app/celerybeat-data
+    networks:
+      - brain-net
+    restart: unless-stopped
+
+  # ── Flower (Celery task UI) ───────────────────────────────────
+  # Access via https://your-domain.com/flower/
+  flower:
+    build: .
+    container_name: ai-flower
+    command: >
+      celery -A app.worker.celery_app flower
+      --port=5555
+      --url_prefix=flower
+      --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-changeme}
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:5555:5555"
+    depends_on:
+      - celery-worker
+    networks:
+      - brain-net
+    restart: unless-stopped
+
+  # ── Redis Exporter (Prometheus metrics for Redis) ─────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: ai-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+    networks:
+      - brain-net
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── Celery Exporter (Prometheus metrics for Celery) ───────────
+  celery-exporter:
+    image: danihodovic/celery-exporter:0.10.3
+    container_name: ai-celery-exporter
+    command: --broker-url=redis://:${REDIS_PASSWORD}@redis:6379/1
+    networks:
+      - brain-net
+    restart: unless-stopped
+    depends_on:
+      - celery-worker
+
+  # ── Prometheus ────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: ai-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - brain-net
+    restart: unless-stopped
+
+  # ── Grafana ───────────────────────────────────────────────────
+  # Access via https://your-domain.com/grafana/
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: ai-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER:     "${GRAFANA_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-changeme}"
+      GF_SERVER_ROOT_URL:         "https://${DOMAIN}/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_AUTH_ANONYMOUS_ENABLED:  "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/brain_overview.json"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - brain-net
+    restart: unless-stopped
 
 networks:
   brain-net:
@@ -117,3 +247,6 @@ volumes:
   redis-data:
   qdrant-data:
   n8n-data:
+  celery-beat-data:
+  prometheus-data:
+  grafana-data:

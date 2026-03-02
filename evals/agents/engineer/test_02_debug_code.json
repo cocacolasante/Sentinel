@@ -1,0 +1,12 @@
+{
+  "input": "Debug this Python code and explain what's wrong:\n\ndef calculate_average(numbers):\n    total = 0\n    for n in numbers:\n        total =+ n\n    return total / len(numbers)\n\nresult = calculate_average([])\nprint(result)",
+  "criteria": [
+    "identifies the =+ operator bug (should be +=)",
+    "identifies the ZeroDivisionError when list is empty",
+    "provides corrected code, not just explanation",
+    "the corrected code handles the empty list case",
+    "explains why each bug occurs, not just what it is"
+  ],
+  "judge_prompt": "You are evaluating a debugging response from an AI engineering assistant. Score 0-10. Full marks require: both bugs identified by name, corrected working code provided, and clear explanation of root cause for each. Deduct 2 points if corrected code is missing. Deduct 2 points if only one bug found.",
+  "threshold": 7
+}

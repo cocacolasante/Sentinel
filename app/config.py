@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     telos_dir: str = "/home/ubuntu/ai-brain/telos"
     telos_cache_ttl_seconds: int = 300
 
+    # ── Observability ───────────────────────────────────────────
+    sentry_dsn: str = ""
+    log_level: str = "INFO"
+    log_dir: str = "/var/log/aibrain"
+
+    # ── Evals ──────────────────────────────────────────────────
+    slack_eval_channel: str = "brain-evals"
+
     # ── Memory ─────────────────────────────────────────────────
     openai_embedding_model: str = "text-embedding-3-small"
     qdrant_collection: str = "brain_memories"

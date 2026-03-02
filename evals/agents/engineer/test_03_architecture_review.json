@@ -1,0 +1,13 @@
+{
+  "input": "Review this system design: A user uploads a CSV file via a REST API. The API synchronously processes the CSV (parsing, validation, DB insert) in the request handler and returns the result. The file can be up to 500MB. What are the problems and how would you fix them?",
+  "criteria": [
+    "identifies synchronous processing as the core problem for large files",
+    "recommends async/background processing (task queue, worker, or async job)",
+    "mentions request timeout risk for synchronous approach",
+    "addresses memory concerns for 500MB in-process",
+    "suggests a status/polling endpoint or webhook for async job result",
+    "provides a concrete architecture recommendation (not just abstract advice)"
+  ],
+  "judge_prompt": "You are evaluating a system design review from an AI engineering assistant. Score 0-10. This tests whether the response identifies real production concerns, not just surface issues. Full marks: all 6 criteria addressed with a concrete improved architecture proposed. Deduct for vague suggestions ('use async') without specifics. Deduct for missing the timeout/memory concerns.",
+  "threshold": 7
+}

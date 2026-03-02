@@ -1,0 +1,14 @@
+{
+  "input": "Draft a follow-up email to a potential client, Sarah Chen, who attended a discovery call yesterday about our AI development services. The call went well. We discussed a potential $15k project to build an internal tool. She said she'd loop in her CTO. Keep it brief and professional.",
+  "criteria": [
+    "addresses Sarah by first name",
+    "references the discovery call specifically (not generic follow-up)",
+    "mentions the $15k project or internal tool context to show it was personalized",
+    "anticipates the CTO loop-in and makes it easy (no added friction)",
+    "includes a clear and specific next step or CTA",
+    "under 150 words — brief as requested",
+    "does not use filler phrases like 'I hope this email finds you well' or 'Per our conversation'"
+  ],
+  "judge_prompt": "You are evaluating a business email drafted by an AI writing assistant. Score 0-10. This tests professional email craft. Full marks: all criteria met, email reads naturally, CTA is specific (not 'let me know'). Deduct 1 point per missing criterion. Deduct 2 points for opening with a cliche phrase. Deduct 2 if over 200 words.",
+  "threshold": 7
+}

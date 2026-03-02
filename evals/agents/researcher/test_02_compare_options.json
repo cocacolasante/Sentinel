@@ -1,0 +1,13 @@
+{
+  "input": "Compare Supabase vs PlanetScale vs Neon for a SaaS startup that needs: Postgres compatibility, good free tier, easy scaling, and a simple developer experience. Give me a clear recommendation.",
+  "criteria": [
+    "covers all three options (Supabase, PlanetScale, Neon)",
+    "evaluates each against all four stated requirements",
+    "flags that PlanetScale dropped its free tier in 2024",
+    "makes a clear, specific recommendation — not 'it depends' without resolution",
+    "explains the key trade-off that drove the recommendation",
+    "response is organized (table or clear per-option sections, not a wall of text)"
+  ],
+  "judge_prompt": "You are evaluating a technology comparison written by an AI research assistant. Score 0-10. This tests accuracy and decision quality. Key accuracy check: PlanetScale removed its free tier in March 2024 — if the response recommends PlanetScale for its free tier, deduct 3 points. Full marks: all three options compared on all four dimensions, structured format, clear recommendation with rationale. Deduct 2 if 'it depends' without a final answer.",
+  "threshold": 7
+}

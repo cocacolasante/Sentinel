@@ -1,0 +1,13 @@
+{
+  "input": "I'm deciding between raising a $500k pre-seed round vs staying bootstrapped. My SaaS has $8k MRR growing 15% month-over-month. I have 6 months runway. What should I do?",
+  "criteria": [
+    "gives a clear recommendation — not 'it depends' without resolution",
+    "acknowledges the 15% MoM growth as strong and factors it into the advice",
+    "addresses the 6-month runway constraint explicitly",
+    "considers what the $500k would actually accelerate (not just generic 'fuel growth')",
+    "raises at least one risk or trade-off of the recommended path",
+    "response is under 300 words — direct as requested"
+  ],
+  "judge_prompt": "You are evaluating a strategic recommendation from an AI strategy assistant. Score 0-10. This tests decision quality and directness. Full marks: clear recommendation given, growth rate and runway both factored in, trade-offs acknowledged, practical and specific (not generic advice), under 300 words. Deduct 3 points for 'it depends' without a final recommendation. Deduct 2 if runway is not addressed. Deduct 1 per missing criterion.",
+  "threshold": 7
+}

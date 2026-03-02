@@ -1,0 +1,28 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    project: aibrain
+
+scrape_configs:
+
+  # AI Brain FastAPI — custom brain_* metrics + HTTP instrumentation
+  - job_name: brain
+    static_configs:
+      - targets: ["brain:8000"]
+    metrics_path: /metrics
+
+  # Redis — memory, connections, hit/miss rate
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # Celery — task queue depth, success/failure rate, worker count
+  - job_name: celery
+    static_configs:
+      - targets: ["celery-exporter:9808"]
+
+  # Prometheus self-metrics
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

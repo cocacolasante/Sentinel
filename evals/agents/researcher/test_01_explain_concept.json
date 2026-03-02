@@ -1,0 +1,13 @@
+{
+  "input": "Explain how vector embeddings work and why they're useful for semantic search. Explain it so a non-technical founder can understand it.",
+  "criteria": [
+    "uses an analogy or real-world comparison (not just abstract math)",
+    "explains what a vector is without using the word 'vector' as the definition",
+    "explains why similar concepts end up 'near' each other in the embedding space",
+    "explains the practical benefit for search (find things even without exact keyword match)",
+    "does not use unexplained jargon (cosine similarity, dimensionality, etc. must be explained if used)",
+    "can be understood by someone with no ML background"
+  ],
+  "judge_prompt": "You are evaluating an explanation written by an AI research assistant for a non-technical audience. Score 0-10. Full marks: all criteria met, the explanation would genuinely help a non-technical founder understand and make a decision about using vector search. Deduct 2 points for any unexplained jargon. Deduct 2 if no analogy is used. Deduct 2 if the practical business benefit is not clearly stated.",
+  "threshold": 7
+}

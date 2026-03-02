@@ -2,42 +2,119 @@
 AI Brain — FastAPI entry point.
 
 Startup sequence:
-  1. PostgreSQL schema initialised (idempotent)
-  2. Slack Socket Mode connection launched as background task
-  3. REST endpoints available at /api/v1/
+  1. Loguru configured (stdout + JSON file)
+  2. Sentry initialised (if SENTRY_DSN is set)
+  3. Event bus loop reference bound (for thread-safe publish_sync)
+  4. PostgreSQL schema initialised (idempotent)
+  5. Qdrant collection initialised
+  6. Slack Socket Mode launched as background task
+  7. REST + WebSocket endpoints available at /api/v1/
 
 Routes:
   GET  /                              -- health probe
   GET  /api/v1/health                 -- detailed health (Redis + Postgres)
   POST /api/v1/chat                   -- main chat endpoint (intent-routed)
   DELETE /api/v1/chat/{id}            -- clear session history
+  POST /api/v1/telos/reload           -- reload TELOS personal context
+  GET  /api/v1/agents                 -- list registered agent personas
   GET  /api/v1/integrations/status    -- integration health check
-  GET  /api/v1/integrations/...       -- direct integration endpoints
+  POST /api/v1/feedback/rate          -- rate an interaction (1-10)
+  POST /api/v1/feedback/thumbs        -- thumbs up/down
+  GET  /api/v1/feedback/summary       -- aggregate rating stats
+  WS   /api/v1/observe/stream         -- real-time event stream (WebSocket)
+  GET  /api/v1/observe/metrics        -- aggregate performance metrics
+  GET  /api/v1/observe/events         -- recent event buffer
+
+Scheduled jobs (Celery Beat — separate celery-beat container):
+  Weekly   Sun 09:00 UTC  -- agent quality evals + Slack scorecard
+  Nightly  02:00 UTC      -- integration reliability checks
 """
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from loguru import logger
 
-from app.router import chat
-from app.router.integrations import router as integrations_router
-from app.router.feedback     import router as feedback_router
-from app.router.slack        import start_socket_mode
-from app.config              import get_settings
+from app.config import get_settings
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-)
-logger   = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def _init_loguru() -> None:
+    """Configure Loguru before anything else logs."""
+    from app.observability.loguru_setup import configure
+    configure(
+        log_dir=settings.log_dir,
+        level=settings.log_level,
+    )
+
+
+def _init_sentry() -> None:
+    """Initialise Sentry if DSN is configured. Safe no-op if not."""
+    if not settings.sentry_dsn:
+        logger.info("Sentry DSN not set — error tracking disabled")
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.asyncio import AsyncioIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.environment,
+            traces_sample_rate=0.2,      # 20% of requests traced (adjust as needed)
+            profiles_sample_rate=0.1,
+            integrations=[
+                FastApiIntegration(transaction_style="endpoint"),
+                AsyncioIntegration(),
+                LoggingIntegration(
+                    level=None,          # capture all log levels as breadcrumbs
+                    event_level="ERROR", # send ERROR+ as Sentry events
+                ),
+            ],
+            before_send=_sentry_before_send,
+        )
+        logger.info("Sentry initialised | env={}", settings.environment)
+    except ImportError:
+        logger.warning("sentry-sdk not installed — run: pip install sentry-sdk[fastapi]")
+    except Exception as exc:
+        logger.error("Sentry init failed (non-fatal): {}", exc)
+
+
+def _sentry_before_send(event, hint):
+    """Filter out noisy non-actionable errors before they reach Sentry."""
+    exc_info = hint.get("exc_info")
+    if exc_info:
+        exc_type = exc_info[0]
+        # Don't track client disconnects or cancelled requests
+        if exc_type.__name__ in ("WebSocketDisconnect", "CancelledError", "ClientDisconnect"):
+            return None
+    return event
+
+
+# ── Loguru and Sentry must init before any other imports that log ─────────────
+_init_loguru()
+_init_sentry()
+
+from app.router import chat                                           # noqa: E402
+from app.router.integrations   import router as integrations_router  # noqa: E402
+from app.router.feedback       import router as feedback_router      # noqa: E402
+from app.router.observability  import router as observe_router       # noqa: E402
+from app.router.slack          import start_socket_mode              # noqa: E402
+from app.observability.event_bus import event_bus                    # noqa: E402
+from prometheus_fastapi_instrumentator import Instrumentator          # noqa: E402
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Brain starting -- environment: %s", settings.environment)
+    logger.info("Brain starting | environment={}", settings.environment)
+
+    # Bind the running event loop to the event bus so publish_sync() works
+    # from worker threads (LLM router runs via asyncio.to_thread)
+    event_bus.set_loop(asyncio.get_event_loop())
+    logger.info("Event bus loop bound | observe_ws=ws://localhost:8000/api/v1/observe/stream")
 
     # Initialise PostgreSQL schema (creates tables if they don't exist)
     try:
@@ -45,7 +122,7 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(postgres.init_schema)
         logger.info("PostgreSQL ready")
     except Exception as exc:
-        logger.error("PostgreSQL init failed -- check POSTGRES_* env vars: %s", exc)
+        logger.error("PostgreSQL init failed — check POSTGRES_* env vars: {}", exc)
 
     # Initialise Qdrant collection
     try:
@@ -56,13 +133,17 @@ async def lifespan(app: FastAPI):
             collection=settings.qdrant_collection,
         )
         await qm.init_collection()
-        logger.info("Qdrant ready")
+        logger.info("Qdrant ready | collection={}", settings.qdrant_collection)
     except Exception as exc:
-        logger.error("Qdrant init failed (non-fatal): %s", exc)
+        logger.error("Qdrant init failed (non-fatal): {}", exc)
 
     # Launch Slack Socket Mode in the background (non-blocking)
     asyncio.create_task(start_socket_mode())
 
+    # Eval scheduling is handled by the Celery Beat container.
+    # APScheduler is not started here — see app/worker/celery_app.py.
+
+    logger.info("Brain ready")
     yield
 
     logger.info("Brain shutting down")
@@ -70,16 +151,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AI Brain",
-    description="Personalized AI Assistant -- CSuite Code",
+    description="Personalized AI Assistant — CSuite Code",
     version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs" if settings.environment != "production" else None,
     redoc_url=None,
 )
 
+# Prometheus HTTP instrumentation — exposes /metrics for Prometheus scraping.
+# Scraped internally by Prometheus (brain:8000/metrics); not proxied publicly.
+Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/metrics", "/", "/api/v1/health"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
 app.include_router(chat.router,         prefix="/api/v1", tags=["chat"])
 app.include_router(integrations_router, prefix="/api/v1", tags=["integrations"])
 app.include_router(feedback_router,     prefix="/api/v1", tags=["feedback"])
+app.include_router(observe_router,      prefix="/api/v1", tags=["observability"])
 
 
 @app.get("/", tags=["root"])

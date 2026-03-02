@@ -1,0 +1,13 @@
+{
+  "input": "Give me a TL;DR on how RAG (Retrieval-Augmented Generation) works, when to use it vs fine-tuning, and what the main failure modes are.",
+  "criteria": [
+    "explains RAG in 2-3 sentences at most before going deeper",
+    "correctly describes the retrieve-then-generate flow",
+    "clearly distinguishes when RAG is better than fine-tuning (dynamic/external knowledge vs baked-in behavior)",
+    "lists at least 3 concrete failure modes (e.g., retrieval misses, context window overflow, hallucination from bad chunks)",
+    "structured with clear sections — not a wall of text",
+    "a developer could act on this immediately without additional research"
+  ],
+  "judge_prompt": "You are evaluating a technical summary written by an AI research assistant. Score 0-10. Full marks: TL;DR is genuinely short (under 50 words), RAG flow is correct, fine-tuning distinction is accurate and practically useful, at least 3 real failure modes named with brief explanation, structure is clear. Deduct 2 if fewer than 3 failure modes. Deduct 2 if fine-tuning distinction is vague or wrong.",
+  "threshold": 7
+}

@@ -1,0 +1,13 @@
+{
+  "input": "I have a B2B SaaS tool for HR teams. Currently charging $99/month flat. Usage has grown 3x but revenue is flat. Should I switch to usage-based pricing? What are the risks?",
+  "criteria": [
+    "directly addresses whether to switch (yes/no with reasoning, not just 'consider it')",
+    "correctly diagnoses the problem: usage 3x but revenue flat = wrong pricing model",
+    "explains the core trade-off of usage-based pricing (aligned incentives vs revenue unpredictability)",
+    "recommends a specific pricing structure or hybrid (not just 'usage-based')",
+    "names at least 2 concrete risks of switching",
+    "addresses how to handle existing customers during a transition"
+  ],
+  "judge_prompt": "You are evaluating a pricing strategy recommendation from an AI strategy assistant. Score 0-10. Full marks: clear yes/no on the switch, diagnosis of the flat-revenue-despite-growth problem, specific pricing structure proposed (not just 'usage-based' as a category), at least 2 named transition risks, existing customer handling addressed. Deduct 3 for no clear recommendation. Deduct 2 if no specific structure proposed. Deduct 1 per missing criterion.",
+  "threshold": 7
+}

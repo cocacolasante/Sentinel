@@ -1,0 +1,13 @@
+{
+  "input": "Write a Python function that validates an email address. It should handle edge cases.",
+  "criteria": [
+    "uses regex for validation",
+    "handles missing @ symbol",
+    "handles missing or invalid domain (no dot after @)",
+    "handles empty string input",
+    "returns a boolean",
+    "includes a docstring explaining what the function does and its return value"
+  ],
+  "judge_prompt": "You are evaluating a Python function written by an AI engineering assistant. Score 0-10 based on how well it meets ALL listed criteria. Deduct points for missing criteria, incorrect logic, or code that would fail edge cases. A score of 10 requires all criteria met with clean, idiomatic Python.",
+  "threshold": 7
+}
