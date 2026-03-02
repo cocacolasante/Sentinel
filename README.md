@@ -99,20 +99,20 @@ Full reference — every variable the brain reads:
 
 ```bash
 # ── Core ──────────────────────────────────────────────────────────────────────
-SECRET_KEY=<openssl rand -hex 32>
+SECRET_KEY=84b760f1f9c146b0918d52be49785566b2e5c64b54fdc47d30e6692079215a71
 ENVIRONMENT=production           # development | production
 
 # ── PostgreSQL ─────────────────────────────────────────────────────────────────
 POSTGRES_USER=brain
-POSTGRES_PASSWORD=<strong password>
+POSTGRES_PASSWORD=Cola1994
 POSTGRES_DB=aibrain
 
 # ── Redis ──────────────────────────────────────────────────────────────────────
-REDIS_PASSWORD=<strong password>
+REDIS_PASSWORD=Cola1994
 # REDIS_HOST and REDIS_PORT default to redis:6379 inside Docker
 
 # ── LLM APIs ───────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=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
 OPENAI_API_KEY=sk-...            # optional — enables real Qdrant embeddings
 
 # ── Slack ──────────────────────────────────────────────────────────────────────
@@ -123,9 +123,9 @@ SLACK_EVAL_CHANNEL=brain-evals   # Channel for weekly eval scorecards
 SLACK_ALERT_CHANNEL=brain-alerts # Channel for budget threshold alerts
 
 # ── n8n ────────────────────────────────────────────────────────────────────────
-N8N_HOST=your-domain.com
-N8N_USER=admin
-N8N_PASSWORD=<strong password>
+N8N_HOST=csuitecoden8n.com
+N8N_USER=Colasante
+N8N_PASSWORD=Sonicajc1994$
 N8N_WEBHOOK_URL=http://n8n:5678
 
 # ── Domain ─────────────────────────────────────────────────────────────────────
