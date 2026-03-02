@@ -24,6 +24,7 @@ Routes:
   WS   /api/v1/observe/stream         -- real-time event stream (WebSocket)
   GET  /api/v1/observe/metrics        -- aggregate performance metrics
   GET  /api/v1/observe/events         -- recent event buffer
+  GET  /api/v1/costs                  -- daily LLM spend and remaining budget
 
 Scheduled jobs (Celery Beat — separate celery-beat container):
   Weekly   Sun 09:00 UTC  -- agent quality evals + Slack scorecard
@@ -102,6 +103,7 @@ from app.router import chat                                           # noqa: E4
 from app.router.integrations   import router as integrations_router  # noqa: E402
 from app.router.feedback       import router as feedback_router      # noqa: E402
 from app.router.observability  import router as observe_router       # noqa: E402
+from app.router.costs          import router as costs_router         # noqa: E402
 from app.router.slack          import start_socket_mode              # noqa: E402
 from app.observability.event_bus import event_bus                    # noqa: E402
 from prometheus_fastapi_instrumentator import Instrumentator          # noqa: E402
@@ -170,6 +172,7 @@ app.include_router(chat.router,         prefix="/api/v1", tags=["chat"])
 app.include_router(integrations_router, prefix="/api/v1", tags=["integrations"])
 app.include_router(feedback_router,     prefix="/api/v1", tags=["feedback"])
 app.include_router(observe_router,      prefix="/api/v1", tags=["observability"])
+app.include_router(costs_router,        prefix="/api/v1", tags=["costs"])
 
 
 @app.get("/", tags=["root"])

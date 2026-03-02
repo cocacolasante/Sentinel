@@ -73,6 +73,20 @@ class Settings(BaseSettings):
     # ── Evals ──────────────────────────────────────────────────
     slack_eval_channel: str = "brain-evals"
 
+    # ── Cost & rate limiting ────────────────────────────────────
+    # Set DAILY_COST_CEILING_USD=0 to disable the ceiling (not recommended).
+    daily_cost_ceiling_usd: float = 10.0
+    # Comma-separated fractions at which to send a Slack alert (0.5 = 50%).
+    budget_alert_thresholds: str = "0.5,0.8,1.0"
+    # Per-model daily token caps (input + output combined). 0 = unlimited.
+    sonnet_daily_token_budget: int = 0
+    haiku_daily_token_budget:  int = 0
+    # Slack channel for budget alerts (separate from eval reports).
+    slack_alert_channel: str = "brain-alerts"
+    # Per-session request rate limits.
+    rate_limit_per_minute: int = 20
+    rate_limit_per_hour:   int = 200
+
     # ── Memory ─────────────────────────────────────────────────
     openai_embedding_model: str = "text-embedding-3-small"
     qdrant_collection: str = "brain_memories"

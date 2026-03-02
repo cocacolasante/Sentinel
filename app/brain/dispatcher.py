@@ -22,9 +22,11 @@ from dataclasses import dataclass
 
 from loguru import logger
 
-from app.brain.intent      import IntentClassifier
-from app.brain.llm_router  import LLMRouter
-from app.config            import get_settings
+from app.brain.cost_tracker import BudgetExceeded
+from app.brain.intent       import IntentClassifier
+from app.brain.llm_router   import LLMRouter
+from app.brain.rate_limiter import RateLimitExceeded, rate_limiter
+from app.config             import get_settings
 from app.observability.event_bus import event_bus
 
 settings = get_settings()
@@ -135,6 +137,22 @@ class Dispatcher:
     async def process(self, message: str, session_id: str) -> DispatchResult:
         from app.hooks.base import HookEvent, HookContext
 
+        # 0. Per-session rate limiting (fast Redis check, no LLM cost)
+        try:
+            rate_limiter.check(session_id)
+        except RateLimitExceeded as exc:
+            try:
+                from app.observability.prometheus_metrics import RATE_LIMITED_TOTAL
+                window = "minute" if "minute" in str(exc) else "hour"
+                RATE_LIMITED_TOTAL.labels(window=window).inc()
+            except Exception:
+                pass
+            return DispatchResult(
+                reply=f"⏱️ {exc}",
+                intent="rate_limited",
+                session_id=session_id,
+            )
+
         # 1. PRE_PROCESS hooks (security, logging)
         ctx = HookContext(
             session_id=session_id,
@@ -214,6 +232,23 @@ class Dispatcher:
         # 8. Call LLM
         try:
             reply = await asyncio.to_thread(self.llm.route, augmented, history, agent)
+        except BudgetExceeded as exc:
+            try:
+                from app.observability.prometheus_metrics import BUDGET_EXCEEDED_TOTAL
+                BUDGET_EXCEEDED_TOTAL.inc()
+            except Exception:
+                pass
+            logger.warning("LLM call blocked — budget exceeded: {}", exc)
+            reply = (
+                "⚠️ I'm temporarily unavailable — the daily API budget has been reached. "
+                "I'll be back at midnight UTC. You can check `GET /api/v1/costs` for the breakdown."
+            )
+            return DispatchResult(
+                reply=reply,
+                intent=intent,
+                session_id=session_id,
+                agent=agent.name if agent else "default",
+            )
         except Exception as exc:
             _capture_error(exc, context={"intent": intent, "agent": agent.name if agent else "default", "session_id": session_id})
             logger.error("LLM routing failed for session {}: {}", session_id, exc)

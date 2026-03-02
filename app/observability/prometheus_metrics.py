@@ -10,7 +10,7 @@ Prometheus scrapes brain:8000/metrics every 15s (configured in prometheus.yml).
 
 from __future__ import annotations
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 # ── Request / response ────────────────────────────────────────────────────────
 
@@ -49,4 +49,27 @@ SKILL_LATENCY = Histogram(
     "Skill execution duration",
     ["skill"],
     buckets=[0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, float("inf")],
+)
+
+# ── Cost tracking ─────────────────────────────────────────────────────────────
+
+COST_DAILY_USD = Gauge(
+    "brain_cost_usd_daily",
+    "Total LLM cost accumulated today in USD (resets at midnight UTC)",
+)
+
+COST_CEILING_USD = Gauge(
+    "brain_cost_ceiling_usd",
+    "Configured daily LLM cost ceiling in USD",
+)
+
+BUDGET_EXCEEDED_TOTAL = Counter(
+    "brain_budget_exceeded_total",
+    "Number of LLM calls blocked due to budget ceiling",
+)
+
+RATE_LIMITED_TOTAL = Counter(
+    "brain_rate_limited_total",
+    "Number of requests blocked by per-session rate limiter",
+    ["window"],  # window: minute | hour
 )

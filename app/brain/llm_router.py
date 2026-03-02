@@ -17,6 +17,7 @@ import anthropic
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from app.brain.cost_tracker import BudgetExceeded, cost_tracker
 from app.config import get_settings
 from app.telos.loader import TelosLoader
 
@@ -118,6 +119,9 @@ class LLMRouter:
             messages.extend(history[-40:])
         messages.append({"role": "user", "content": message})
 
+        # ── Budget check (raises BudgetExceeded if ceiling is hit) ───────────
+        cost_tracker.check_budget(model)
+
         t0 = time.monotonic()
         response = self.client.messages.create(
             model=model,
@@ -129,6 +133,9 @@ class LLMRouter:
 
         input_tok  = getattr(response.usage, "input_tokens",  0)
         output_tok = getattr(response.usage, "output_tokens", 0)
+
+        # ── Record actual usage (always after a successful call) ──────────────
+        cost_tracker.record(model, input_tok, output_tok)
 
         logger.info(
             "LLM | model={model} | in={in_tok} | out={out_tok} | {ms}ms",

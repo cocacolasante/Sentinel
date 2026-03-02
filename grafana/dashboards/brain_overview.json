@@ -174,6 +174,33 @@
         "legendFormat": "clients", "refId": "A"
       }],
       "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+
+    {
+      "id": 15, "type": "stat", "title": "Daily Spend vs Ceiling",
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "brain_cost_usd_daily",   "legendFormat": "spent today", "refId": "A" },
+        { "expr": "brain_cost_ceiling_usd", "legendFormat": "daily ceiling", "refId": "B" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "orientation": "horizontal" },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":5},{"color":"red","value":9}] } } }
+    },
+
+    {
+      "id": 16, "type": "timeseries", "title": "Daily Cost Accumulation",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "brain_cost_usd_daily",   "legendFormat": "spent USD", "refId": "A" },
+        { "expr": "brain_cost_ceiling_usd", "legendFormat": "ceiling USD", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD" },
+        "overrides": [{ "matcher": { "id": "byName", "options": "ceiling USD" }, "properties": [{"id":"color","value":{"mode":"fixed","fixedColor":"red"}},{"id":"custom.lineStyle","value":{"fill":"dash"}}] }]
+      },
+      "options": { "tooltip": { "mode": "multi" } }
     }
 
   ]
