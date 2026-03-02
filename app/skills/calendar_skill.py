@@ -33,6 +33,7 @@ class CalendarWriteSkill(BaseSkill):
     name = "calendar_write"
     description = "Create, update, reschedule, or cancel a Google Calendar event"
     trigger_intents = ["calendar_write"]
+    requires_confirmation = True
 
     def is_available(self) -> bool:
         from app.integrations.google_calendar import CalendarClient
@@ -40,8 +41,33 @@ class CalendarWriteSkill(BaseSkill):
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.google_calendar import CalendarClient
-        client = CalendarClient()
-        if not client.is_configured():
-            return SkillResult(context_data="[Google Calendar not configured]", skill_name=self.name)
-        result = await client.create_event(params)
-        return SkillResult(context_data=json.dumps(result, indent=2), skill_name=self.name)
+        if not CalendarClient().is_configured():
+            return SkillResult(
+                context_data="[Google Calendar not configured — GOOGLE_REFRESH_TOKEN missing in .env]",
+                skill_name=self.name,
+            )
+
+        pending = {
+            "intent":   "calendar_write",
+            "action":   "create_calendar_event",
+            "params":   params,
+            "original": original_message,
+        }
+        title    = params.get("title", "New Event")
+        date     = params.get("date", "TBD")
+        time_str = params.get("time", "TBD")
+        duration = params.get("duration_min", 60)
+        context = (
+            f"Show the user the calendar event you are about to create:\n"
+            f"  Title: {title}\n"
+            f"  Date: {date}\n"
+            f"  Time: {time_str} ({duration} min)\n"
+            f"  Description: {params.get('description', '')}\n"
+            f"  Location: {params.get('location', '')}\n"
+            "Format it clearly and ask the user to reply **confirm** to add it or **cancel** to abort."
+        )
+        return SkillResult(
+            context_data=context,
+            pending_action=pending,
+            skill_name=self.name,
+        )

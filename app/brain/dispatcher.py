@@ -325,6 +325,19 @@ class Dispatcher:
                     body    = params.get("drafted_body", params.get("body_hint", "")),
                 )
                 return f"Email sent. Message ID: `{result.get('id', 'unknown')}`"
+
+            if action == "create_calendar_event":
+                from app.integrations.google_calendar import CalendarClient
+                result = await CalendarClient().create_event(params)
+                title = result.get("title", params.get("title", "Event"))
+                start = result.get("start", "")
+                link  = result.get("link", "")
+                return (
+                    f"Done! **{title}** has been added to your calendar.\n"
+                    f"Start: `{start}`\n"
+                    + (f"[Open in Google Calendar]({link})" if link else "")
+                )
+
             return f"[Unknown pending action: {action}]"
         except Exception as exc:
             logger.error("Failed to execute pending action %s: %s", action, exc)

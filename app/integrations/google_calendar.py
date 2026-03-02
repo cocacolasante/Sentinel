@@ -94,16 +94,32 @@ class CalendarClient:
             })
         return events
 
+    @staticmethod
+    def _validated_tz(tz_name: str) -> str:
+        """Return tz_name if it's a valid IANA timezone, else fall back to UTC."""
+        try:
+            import zoneinfo
+            zoneinfo.ZoneInfo(tz_name)
+            return tz_name
+        except Exception:
+            logger.warning("Invalid timezone '%s' — falling back to UTC", tz_name)
+            return "UTC"
+
     def _create_event_sync(self, params: dict, calendar_id: str) -> dict:
         svc = self._build_service()
         # Parse date + time from params
         date     = params.get("date", "")
         time_str = params.get("time", "09:00")
         duration = int(params.get("duration_min", 60))
+        tz_name  = self._validated_tz(params.get("timezone", settings.timezone))
+
+        # Normalise time_str — accept "HH:MM" or "HH:MM:SS"
+        if time_str.count(":") == 1:
+            time_str = f"{time_str}:00"
 
         if date:
             try:
-                start_dt = datetime.fromisoformat(f"{date}T{time_str}:00")
+                start_dt = datetime.fromisoformat(f"{date}T{time_str}")
             except ValueError:
                 start_dt = datetime.now(tz=timezone.utc) + timedelta(hours=1)
         else:
@@ -115,8 +131,8 @@ class CalendarClient:
             "summary":     params.get("title", "New Event"),
             "description": params.get("description", ""),
             "location":    params.get("location", ""),
-            "start":       {"dateTime": start_dt.isoformat(), "timeZone": settings.timezone},
-            "end":         {"dateTime": end_dt.isoformat(),   "timeZone": settings.timezone},
+            "start":       {"dateTime": start_dt.isoformat(), "timeZone": tz_name},
+            "end":         {"dateTime": end_dt.isoformat(),   "timeZone": tz_name},
         }
         if "attendees" in params:
             body["attendees"] = [{"email": e} for e in params["attendees"]]

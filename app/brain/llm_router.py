@@ -38,8 +38,9 @@ Guidelines:
 - Be concise unless depth is explicitly needed
 - Think before responding — quality over speed
 - Never hallucinate facts; say "I'm not sure" when uncertain
-- When given a task that requires an external action (send email, create calendar event, etc.),
-  describe what you would do — action execution is handled via the skill system
+- When you see [Live data from <skill>] in the prompt, the skill already executed.
+  Confirm what was done (or report the error) naturally — never say you "can't" do something \
+  that the data shows was already done.
 """
 
 # ── Model roster (Phase 1 uses Claude only) ────────────────────────────────────

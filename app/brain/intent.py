@@ -51,7 +51,7 @@ Intent-specific param examples:
   gmail_read:    {{"query": "from:boss", "max_results": 5}}
   gmail_send:    {{"to": "sarah@co.com", "subject": "Re: meeting", "body_hint": "I'll be 10 min late"}}
   calendar_read: {{"period": "today" | "tomorrow" | "this week" | "next week"}}
-  calendar_write:{{"title": "Sprint review", "date": "2026-03-05", "time": "14:00", "duration_min": 60, "description": ""}}
+  calendar_write:{{"title": "Sprint review", "date": "2026-03-05", "time": "14:00", "duration_min": 60, "description": "", "timezone": "America/New_York"}}
   github_read:   {{"repo": "owner/name", "resource": "issues" | "prs" | "notifications"}}
   github_write:  {{"repo": "owner/name", "action": "create_issue", "title": "...", "body": "..."}}
   smart_home:    {{"action": "turn_on" | "turn_off" | "toggle" | "set" | "status", "entity": "light.living_room", "value": null}}

@@ -6,7 +6,22 @@
   "refresh": "30s",
   "time": { "from": "now-3h", "to": "now" },
   "schemaVersion": 39,
+  "version": 6,
   "tags": ["brain", "ai", "celery", "loki", "observability"],
+  "templating": {
+    "list": [
+      {
+        "name": "brain_url",
+        "type": "textbox",
+        "label": "Brain API URL",
+        "description": "Base URL of the Brain API. Use http://localhost:8000 locally, or https://your-domain.com in production.",
+        "query": "http://localhost:8000",
+        "current": { "value": "http://localhost:8000", "text": "http://localhost:8000" },
+        "options": [{ "value": "http://localhost:8000", "text": "http://localhost:8000" }],
+        "hide": 0
+      }
+    ]
+  },
   "panels": [
 
     {
@@ -241,11 +256,22 @@
     },
 
     {
-      "id": 19, "type": "timeseries", "title": "Error Rate Trend (7d)",
+      "id": 19, "type": "timeseries", "title": "HTTP Error Rate (5xx / min)",
       "gridPos": { "h": 8, "w": 12, "x": 6, "y": 39 },
-      "datasource": { "type": "grafana-sentry-datasource", "uid": "sentry" },
-      "targets": [{ "queryType": "statsV2", "projectIds": [], "query": "", "groupBy": ["issue"], "field": "count()", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "short" } },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{
+        "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) * 60",
+        "legendFormat": "5xx errors/min",
+        "refId": "A"
+      },{
+        "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) * 60",
+        "legendFormat": "4xx errors/min",
+        "refId": "B"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } },
+        "overrides": [{ "matcher": {"id":"byName","options":"5xx errors/min"}, "properties": [{"id":"color","value":{"mode":"fixed","fixedColor":"red"}}] }]
+      },
       "options": { "tooltip": { "mode": "multi" } }
     },
 
@@ -337,14 +363,14 @@
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 61 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [{
-        "expr": "{service=\"brain\"}",
+        "expr": "{job=\"docker\", level=~\".+\"}",
         "legendFormat": "", "refId": "A"
       }],
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
         "prettifyLogMessage": false,
-        "showLabels": false,
+        "showLabels": true,
         "showTime": true,
         "sortOrder": "Descending",
         "wrapLogMessage": false
@@ -356,7 +382,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 71 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [{
-        "expr": "{service=\"brain\"} |= \"ERROR\"",
+        "expr": "{job=\"docker\", level=\"ERROR\"}",
         "legendFormat": "", "refId": "A"
       }],
       "options": {
@@ -369,11 +395,11 @@
     },
 
     {
-      "id": 29, "type": "logs", "title": "n8n Workflow Logs",
+      "id": 29, "type": "logs", "title": "n8n + Other Container Logs",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 71 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [{
-        "expr": "{service=\"n8n\"}",
+        "expr": "{job=\"docker\", level=\"\"} |= \"n8n\"",
         "legendFormat": "", "refId": "A"
       }],
       "options": {
@@ -396,7 +422,7 @@
       "gridPos": { "h": 20, "w": 14, "x": 0, "y": 80 },
       "options": {
         "mode": "html",
-        "content": "<div id=\"brain-chat\" style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Brain Chat</span><button onclick=\"clearSession()\" style=\"background:#374151;color:#9ca3af;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Clear</button></div><div id=\"msgs\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0\"></div><div style=\"display:flex;gap:6px\"><textarea id=\"inp\" rows=\"2\" placeholder=\"Message Brain... (Enter to send)\" style=\"flex:1;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:8px;font-size:13px;font-family:monospace;resize:none\"></textarea><button onclick=\"sendMsg()\" id=\"sendBtn\" style=\"background:#3b82f6;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;align-self:flex-end\">Send</button></div><div id=\"chat-status\" style=\"font-size:11px;color:#6b7280\"></div></div><script>var _sid='dashboard-'+Math.random().toString(36).slice(2,8);function addMsg(role,text){var msgs=document.getElementById('msgs');var d=document.createElement('div');d.style.cssText='padding:8px 10px;border-radius:6px;max-width:92%;word-break:break-word;font-size:13px;line-height:1.5;white-space:pre-wrap;'+(role==='user'?'background:#1e3a5f;color:#93c5fd;align-self:flex-end':'background:#1f2937;color:#d1d5db;align-self:flex-start');d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;}async function sendMsg(){var inp=document.getElementById('inp');var btn=document.getElementById('sendBtn');var msg=inp.value.trim();if(!msg)return;addMsg('user',msg);inp.value='';btn.disabled=true;document.getElementById('chat-status').textContent='Thinking...';try{var r=await fetch('/api/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,session_id:_sid})});var data=await r.json();addMsg('brain',data.reply||data.detail||'No response');document.getElementById('chat-status').textContent='intent: '+data.intent+' | agent: '+data.agent;}catch(e){addMsg('brain','Error: '+e.message);document.getElementById('chat-status').textContent='';}btn.disabled=false;}function clearSession(){fetch('/api/v1/chat/'+_sid,{method:'DELETE'});document.getElementById('msgs').innerHTML='';document.getElementById('chat-status').textContent='Session cleared';}document.getElementById('inp').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}});</script>"
+        "content": "<div id=\"brain-chat\" style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Brain Chat</span><button onclick=\"clearSession()\" style=\"background:#374151;color:#9ca3af;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Clear</button></div><div id=\"msgs\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0\"></div><div style=\"display:flex;gap:6px\"><textarea id=\"inp\" rows=\"2\" placeholder=\"Message Brain... (Enter to send)\" style=\"flex:1;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:8px;font-size:13px;font-family:monospace;resize:none\"></textarea><button onclick=\"sendMsg()\" id=\"sendBtn\" style=\"background:#3b82f6;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;align-self:flex-end\">Send</button></div><div id=\"chat-status\" style=\"font-size:11px;color:#6b7280\"></div></div><script>var _sid='dashboard-'+Math.random().toString(36).slice(2,8);function addMsg(role,text){var msgs=document.getElementById('msgs');var d=document.createElement('div');d.style.cssText='padding:8px 10px;border-radius:6px;max-width:92%;word-break:break-word;font-size:13px;line-height:1.5;white-space:pre-wrap;'+(role==='user'?'background:#1e3a5f;color:#93c5fd;align-self:flex-end':'background:#1f2937;color:#d1d5db;align-self:flex-start');d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;}async function sendMsg(){var inp=document.getElementById('inp');var btn=document.getElementById('sendBtn');var msg=inp.value.trim();if(!msg)return;addMsg('user',msg);inp.value='';btn.disabled=true;document.getElementById('chat-status').textContent='Thinking...';try{var r=await fetch('[[brain_url]]/api/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,session_id:_sid})});var data=await r.json();addMsg('brain',data.reply||data.detail||'No response');document.getElementById('chat-status').textContent='intent: '+data.intent+' | agent: '+data.agent;}catch(e){addMsg('brain','Error: '+e.message);document.getElementById('chat-status').textContent='';}btn.disabled=false;}function clearSession(){fetch('[[brain_url]]/api/v1/chat/'+_sid,{method:'DELETE'});document.getElementById('msgs').innerHTML='';document.getElementById('chat-status').textContent='Session cleared';}document.getElementById('inp').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}});</script>"
       }
     },
 
@@ -405,7 +431,7 @@
       "gridPos": { "h": 20, "w": 10, "x": 14, "y": 80 },
       "options": {
         "mode": "html",
-        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Task Queue</span><div style=\"display:flex;gap:4px;flex-wrap:wrap\"><button onclick=\"pauseWorkers()\" style=\"background:#7f1d1d;color:#fca5a5;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Pause Workers</button><button onclick=\"resumeWorkers()\" style=\"background:#14532d;color:#86efac;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Resume Workers</button><button onclick=\"loadTasks()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Refresh</button></div></div><div id=\"task-status\" style=\"font-size:11px;color:#6b7280\"></div><div id=\"task-table\" style=\"flex:1;overflow-y:auto\"></div></div><script>function renderTasks(data){var all=[];['active','reserved','scheduled'].forEach(function(type){Object.entries(data[type]||{}).forEach(function(kv){(kv[1]||[]).forEach(function(t){all.push(Object.assign({_type:type,_worker:kv[0]},t));});});});var el=document.getElementById('task-table');if(!all.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No tasks — queue is idle</div>';return;}var clr={active:'#86efac',reserved:'#93c5fd',scheduled:'#fde68a'};var rows=all.map(function(t){return'<tr><td style=\"padding:4px 6px\"><span style=\"color:'+(clr[t._type]||'#9ca3af')+';font-size:11px\">'+t._type+'</span></td><td style=\"padding:4px 6px;color:#d1d5db;font-size:11px\">'+((t.name||'').split('.').pop())+'</td><td style=\"padding:4px 6px;color:#6b7280;font-size:10px\">'+((t.id||'').slice(0,8))+'…</td><td style=\"padding:4px 6px\"><button onclick=\"revoke(\\\"'+t.id+'\\\")\" style=\"background:#374151;color:#f87171;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px\">Revoke</button></td></tr>';}).join('');el.innerHTML='<table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">State</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">Task</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">ID</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';}async function loadTasks(){document.getElementById('task-status').textContent='Loading...';try{var r=await fetch('/api/v1/tasks');if(!r.ok)throw new Error(r.statusText);renderTasks(await r.json());document.getElementById('task-status').textContent='Updated '+new Date().toLocaleTimeString();}catch(e){document.getElementById('task-status').textContent='Error: '+e.message;}}async function revoke(id){document.getElementById('task-status').textContent='Revoking '+id.slice(0,8)+'...';await fetch('/api/v1/tasks/'+id+'?terminate=true',{method:'DELETE'});loadTasks();}async function pauseWorkers(){await fetch('/api/v1/workers/pause',{method:'POST'});document.getElementById('task-status').textContent='Workers paused — finishing current tasks then stopping';}async function resumeWorkers(){await fetch('/api/v1/workers/resume',{method:'POST'});document.getElementById('task-status').textContent='Workers resumed — pulling from queue';}loadTasks();setInterval(loadTasks,15000);</script>"
+        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Task Queue</span><div style=\"display:flex;gap:4px;flex-wrap:wrap\"><button onclick=\"pauseWorkers()\" style=\"background:#7f1d1d;color:#fca5a5;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Pause Workers</button><button onclick=\"resumeWorkers()\" style=\"background:#14532d;color:#86efac;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Resume Workers</button><button onclick=\"loadTasks()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Refresh</button></div></div><div id=\"task-status\" style=\"font-size:11px;color:#6b7280\"></div><div id=\"task-table\" style=\"flex:1;overflow-y:auto\"></div></div><script>function renderTasks(data){var all=[];['active','reserved','scheduled'].forEach(function(type){Object.entries(data[type]||{}).forEach(function(kv){(kv[1]||[]).forEach(function(t){all.push(Object.assign({_type:type,_worker:kv[0]},t));});});});var el=document.getElementById('task-table');if(!all.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No tasks — queue is idle</div>';return;}var clr={active:'#86efac',reserved:'#93c5fd',scheduled:'#fde68a'};var rows=all.map(function(t){return'<tr><td style=\"padding:4px 6px\"><span style=\"color:'+(clr[t._type]||'#9ca3af')+';font-size:11px\">'+t._type+'</span></td><td style=\"padding:4px 6px;color:#d1d5db;font-size:11px\">'+((t.name||'').split('.').pop())+'</td><td style=\"padding:4px 6px;color:#6b7280;font-size:10px\">'+((t.id||'').slice(0,8))+'…</td><td style=\"padding:4px 6px\"><button onclick=\"revoke(\\\"'+t.id+'\\\")\" style=\"background:#374151;color:#f87171;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px\">Revoke</button></td></tr>';}).join('');el.innerHTML='<table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">State</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">Task</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">ID</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';}async function loadTasks(){document.getElementById('task-status').textContent='Loading...';try{var r=await fetch('[[brain_url]]/api/v1/tasks');if(!r.ok)throw new Error(r.statusText);renderTasks(await r.json());document.getElementById('task-status').textContent='Updated '+new Date().toLocaleTimeString();}catch(e){document.getElementById('task-status').textContent='Error: '+e.message;}}async function revoke(id){document.getElementById('task-status').textContent='Revoking '+id.slice(0,8)+'...';await fetch('[[brain_url]]/api/v1/tasks/'+id+'?terminate=true',{method:'DELETE'});loadTasks();}async function pauseWorkers(){await fetch('[[brain_url]]/api/v1/workers/pause',{method:'POST'});document.getElementById('task-status').textContent='Workers paused — finishing current tasks then stopping';}async function resumeWorkers(){await fetch('[[brain_url]]/api/v1/workers/resume',{method:'POST'});document.getElementById('task-status').textContent='Workers resumed — pulling from queue';}loadTasks();setInterval(loadTasks,15000);</script>"
       }
     }
 

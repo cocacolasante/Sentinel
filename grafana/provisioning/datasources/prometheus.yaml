@@ -31,3 +31,12 @@ datasources:
       sslmode: disable
       postgresVersion: 1600
     editable: false
+
+  - name: Sentry
+    type: grafana-sentry-datasource
+    uid: sentry
+    jsonData:
+      orgSlug: ${SENTRY_ORG}
+    secureJsonData:
+      authToken: ${SENTRY_AUTH_TOKEN}
+    editable: true

@@ -35,6 +35,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from app.config import get_settings
@@ -168,6 +169,16 @@ Instrumentator(
     should_ignore_untemplated=True,
     excluded_handlers=["/metrics", "/", "/api/v1/health"],
 ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
+# CORS — allow Grafana (localhost:3000) to call the Brain API in local dev.
+# In production both are on the same Nginx domain so CORS is not needed.
+if settings.environment != "production":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000"],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
 
 app.include_router(chat.router,          prefix="/api/v1", tags=["chat"])
 app.include_router(integrations_router,  prefix="/api/v1", tags=["integrations"])

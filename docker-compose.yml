@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
 
   # ── AI Brain (FastAPI) ──────────────────────────────────────
@@ -206,7 +204,6 @@ services:
     restart: unless-stopped
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./observability/promtail-config.yml:/etc/promtail/config.yml:ro
     networks:
       - brain-net
@@ -300,6 +297,11 @@ services:
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/brain_overview.json"
       GF_INSTALL_PLUGINS:              "grafana-sentry-datasource"
       GF_PANELS_DISABLE_SANITIZE_HTML: "true"
+      SENTRY_AUTH_TOKEN:               "${SENTRY_AUTH_TOKEN:-}"
+      SENTRY_ORG:                      "${SENTRY_ORG:-}"
+      POSTGRES_USER:                   "${POSTGRES_USER}"
+      POSTGRES_PASSWORD:               "${POSTGRES_PASSWORD}"
+      POSTGRES_DB:                     "${POSTGRES_DB}"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
