@@ -27,6 +27,19 @@ import shlex
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
+# ── Milestone-worthy safe command detection ────────────────────────────────────
+# Safe commands that change state (not just reads) are worth logging as milestones.
+_MILESTONE_CMD_RE = re.compile(
+    r"\b(git\s+(commit|push|pull|clone|checkout|merge)\b"
+    r"|docker\s+(restart|build|start|compose)\b"
+    r"|npm\s+(install|run|build|start)\b"
+    r"|pip\s+install\b"
+    r"|apt(?:-get)?\s+install\b"
+    r"|systemctl\s+start\b"
+    r"|make\b)",
+    re.IGNORECASE,
+)
+
 # ── Destructive pattern detection ─────────────────────────────────────────────
 # These patterns require explicit user confirmation before execution.
 _DESTRUCTIVE_RE = re.compile(
@@ -225,4 +238,25 @@ class ServerShellSkill(BaseSkill):
             f"Status: {status}\n\n"
             f"Output:\n```\n{output or '(no output)'}\n```"
         )
+
+        # Log milestone for write-type safe commands (not pure reads like cat/ls/grep)
+        _is_milestone = (
+            action in ("docker_restart", "docker_compose")
+            or bool(_MILESTONE_CMD_RE.search(command))
+        )
+        if code == 0 and _is_milestone:
+            async def _notify() -> None:
+                try:
+                    from app.integrations.milestone_logger import log_milestone
+                    await log_milestone(
+                        action=action or "shell_command",
+                        intent="server_shell",
+                        params={"command": command, "cwd": cwd},
+                        session_id="system",
+                        agent="brain",
+                    )
+                except Exception:
+                    pass
+            asyncio.create_task(_notify())
+
         return SkillResult(context_data=context, skill_name=self.name)

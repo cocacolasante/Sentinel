@@ -1,0 +1,41 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [
+    "grafana/",
+    "nginx/",
+    "prometheus/",
+    "certbot/",
+    "observability/",
+    "scripts/",
+    "telos/",
+    ".github/",
+]
+
+[tool.ruff.lint]
+# E: pycodestyle errors, F: pyflakes, W: pycodestyle warnings
+select = ["E", "F", "W"]
+ignore = [
+    "E401",  # Multiple imports on one line — used in some integrations
+    "E402",  # Module level import not at top — intentional in main.py
+    "E501",  # Line too long — covered by line-length setting
+    "E702",  # Multiple statements on one line (semicolons) — intentional compact style
+    "E711",  # Comparison to None — style preference
+    "E712",  # Comparison to True/False — style preference
+    "E721",  # Type comparison using type()
+    "E741",  # Ambiguous variable name
+    "F401",  # Unused import — some are intentional re-exports
+    "F541",  # f-string without placeholders — minor, fix incrementally
+    "F811",  # Redefinition of unused name — some imports are intentional
+    "F821",  # Undefined name — false positive from forward-reference string annotations
+    "F841",  # Unused variable — fix incrementally
+    "E731",  # Lambda assignment — used intentionally in brain.py CLI helpers
+    "W291",  # Trailing whitespace
+    "W293",  # Whitespace before comment
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"

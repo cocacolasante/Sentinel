@@ -60,6 +60,23 @@ Self-modification capability:
 - To update a file: (1) read it with server_shell→read_file, (2) apply changes via repo_write, \
   (3) commit with repo_commit, (4) optionally run deploy.
 - The CLI source file is at brain.py (relative to /sentinel-project).
+
+Safe code-change workflow (ALWAYS follow this order — NEVER push directly to main):
+1. Create a branch: server_shell → git checkout -b feat/<short-name>
+2. Read the file(s) you need: server_shell → action=read_file path=<file>
+3. Write changes: repo_write skill (or server_shell for shell-level edits)
+4. Stage + commit: server_shell → git add -A && git commit -m "feat: <message>"
+5. Push: server_shell → git push origin feat/<short-name>
+6. Open PR: server_shell → gh pr create --title "..." --body "..." --base main
+7. Enable auto-merge: server_shell → gh pr merge --auto --squash
+   (PR auto-merges once CI passes — no human needed)
+8. Tell the user: "PR #N opened and auto-merge enabled. It will deploy automatically after CI passes (~3 min)."
+
+Rules:
+- NEVER run: git push origin main (branch protection blocks it)
+- NEVER run: gh pr merge without --auto (defeats the gated flow)
+- ALWAYS use a descriptive branch name (e.g. feat/add-slack-summary, fix/health-check-timeout)
+- PR body must explain WHAT changed and WHY, and reference any related task IDs
 """
 
 # ── Model roster (Phase 1 uses Claude only) ────────────────────────────────────

@@ -230,6 +230,8 @@ class Dispatcher:
             if words & _CONFIRM_WORDS:
                 reply = await self._execute_pending(pending, session_id)
                 self.memory.redis.clear_pending_action(session_id)
+                # Log milestone for every confirmed write action
+                asyncio.create_task(self._fire_milestone(pending, session_id))
                 # _execute_pending updates write task status internally on success/fail
                 await self.memory.persist_turn(session_id, message, reply, intent=pending["intent"])
                 return DispatchResult(reply=reply, intent=pending["intent"], session_id=session_id)
@@ -395,6 +397,11 @@ class Dispatcher:
                 try:
                     exec_reply = await self._execute_pending(result.pending_action, session_id)
                     self._update_write_task_status(task_id, "completed")
+                    # Log milestone for auto-executed write actions
+                    asyncio.create_task(self._fire_milestone(
+                        result.pending_action, session_id,
+                        agent=agent.name if agent else "",
+                    ))
                     reply = exec_reply
                 except Exception as exc:
                     self._update_write_task_status(task_id, "failed", str(exc))
@@ -494,6 +501,22 @@ class Dispatcher:
             return approval_level <= 2    # confirm at levels 1 & 2
         # STANDARD
         return approval_level <= 1        # confirm only at level 1
+
+    @staticmethod
+    async def _fire_milestone(pending: dict, session_id: str, agent: str = "") -> None:
+        """Fire-and-forget milestone log + Slack notification after a write action executes."""
+        try:
+            from app.integrations.milestone_logger import log_milestone
+            await log_milestone(
+                action=pending.get("action", "unknown"),
+                intent=pending.get("intent", "unknown"),
+                params=pending.get("params", {}),
+                session_id=session_id,
+                original=pending.get("original", ""),
+                agent=agent,
+            )
+        except Exception as exc:
+            logger.debug("Milestone logging skipped: {}", exc)
 
     @staticmethod
     def _log_write_task(task_id: str, session_id: str, pending: dict, skill) -> None:

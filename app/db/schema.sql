@@ -195,3 +195,19 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority_num    SMALLINT    DEFAULT 3
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS approval_level  SMALLINT    DEFAULT 2 CHECK (approval_level BETWEEN 1 AND 3);
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to     TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tags            TEXT;
+
+-- ── AI Milestone log ──────────────────────────────────────────────────────────
+-- Every confirmed write action the AI executes is recorded here and posted to
+-- #sentinel-milestones in Slack.
+CREATE TABLE IF NOT EXISTS ai_milestones (
+    id           BIGSERIAL   PRIMARY KEY,
+    session_id   TEXT        NOT NULL,
+    action       TEXT        NOT NULL,
+    intent       TEXT,
+    summary      TEXT,
+    detail       JSONB       DEFAULT '{}',
+    agent        TEXT,
+    triggered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ai_milestones_session ON ai_milestones (session_id, triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_milestones_action  ON ai_milestones (action, triggered_at DESC);

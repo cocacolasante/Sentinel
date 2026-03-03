@@ -2,6 +2,7 @@ services:
 
   # ── AI Brain (FastAPI) ──────────────────────────────────────
   brain:
+    image: ghcr.io/cocacolasante/sentinel:${IMAGE_TAG:-latest}
     build: .
     container_name: ai-brain
     restart: unless-stopped
@@ -12,6 +13,7 @@ services:
     environment:
       # Point RepoClient at the bind-mounted live host code
       REPO_LOCAL_PATH: /sentinel-project
+      GH_TOKEN: ${GITHUB_TOKEN}    # enables gh pr create inside container
     volumes:
       # SSH key for git push to GitHub (read-only)
       - ${HOME}/.ssh:/root/.ssh:ro
@@ -150,6 +152,7 @@ services:
 
   # ── Celery Worker ─────────────────────────────────────────────
   celery-worker:
+    image: ghcr.io/cocacolasante/sentinel:${IMAGE_TAG:-latest}
     build: .
     container_name: ai-celery-worker
     command: >
@@ -179,6 +182,7 @@ services:
   # ── Celery Beat (scheduler) ───────────────────────────────────
   # Owns the cron schedule — replaces APScheduler in the brain process.
   celery-beat:
+    image: ghcr.io/cocacolasante/sentinel:${IMAGE_TAG:-latest}
     build: .
     container_name: ai-celery-beat
     command: >
@@ -199,6 +203,7 @@ services:
   # ── Flower (Celery task UI) ───────────────────────────────────
   # Access via https://your-domain.com/flower/
   flower:
+    image: ghcr.io/cocacolasante/sentinel:${IMAGE_TAG:-latest}
     build: .
     container_name: ai-flower
     command: >
@@ -345,6 +350,25 @@ services:
     networks:
       - brain-net
     restart: unless-stopped
+
+  # ── Deploy Agent (webhook receiver — stays up during brain restarts) ──────
+  deploy-agent:
+    image: python:3.11-slim
+    container_name: ai-deploy-agent
+    restart: unless-stopped
+    environment:
+      DEPLOY_WEBHOOK_SECRET: ${DEPLOY_WEBHOOK_SECRET}
+      GHCR_PAT:              ${GHCR_PAT:-}
+      GITHUB_USERNAME:       ${GITHUB_USERNAME:-cocacolasante}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/sentinel:/sentinel-project
+      - ./deploy:/deploy:ro
+    command: python /deploy/webhook_server.py
+    ports:
+      - "127.0.0.1:9000:9000"
+    networks:
+      - brain-net
 
 networks:
   brain-net:

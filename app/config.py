@@ -140,6 +140,8 @@ class Settings(BaseSettings):
     haiku_daily_token_budget:  int = 0
     # Slack channel for budget alerts (separate from eval reports).
     slack_alert_channel: str = "brain-alerts"
+    # Slack channel for AI action milestones (every confirmed write action).
+    slack_milestone_channel: str = "sentinel-milestones"
     # Per-session request rate limits.
     rate_limit_per_minute: int = 20
     rate_limit_per_hour:   int = 200

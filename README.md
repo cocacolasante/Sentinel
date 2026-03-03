@@ -24,7 +24,8 @@ Personalized AI assistant for Anthony. Runs on an Ubuntu server as a FastAPI/Pyt
 16. [Security](#security)
 17. [Google OAuth Setup](#google-oauth-setup)
 18. [Updating](#updating)
-19. [Troubleshooting](#troubleshooting)
+19. [CI/CD — GitOps Loop](#cicd--gitops-loop)
+20. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -1031,6 +1032,20 @@ docker compose build --no-cache brain && docker compose up -d brain
 ```
 
 Database schema changes (`app/db/schema.sql`) run automatically on startup — all `CREATE TABLE` statements use `IF NOT EXISTS` so no data is ever lost.
+
+---
+
+## CI/CD — GitOps Loop
+
+The brain can edit its own code, open a PR, and deploy automatically after CI passes.
+Full setup instructions: **[CICD.md](./CICD.md)**
+
+Quick summary:
+1. Add `DEPLOY_WEBHOOK_SECRET` to GitHub repo secrets and to `.env`
+2. `docker compose up -d deploy-agent && docker compose restart nginx`
+3. Push to `main` → CI runs → image pushed to GHCR → webhook fires → brain restarts
+4. Make the GHCR package **Public** after the first image push (GitHub → Packages → sentinel → settings)
+5. Set branch protection so all changes (including AI edits) go through PRs
 
 ---
 
