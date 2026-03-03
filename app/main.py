@@ -229,4 +229,4 @@ app.include_router(task_board_router,      prefix="/api/v1", tags=["tasks-board"
 
 @app.get("/", tags=["root"])
 async def root():
-    return {"status": "Brain is alive", "version": "2.0.0"}
+    return {"status": "Sentinel AI — online", "version": "2.2.0"}

@@ -267,7 +267,8 @@ class CodeChangeSkill(BaseSkill):
         try:
             _sh("git checkout main")
             _sh("git pull --ff-only origin main")
-            _sh(f"git checkout -b {branch}")
+            # -B resets the branch to current HEAD if it already exists
+            _sh(f"git checkout -B {branch}")
 
             full_path = ws / path
             if not full_path.exists():
