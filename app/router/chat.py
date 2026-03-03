@@ -84,9 +84,11 @@ async def list_agents():
 
 @router.get("/health")
 async def health():
+    import os
     from app.db import postgres
     return {
         "status":   "ok",
         "redis":    memory.ping(),
         "postgres": postgres.ping(),
+        "sha":      os.environ.get("GIT_SHA", "dev"),
     }
