@@ -65,10 +65,14 @@ class Settings(BaseSettings):
     telos_dir: str = "/home/ubuntu/ai-brain/telos"
     telos_cache_ttl_seconds: int = 300
 
-    # ── Observability ───────────────────────────────────────────
-    sentry_dsn: str = ""
+    # ── Observability / Sentry ───────────────────────────────────
+    sentry_dsn:             str = ""
+    sentry_auth_token:      str = ""   # API token for reading/managing issues
+    sentry_org:             str = ""   # organization slug
+    sentry_project:         str = ""   # default project slug (optional)
+    sentry_webhook_secret:  str = ""   # HMAC secret for webhook signature verification
     log_level: str = "INFO"
-    log_dir: str = "/var/log/aibrain"
+    log_dir:   str = "/var/log/aibrain"
 
     # ── Evals ──────────────────────────────────────────────────
     slack_eval_channel: str = "brain-evals"

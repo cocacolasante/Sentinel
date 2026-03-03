@@ -161,6 +161,24 @@ CREATE TABLE IF NOT EXISTS pending_write_tasks (
 CREATE INDEX IF NOT EXISTS idx_write_tasks_status  ON pending_write_tasks (status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_write_tasks_session ON pending_write_tasks (session_id, created_at DESC);
 
+-- ── Sentry issue audit log ──────────────────────────────────────────────────────
+-- Populated by the Sentry webhook router. Drives pending_write_tasks creation.
+CREATE TABLE IF NOT EXISTS sentry_issues (
+    issue_id    TEXT        PRIMARY KEY,   -- Sentry issue ID
+    title       TEXT        NOT NULL,
+    level       TEXT        NOT NULL,      -- fatal | critical | error | warning | info | debug
+    status      TEXT        NOT NULL,      -- unresolved | resolved | ignored
+    project     TEXT,
+    permalink   TEXT,
+    count       INTEGER     NOT NULL DEFAULT 0,
+    platform    TEXT,
+    first_seen  TEXT,
+    category    TEXT        NOT NULL,      -- breaking | critical | standard | none
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sentry_issues_received ON sentry_issues (received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sentry_issues_level    ON sentry_issues (level, received_at DESC);
+
 -- ── Brain settings (key-value) ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS brain_settings (
     key         TEXT        PRIMARY KEY,

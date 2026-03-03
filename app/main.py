@@ -31,6 +31,8 @@ Routes:
   GET  /api/v1/approval/history       -- recent completed/failed write tasks
   POST /api/v1/approval/approve/{id}  -- approve a pending write task
   POST /api/v1/approval/cancel/{id}   -- cancel a pending write task
+  POST /api/v1/sentry/webhook         -- Sentry alert webhook → Brain task (severity-gated)
+  GET  /api/v1/sentry/issues          -- recent Sentry issues tracked in DB
 
 Scheduled jobs (Celery Beat — separate celery-beat container):
   Weekly   Sun 09:00 UTC  -- agent quality evals + Slack scorecard
@@ -113,7 +115,8 @@ from app.router.observability  import router as observe_router           # noqa:
 from app.router.costs          import router as costs_router             # noqa: E402
 from app.router.tasks_control  import router as tasks_control_router     # noqa: E402
 from app.router.approval       import router as approval_router           # noqa: E402
-from app.router.whatsapp       import router as whatsapp_router           # noqa: E402
+from app.router.whatsapp        import router as whatsapp_router          # noqa: E402
+from app.router.sentry_webhook  import router as sentry_webhook_router    # noqa: E402
 from app.router.slack          import start_socket_mode                  # noqa: E402
 from app.observability.event_bus import event_bus                    # noqa: E402
 from prometheus_fastapi_instrumentator import Instrumentator          # noqa: E402
@@ -195,7 +198,8 @@ app.include_router(observe_router,       prefix="/api/v1", tags=["observability"
 app.include_router(costs_router,         prefix="/api/v1", tags=["costs"])
 app.include_router(tasks_control_router, prefix="/api/v1", tags=["tasks"])
 app.include_router(approval_router,      prefix="/api/v1", tags=["approval"])
-app.include_router(whatsapp_router,      prefix="/api/v1", tags=["whatsapp"])
+app.include_router(whatsapp_router,        prefix="/api/v1", tags=["whatsapp"])
+app.include_router(sentry_webhook_router,  prefix="/api/v1", tags=["sentry"])
 
 
 @app.get("/", tags=["root"])

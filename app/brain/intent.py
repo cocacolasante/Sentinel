@@ -72,6 +72,8 @@ Intent-specific param examples:
   repo_read:      {{"action": "status" | "diff" | "list_files" | "read_file", "path": "app/main.py"}}
   repo_write:     {{"action": "write_file" | "patch_file", "path": "app/main.py", "content": "...", "old": "...", "new": "..."}}
   repo_commit:    {{"action": "commit" | "push" | "commit_push", "message": "Fix calendar timezone bug", "push": true}}
+  sentry_read:    {{"action": "list" | "get" | "db", "project": "", "query": "is:unresolved", "issue_id": "", "limit": 20}}
+  sentry_manage:  {{"action": "resolve" | "ignore" | "assign" | "comment", "issue_id": "123456", "assignee": "user@co.com", "text": "looking into this"}}
   skill_discover: {{}}
   chat:           {{}}
 
@@ -101,6 +103,8 @@ ionos_dns       — manage IONOS DNS zones and records (A, CNAME, MX, TXT, etc.)
 repo_read       — read, list, diff, or check status of the Brain's own codebase/files
 repo_write      — create or edit a file in the Brain's codebase
 repo_commit     — commit and/or push changes in the Brain's repository to GitHub
+sentry_read     — list, search, or inspect Sentry error issues; show recent errors
+sentry_manage   — resolve, ignore, assign, or comment on a Sentry issue
 skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
 chat            — anything else: analysis, writing, code, questions, conversation"""
 

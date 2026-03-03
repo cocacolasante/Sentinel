@@ -61,19 +61,24 @@ Both connections use separate credentials:
 
 ## Step 4 — Add to `.env`
 
-Open `.env` and fill in the three Sentry values:
+Open `.env` and fill in the Sentry values:
 
 ```env
-# ── Observability ─────────────────────────────────────────
+# ── Observability / Sentry ────────────────────────────────
 SENTRY_DSN=https://abc123xyz@o123456.ingest.sentry.io/7654321
-SENTRY_AUTH_TOKEN=sntrys_your_token_here
+SENTRY_AUTH_TOKEN=sntrys_your_token_here   # used by Brain skill + Grafana
 SENTRY_ORG=your-org-slug
 SENTRY_PROJECT=ai-brain
+SENTRY_WEBHOOK_SECRET=                     # optional — see Step 9 below
 ```
 
-> `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are only used by
-> Grafana's Sentry datasource — they are not read by the Brain app itself.
-> The Brain app only reads `SENTRY_DSN`.
+> **`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`** are used by
+> both Grafana's Sentry datasource **and** the Brain's `sentry_read` /
+> `sentry_manage` skills. Without them the Brain can still receive webhook
+> alerts and create tasks, but it won't be able to query or manage issues
+> via natural language.
+>
+> **`SENTRY_DSN`** is used only by the Brain SDK for sending errors to Sentry.
 
 ---
 
@@ -186,19 +191,116 @@ noise from real production errors:
 
 ---
 
-## Alerting (Optional)
+## Step 9 — Connect Sentry Webhooks to the Brain (Task Integration)
 
-Once errors are flowing, set up Sentry alerts so you get notified without
-watching the dashboard:
+This is the most powerful part: when Sentry detects an error, it pushes a
+webhook to the Brain and the Brain automatically creates an approval task,
+classified by severity.
+
+### How severity maps to the approval system
+
+| Sentry Level | Approval Category | Behavior at default level (1) |
+|---|---|---|
+| `fatal` | BREAKING | Always requires confirmation |
+| `critical` / `error` | CRITICAL | Requires confirmation at levels 1 & 2 |
+| `warning` | STANDARD | Requires confirmation at level 1 only |
+| `info` / `debug` | NONE | Logged silently — no task created |
+
+### Step 9a — Create a Sentry Internal Integration
+
+1. In Sentry, go to **Settings → Integrations**
+2. Click **Create New Integration** → **Internal Integration**
+3. Name it `Brain Task Router` (or anything descriptive)
+4. Under **Webhook URL**, enter:
+   ```
+   https://your-domain.com/api/v1/sentry/webhook
+   ```
+5. Under **Subscriptions**, check **Issue**
+6. *(Optional)* Under **Credentials**, copy the **Client Secret** — this is your
+   `SENTRY_WEBHOOK_SECRET` for signature verification
+
+### Step 9b — Add the webhook secret to `.env`
+
+```env
+SENTRY_WEBHOOK_SECRET=your_client_secret_from_sentry
+```
+
+Leave blank to skip signature verification (only safe behind Nginx auth or if
+the endpoint is not publicly exposed).
+
+Rebuild and restart:
+```bash
+docker compose up --build -d brain
+```
+
+### Step 9c — Verify it's working
+
+1. In Sentry, go to your Internal Integration → **Send Test** (or wait for a
+   real error to occur)
+2. Check the Brain's approval queue:
+   ```bash
+   curl http://localhost:8000/api/v1/approval/pending
+   ```
+   You should see a new task with `"action": "sentry_investigate"` and
+   `"category": "critical"` (or whatever level the test event was).
+3. Check the tracked issue log:
+   ```bash
+   curl http://localhost:8000/api/v1/sentry/issues
+   ```
+
+### Step 9d — Approve a task and get an analysis
+
+Once a task appears in the approval queue, approve it via the API:
+```bash
+curl -X POST http://localhost:8000/api/v1/approval/approve/<task_id>
+```
+
+Or just tell the Brain in Slack/chat:
+```
+confirm
+```
+
+The Brain will fetch the full issue from Sentry, run an LLM analysis, and
+return:
+- Likely root cause
+- Immediate mitigation steps
+- Recommended fix
+- Suggested next action (resolve, create GitHub issue, assign, etc.)
+
+---
+
+## Step 10 — Brain Commands for Sentry
+
+Once `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are set, the
+Brain can read and manage Sentry issues directly via natural language:
+
+| What you say | What happens |
+|---|---|
+| "show my Sentry errors" | Lists unresolved issues from the Sentry API |
+| "show me Sentry issue 12345" | Fetches full detail for that issue |
+| "show tracked Sentry issues" | Lists issues stored in the Brain's DB (from webhooks) |
+| "resolve Sentry issue 12345" | Marks resolved (CRITICAL — asks for confirmation) |
+| "ignore Sentry issue 12345" | Marks ignored (CRITICAL — asks for confirmation) |
+| "assign Sentry issue 12345 to me" | Assigns to a user (STANDARD — asks at level 1) |
+| "add a note to Sentry issue 12345: looking into this" | Adds a comment |
+
+---
+
+## Alerting (Optional — Sentry → Slack Direct)
+
+As an alternative or complement to the Brain webhook integration, set up
+Sentry's native Slack alerts so you get pinged on critical errors without
+waiting for approval:
 
 1. Go to **Alerts → Create Alert Rule**
 2. Recommended rule: **"Notify on first occurrence of any new issue"**
 3. Add a Slack notification action — connect Sentry to your Slack workspace via
    **Settings → Integrations → Slack**
-4. Point it at your `sentinel-alerts` channel
+4. Point it at your `brain-alerts` channel
 
-This gives you a Slack ping the moment a new error type hits production — before
-any user reports it.
+The Brain webhook integration and Sentry's native Slack alerts work in parallel
+— Sentry Slack pings you immediately, the Brain webhook queues an actionable
+task you can approve from chat.
 
 ---
 

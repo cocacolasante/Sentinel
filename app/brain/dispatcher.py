@@ -84,6 +84,7 @@ def _build_skill_registry():
     from app.skills.n8n_skill       import N8nManageSkill
     from app.skills.whatsapp_skill  import WhatsAppReadSkill, WhatsAppSendSkill
     from app.skills.skill_discovery import SkillDiscoverySkill
+    from app.skills.sentry_skill    import SentryReadSkill, SentryManageSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -128,6 +129,9 @@ def _build_skill_registry():
     reg.register(RepoCommitSkill())
     # Skill discovery
     reg.register(SkillDiscoverySkill())
+    # Sentry error tracking
+    reg.register(SentryReadSkill())
+    reg.register(SentryManageSkill())
     return reg
 
 
@@ -818,6 +822,79 @@ class Dispatcher:
                 if task_id:
                     self._update_write_task_status(task_id, "completed")
                 return f"n8n `{real_act}` completed:\n```json\n{_json.dumps(res, indent=2)}\n```"
+
+            # ── Sentry issue management ──────────────────────────────────────
+            if action in ("sentry_resolve", "sentry_ignore", "sentry_assign",
+                          "sentry_comment", "sentry_investigate"):
+                from app.integrations.sentry_client import SentryClient
+                client   = SentryClient()
+                issue_id = params.get("issue_id", "")
+
+                if action == "sentry_investigate":
+                    try:
+                        issue = await client.get_issue(issue_id) if client.is_configured() else params
+                    except Exception:
+                        issue = params  # fall back to webhook params if API not configured
+
+                    level     = issue.get("level", "error")
+                    title     = issue.get("title", params.get("title", ""))
+                    project   = issue.get("project", params.get("project", ""))
+                    count     = issue.get("count", params.get("count", 0))
+                    permalink = issue.get("permalink", params.get("permalink", ""))
+                    platform  = issue.get("platform", params.get("platform", ""))
+                    culprit   = issue.get("culprit", "")
+
+                    analysis_prompt = (
+                        f"A {level.upper()} error has been reported in the {project} project.\n\n"
+                        f"**Title:** {title}\n"
+                        f"**Platform:** {platform}\n"
+                        f"**Occurrences:** {count}\n"
+                        f"**Culprit:** {culprit}\n"
+                        f"**Sentry link:** {permalink}\n\n"
+                        "Analyze this error and provide:\n"
+                        "1. Likely root cause\n"
+                        "2. Immediate mitigation steps\n"
+                        "3. Recommended fix\n"
+                        "4. Suggested next action (resolve, create GitHub issue, assign, etc.)"
+                    )
+                    analysis = await self.llm.generate(analysis_prompt, task_type="reasoning")
+
+                    task_id = pending.get("_task_id")
+                    if task_id:
+                        self._update_write_task_status(task_id, "completed")
+
+                    badge = {"fatal": "🔴", "critical": "🔴", "error": "🟠", "warning": "🟡"}.get(level, "🟠")
+                    return f"{badge} **Sentry {level.upper()} Analysis** — `{issue_id}`\n" + analysis
+
+                elif action == "sentry_resolve":
+                    await client.resolve_issue(issue_id)
+                    task_id = pending.get("_task_id")
+                    if task_id:
+                        self._update_write_task_status(task_id, "completed")
+                    return f"✅ Sentry issue `{issue_id}` marked as **resolved**."
+
+                elif action == "sentry_ignore":
+                    await client.ignore_issue(issue_id)
+                    task_id = pending.get("_task_id")
+                    if task_id:
+                        self._update_write_task_status(task_id, "completed")
+                    return f"🔇 Sentry issue `{issue_id}` marked as **ignored**."
+
+                elif action == "sentry_assign":
+                    assignee = params.get("assignee", "")
+                    await client.assign_issue(issue_id, assignee)
+                    task_id = pending.get("_task_id")
+                    if task_id:
+                        self._update_write_task_status(task_id, "completed")
+                    return f"👤 Sentry issue `{issue_id}` assigned to **{assignee}**."
+
+                elif action == "sentry_comment":
+                    text = params.get("text", "")
+                    await client.add_note(issue_id, text)
+                    task_id = pending.get("_task_id")
+                    if task_id:
+                        self._update_write_task_status(task_id, "completed")
+                    return f"💬 Note added to Sentry issue `{issue_id}`."
 
             return f"[Unknown pending action: {action}]"
 
