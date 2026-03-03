@@ -364,6 +364,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/sentinel:/sentinel-project
       - ./deploy:/deploy:ro
+      # Bind-mount host docker + docker-compose binaries (read-only)
+      - /usr/bin/docker:/usr/bin/docker:ro
+      - /usr/libexec/docker:/usr/libexec/docker:ro
     command: python /deploy/webhook_server.py
     ports:
       - "127.0.0.1:9000:9000"

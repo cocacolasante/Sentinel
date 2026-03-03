@@ -6,6 +6,9 @@ SERVICES="brain celery-worker celery-beat flower"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a /tmp/deploy.log; }
 
 log "=== Deploy triggered: $IMAGE ==="
-docker pull "$IMAGE"    # package is public — no login needed
-docker compose -f "$COMPOSE_FILE" up -d --no-deps --pull never $SERVICES
+if [ -n "${GHCR_PAT:-}" ]; then
+  echo "$GHCR_PAT" | docker login ghcr.io -u "${GITHUB_USERNAME:-cocacolasante}" --password-stdin
+fi
+docker pull "$IMAGE"
+docker compose -p sentinel -f "$COMPOSE_FILE" up -d --no-deps --pull never $SERVICES
 log "=== Deploy complete ==="
