@@ -24,11 +24,6 @@ from app.config import get_settings
 logger   = logging.getLogger(__name__)
 settings = get_settings()
 
-slack_app = AsyncApp(
-    token=settings.slack_bot_token,
-    signing_secret=settings.slack_signing_secret,
-)
-
 dispatch = Dispatcher()
 
 # Phrases that trigger the built-in skills/help listing (no LLM call)
@@ -204,17 +199,30 @@ async def _handle(event: dict, say, client) -> None:
     await say(reply)
 
 
-# ── Event listeners ───────────────────────────────────────────────────────────
+# ── App factory ───────────────────────────────────────────────────────────────
 
-@slack_app.event("message")
-async def handle_dm(event, say, client):
-    if event.get("channel_type") == "im" and not event.get("subtype"):
+def _build_app() -> AsyncApp:
+    """Create AsyncApp and register event listeners.
+
+    Called lazily inside start_socket_mode() so that importing this module
+    never instantiates AsyncApp — avoiding BoltError when Slack credentials
+    are absent (e.g. in CI / test environments).
+    """
+    app = AsyncApp(
+        token=settings.slack_bot_token,
+        signing_secret=settings.slack_signing_secret,
+    )
+
+    @app.event("message")
+    async def handle_dm(event, say, client):
+        if event.get("channel_type") == "im" and not event.get("subtype"):
+            await _handle(event, say, client)
+
+    @app.event("app_mention")
+    async def handle_mention(event, say, client):
         await _handle(event, say, client)
 
-
-@slack_app.event("app_mention")
-async def handle_mention(event, say, client):
-    await _handle(event, say, client)
+    return app
 
 
 # ── Socket Mode launcher ──────────────────────────────────────────────────────
@@ -226,6 +234,7 @@ async def start_socket_mode() -> None:
             "Set SLACK_BOT_TOKEN and SLACK_APP_TOKEN in .env"
         )
         return
+    slack_app = _build_app()
     handler = AsyncSocketModeHandler(slack_app, settings.slack_app_token)
     logger.info("Slack Socket Mode connecting...")
     try:

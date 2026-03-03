@@ -24,11 +24,6 @@ os.environ.setdefault("POSTGRES_PASSWORD", "changeme")
 os.environ.setdefault("POSTGRES_DB", "aibrain")
 os.environ.setdefault("ANTHROPIC_API_KEY", "")
 os.environ.setdefault("SENTRY_DSN", "")
-# Slack — dummy values so AsyncApp initialises without raising BoltError.
-# start_socket_mode is patched in the client fixture so no real connection is made.
-os.environ.setdefault("SLACK_BOT_TOKEN", "xoxb-test-token")
-os.environ.setdefault("SLACK_SIGNING_SECRET", "test-signing-secret")
-os.environ.setdefault("SLACK_APP_TOKEN", "xapp-test-token")
 
 
 @pytest.fixture(scope="session")
