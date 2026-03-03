@@ -83,8 +83,9 @@ def _build_skill_registry():
     from app.skills.cicd_skill      import CICDReadSkill, CICDTriggerSkill
     from app.skills.n8n_skill       import N8nManageSkill
     from app.skills.whatsapp_skill  import WhatsAppReadSkill, WhatsAppSendSkill
-    from app.skills.skill_discovery import SkillDiscoverySkill
-    from app.skills.sentry_skill    import SentryReadSkill, SentryManageSkill
+    from app.skills.skill_discovery    import SkillDiscoverySkill
+    from app.skills.sentry_skill       import SentryReadSkill, SentryManageSkill
+    from app.skills.server_shell_skill import ServerShellSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -132,6 +133,8 @@ def _build_skill_registry():
     # Sentry error tracking
     reg.register(SentryReadSkill())
     reg.register(SentryManageSkill())
+    # Server shell — filesystem navigation, builds, project scaffolding
+    reg.register(ServerShellSkill())
     return reg
 
 
@@ -501,9 +504,11 @@ class Dispatcher:
 
         try:
             if action == "send_email":
-                from app.integrations.gmail import GmailClient
+                from app.integrations.gmail import get_gmail_client
                 to      = params.get("to", "")
                 subject = params.get("subject", "")
+                account = params.get("account")
+                client  = get_gmail_client(account_name=account)
 
                 # Generate a properly written email body (not just the raw hint)
                 draft_prompt = (
@@ -516,25 +521,28 @@ class Dispatcher:
                 )
                 body = await asyncio.to_thread(self.llm.route, draft_prompt, None, None)
 
-                result = await GmailClient().send_email(to=to, subject=subject, body=body)
+                result = await client.send_email(to=to, subject=subject, body=body)
                 msg_id = result.get("id", "unknown")
-                logger.info("Email sent | to={} | subject={} | msg_id={}", to, subject, msg_id)
+                logger.info("Email sent | account={} | to={} | subject={} | msg_id={}", client.account_name, to, subject, msg_id)
                 task_id = pending.get("_task_id")
                 if task_id:
                     self._update_write_task_status(task_id, "completed")
-                return f"Email sent to **{to}**.\nSubject: _{subject}_\nMessage ID: `{msg_id}`"
+                return f"Email sent from **{client.account_name}** to **{to}**.\nSubject: _{subject}_\nMessage ID: `{msg_id}`"
 
             if action == "create_calendar_event":
-                from app.integrations.google_calendar import CalendarClient
-                from app.integrations.gmail import GmailClient
-                result    = await CalendarClient().create_event(params)
-                title     = result.get("title", params.get("title", "Event"))
-                start     = result.get("start", "")
-                link      = result.get("link", "")
+                from app.integrations.google_calendar import get_calendar_client
+                from app.integrations.gmail import get_gmail_client
+                account  = params.get("account")
+                cal      = get_calendar_client(account_name=account)
+                result   = await cal.create_event(params)
+                title    = result.get("title", params.get("title", "Event"))
+                start    = result.get("start", "")
+                link     = result.get("link", "")
                 attendees = result.get("attendees", [])
-                logger.info("Calendar event created | title={} | start={} | attendees={}", title, start, attendees)
+                logger.info("Calendar event created | account={} | title={} | start={} | attendees={}", cal.account_name, title, start, attendees)
 
-                # Send a personal Gmail invite to each attendee
+                # Send a personal Gmail invite to each attendee (use same account)
+                gmail_client  = get_gmail_client(account_name=account)
                 gmail_results = []
                 for email in attendees:
                     invite_body = await asyncio.to_thread(
@@ -547,7 +555,7 @@ class Dispatcher:
                         ),
                         None, None,
                     )
-                    await GmailClient().send_email(
+                    await gmail_client.send_email(
                         to=email,
                         subject=f"Invitation: {title}",
                         body=invite_body,
@@ -556,7 +564,7 @@ class Dispatcher:
                     logger.info("Invite email sent | to={} | event={}", email, title)
 
                 reply = (
-                    f"Done! **{title}** has been added to your calendar.\n"
+                    f"Done! **{title}** has been added to the **{cal.account_name}** calendar.\n"
                     f"Start: `{start}`\n"
                     + (f"[Open in Google Calendar]({link})\n" if link else "")
                 )
@@ -607,8 +615,10 @@ class Dispatcher:
                 return "\n".join(output_parts) or "Done."
 
             if action == "reply_email":
-                from app.integrations.gmail import GmailClient
-                msg_id = params.get("msg_id", "")
+                from app.integrations.gmail import get_gmail_client
+                account = params.get("account")
+                client  = get_gmail_client(account_name=account)
+                msg_id  = params.get("msg_id", "")
                 draft_prompt = (
                     f"Write a reply email.\n"
                     f"Context: {params.get('body_hint', original)}\n\n"
@@ -616,13 +626,33 @@ class Dispatcher:
                     "Use an appropriate tone."
                 )
                 body   = await asyncio.to_thread(self.llm.route, draft_prompt, None, None)
-                result = await GmailClient().reply_email(msg_id=msg_id, body=body)
+                result = await client.reply_email(msg_id=msg_id, body=body)
                 task_id = pending.get("_task_id")
                 if task_id:
                     self._update_write_task_status(task_id, "completed")
                 return (
-                    f"Reply sent in-thread to **{result.get('to', '?')}**.\n"
+                    f"Reply sent in-thread from **{client.account_name}** to **{result.get('to', '?')}**.\n"
                     f"Thread ID: `{result.get('thread_id', '?')}`"
+                )
+
+            if action == "shell_exec":
+                from app.skills.server_shell_skill import _run_command
+                command = params.get("command", "").strip()
+                cwd     = params.get("cwd", "/root").rstrip("/") or "/root"
+                if not command:
+                    return "[shell_exec: no command provided]"
+                output, code = await _run_command(command, cwd)
+                status = "✅ exit 0" if code == 0 else f"⚠️ exit {code}"
+                logger.info("Shell exec confirmed | cwd={} | cmd={} | code={}", cwd, command, code)
+                task_id = pending.get("_task_id")
+                if task_id:
+                    self._update_write_task_status(task_id, "completed")
+                return (
+                    f"Command executed.\n"
+                    f"```bash\n$ {command}\n```\n"
+                    f"Working directory: `{cwd}`\n"
+                    f"Status: {status}\n\n"
+                    f"Output:\n```\n{output or '(no output)'}\n```"
                 )
 
             if action in ("add_contact", "update_contact", "delete_contact") or (

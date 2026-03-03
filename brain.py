@@ -23,6 +23,8 @@ Environment:
 import json
 import os
 import sys
+import time
+import threading
 import uuid
 import urllib.error
 import urllib.request
@@ -50,6 +52,65 @@ if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
     for _a in list(vars(C)):
         if not _a.startswith("_"):
             setattr(C, _a, "")
+
+# ── Spinner ───────────────────────────────────────────────────────────────────
+
+_SPINNER_ENABLED = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+
+class _Spinner:
+    """Animated terminal spinner with phase labels, runs in a background thread."""
+
+    _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    _PHASES = [
+        ( 0.0, "Thinking"),
+        ( 2.5, "Routing intent"),
+        ( 5.0, "Running skill"),
+        (10.0, "Composing response"),
+        (22.0, "Still working"),
+    ]
+    _WIDTH = 55   # width of the spinner line (used to blank it on exit)
+
+    def __init__(self) -> None:
+        self._stop    = threading.Event()
+        self._thread  = threading.Thread(target=self._run, daemon=True)
+        self._t0: float = 0.0
+
+    def _phase_label(self, elapsed: float) -> str:
+        label = self._PHASES[0][1]
+        for threshold, name in self._PHASES:
+            if elapsed >= threshold:
+                label = name
+        return label
+
+    def _run(self) -> None:
+        i = 0
+        while not self._stop.is_set():
+            elapsed = time.time() - self._t0
+            frame   = self._FRAMES[i % len(self._FRAMES)]
+            label   = self._phase_label(elapsed)
+            line    = (
+                f"\r{C.CYAN}{frame}{C.RESET} "
+                f"{C.DIM}{label}...{C.RESET}  "
+                f"{C.DIM}{elapsed:.1f}s{C.RESET}"
+            )
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            i += 1
+            time.sleep(0.1)
+
+    def start(self) -> "_Spinner":
+        self._t0 = time.time()
+        self._thread.start()
+        return self
+
+    def stop(self) -> float:
+        """Stop the spinner, clear the line, return elapsed seconds."""
+        self._stop.set()
+        self._thread.join()
+        sys.stdout.write(f"\r{' ' * self._WIDTH}\r")
+        sys.stdout.flush()
+        return time.time() - self._t0
+
 
 # ── Session storage ───────────────────────────────────────────────────────────
 
@@ -192,18 +253,47 @@ def _sep() -> None:
 # ── Commands ──────────────────────────────────────────────────────────────────
 
 def cmd_chat(message: str, session_id: str) -> None:
-    d = _api("POST", "/api/v1/chat", {"message": message, "session_id": session_id})
-    if not _ok(d):
+    result: dict = {}
+
+    def _fetch() -> None:
+        data = _api("POST", "/api/v1/chat", {"message": message, "session_id": session_id})
+        result.update(data)
+
+    thread = threading.Thread(target=_fetch, daemon=True)
+
+    if _SPINNER_ENABLED:
+        spinner = _Spinner()
+        spinner.start()
+        thread.start()
+        try:
+            thread.join()
+        except KeyboardInterrupt:
+            spinner.stop()
+            print(f"\n{C.YELLOW}Cancelled.{C.RESET}\n")
+            return
+        elapsed = spinner.stop()
+    else:
+        t0 = time.time()
+        thread.start()
+        thread.join()
+        elapsed = time.time() - t0
+
+    if not _ok(result):
         return
-    reply  = d.get("reply", "")
-    intent = d.get("intent", "chat")
-    agent  = d.get("agent", "default")
-    print(f"\n{C.GREEN}{C.BOLD}Brain{C.RESET} {C.DIM}[{intent} · {agent}]{C.RESET}")
+
+    reply  = result.get("reply", "")
+    intent = result.get("intent", "chat")
+    agent  = result.get("agent", "default")
+
+    print(
+        f"\n{C.GREEN}{C.BOLD}✓ Brain{C.RESET}  "
+        f"{C.DIM}[{intent} · {agent}]{C.RESET}  "
+        f"{C.GREEN}{elapsed:.1f}s{C.RESET}"
+    )
     _sep()
     print(reply)
     _sep()
     print()
-    # Persist session metadata
     _save_session(session_id, message, reply)
 
 

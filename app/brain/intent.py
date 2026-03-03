@@ -13,6 +13,7 @@ Intents:
   github_write     — create issue, comment, close issue
   smart_home       — control or query HA devices
   n8n_execute      — trigger a named n8n workflow
+  server_shell     — run shell commands on the server (navigate, build, scaffold)
   chat             — general reasoning / writing / coding (no external action)
 """
 
@@ -74,8 +75,25 @@ Intent-specific param examples:
   repo_commit:    {{"action": "commit" | "push" | "commit_push", "message": "Fix calendar timezone bug", "push": true}}
   sentry_read:    {{"action": "list" | "get" | "db", "project": "", "query": "is:unresolved", "issue_id": "", "limit": 20}}
   sentry_manage:  {{"action": "resolve" | "ignore" | "assign" | "comment", "issue_id": "123456", "assignee": "user@co.com", "text": "looking into this"}}
+  server_shell:   {{"command": "ls -la /root/projects", "cwd": "/root"}}
+  code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
+
+Routing guidance:
+  - "improve X", "fix X", "optimize X", "refactor X", "enhance X" where X is a file/code → repo_read then repo_write
+  - "review code", "check the code", "analyse the codebase" → repo_read
+  - "write code for...", "implement a function...", "help me code..." → code
+  - "read file X", "show me X", "what is in X" → repo_read
+  - Requests to edit/create a specific file with a path → repo_write
+  - Ambiguous improvement requests without a specific file → code (let LLM suggest approach)
+  - "go to /path", "navigate to", "cd to", "list files in", "what's in this directory" → server_shell
+  - "create a directory", "mkdir", "make a folder", "scaffold a project" → server_shell
+  - "run this command", "execute on the server", "check disk space", "show processes" → server_shell
+  - "create a new project", "set up a repo", "init a project", "npm init / git init" → server_shell
+  - "install packages", "pip install", "npm install", "apt install" → server_shell
+  - "show me the logs", "tail the logs", "check server logs" → server_shell
+  - "what's running", "ps aux", "top", "htop", "check memory / disk" → server_shell
 
 IMPORTANT for calendar_write: "date" must always be an absolute ISO date (YYYY-MM-DD).
 Never output day names like "Thursday" — resolve them using today's date above.
@@ -101,12 +119,14 @@ whatsapp_send   — send a WhatsApp message to a contact or number
 ionos_cloud     — manage IONOS cloud: datacenters, servers (spin up/down), SSH, deploy apps
 ionos_dns       — manage IONOS DNS zones and records (A, CNAME, MX, TXT, etc.)
 repo_read       — read, list, diff, or check status of the Brain's own codebase/files
-repo_write      — create or edit a file in the Brain's codebase
+repo_write      — create or edit a file in the Brain's codebase; improve, refactor, or patch files
 repo_commit     — commit and/or push changes in the Brain's repository to GitHub
 sentry_read     — list, search, or inspect Sentry error issues; show recent errors
 sentry_manage   — resolve, ignore, assign, or comment on a Sentry issue
+server_shell    — run shell commands on the server: navigate filesystem, create dirs/projects, run builds, check disk/processes/logs
+code            — software engineering help, code review, debugging, architecture — no file edits
 skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
-chat            — anything else: analysis, writing, code, questions, conversation"""
+chat            — anything else: analysis, writing, questions, conversation"""
 
 
 # ── Classifier ────────────────────────────────────────────────────────────────

@@ -9,6 +9,10 @@ Operations:
   delete_event(event_id)        — delete an event
 
 Auth: same Google OAuth refresh token as Gmail.
+
+Multi-account: use get_calendar_client(account_name) to get a client for a
+specific account.  Pass account_name=None (or call CalendarClient() with no
+args) to use the primary / first configured account.
 """
 
 import asyncio
@@ -32,15 +36,44 @@ _PERIOD_DAYS: dict[str, int] = {
 }
 
 
+def _resolve_account(account_name: str | None) -> dict | None:
+    """Return the account config dict for *account_name*, or the primary account."""
+    accounts = settings.google_accounts
+    if not accounts:
+        return None
+    if account_name is None:
+        return accounts[0]
+    name_lower = account_name.lower()
+    for acc in accounts:
+        if acc["name"].lower() == name_lower:
+            return acc
+    return accounts[0]   # fallback to primary
+
+
+def get_calendar_client(account_name: str | None = None) -> "CalendarClient":
+    """Factory: return a CalendarClient for the named account (or primary)."""
+    return CalendarClient(account_config=_resolve_account(account_name))
+
+
 class CalendarClient:
-    def __init__(self) -> None:
+    def __init__(self, account_config: dict | None = None) -> None:
+        self._account = account_config if account_config is not None else _resolve_account(None)
         self._service = None
+
+    @property
+    def account_name(self) -> str:
+        return (self._account or {}).get("name", "unknown")
+
+    @property
+    def _calendar_id(self) -> str:
+        return (self._account or {}).get("calendar_id", "primary")
 
     def is_configured(self) -> bool:
         return bool(
-            settings.google_client_id
-            and settings.google_client_secret
-            and settings.google_refresh_token
+            self._account
+            and self._account.get("client_id")
+            and self._account.get("client_secret")
+            and self._account.get("refresh_token")
         )
 
     def _build_service(self):
@@ -52,10 +85,10 @@ class CalendarClient:
 
         creds = Credentials(
             token=None,
-            refresh_token=settings.google_refresh_token,
+            refresh_token=self._account["refresh_token"],
             token_uri="https://oauth2.googleapis.com/token",
-            client_id=settings.google_client_id,
-            client_secret=settings.google_client_secret,
+            client_id=self._account["client_id"],
+            client_secret=self._account["client_secret"],
             scopes=_SCOPES,
         )
         creds.refresh(Request())
@@ -135,16 +168,13 @@ class CalendarClient:
 
     def _create_event_sync(self, params: dict, calendar_id: str) -> dict:
         svc = self._build_service()
-        # Parse date + time from params
         raw_date = params.get("date", "")
         time_str = params.get("time", "09:00")
         duration = int(params.get("duration_min", 60))
         tz_name  = self._validated_tz(params.get("timezone", settings.timezone))
 
-        # Resolve relative date names → ISO date
         date = self._resolve_date(raw_date)
 
-        # Normalise time_str — accept "HH:MM" or "HH:MM:SS"
         if time_str.count(":") == 1:
             time_str = f"{time_str}:00"
 
@@ -171,7 +201,6 @@ class CalendarClient:
         if attendees:
             body["attendees"] = [{"email": e} for e in attendees]
 
-        # sendUpdates='all' makes Google Calendar email each attendee a calendar invite
         created = svc.events().insert(
             calendarId=calendar_id,
             body=body,
@@ -204,7 +233,6 @@ class CalendarClient:
             for b in fb.get("calendars", {}).get(calendar_id, {}).get("busy", [])
         ]
 
-        # Simple slot finder — 30-min grid
         free_slots = []
         cursor = day_start
         while cursor + timedelta(minutes=duration_min) <= day_end:
@@ -222,7 +250,7 @@ class CalendarClient:
                 })
             cursor += timedelta(minutes=30)
 
-        return free_slots[:8]  # return first 8 slots
+        return free_slots[:8]
 
     # ── Public async API ──────────────────────────────────────────────────────
 
@@ -231,7 +259,7 @@ class CalendarClient:
         period: str = "this week",
         calendar_id: str | None = None,
     ) -> list[dict]:
-        cal_id = calendar_id or settings.google_calendar_id
+        cal_id = calendar_id or self._calendar_id
         return await asyncio.to_thread(self._list_events_sync, period, cal_id)
 
     async def create_event(
@@ -239,7 +267,7 @@ class CalendarClient:
         params: dict,
         calendar_id: str | None = None,
     ) -> dict:
-        cal_id = calendar_id or settings.google_calendar_id
+        cal_id = calendar_id or self._calendar_id
         return await asyncio.to_thread(self._create_event_sync, params, cal_id)
 
     async def find_free_slots(
@@ -248,5 +276,5 @@ class CalendarClient:
         duration_min: int = 60,
         calendar_id: str | None = None,
     ) -> list[dict]:
-        cal_id = calendar_id or settings.google_calendar_id
+        cal_id = calendar_id or self._calendar_id
         return await asyncio.to_thread(self._find_free_slots_sync, date, duration_min, cal_id)

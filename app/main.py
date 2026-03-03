@@ -66,6 +66,7 @@ def _init_sentry() -> None:
         logger.info("Sentry DSN not set — error tracking disabled")
         return
     try:
+        import logging as _logging
         import sentry_sdk
         from sentry_sdk.integrations.fastapi import FastApiIntegration
         from sentry_sdk.integrations.asyncio import AsyncioIntegration
@@ -74,17 +75,19 @@ def _init_sentry() -> None:
         sentry_sdk.init(
             dsn=settings.sentry_dsn,
             environment=settings.environment,
-            traces_sample_rate=0.2,      # 20% of requests traced (adjust as needed)
+            traces_sample_rate=0.2,
             profiles_sample_rate=0.1,
+            max_breadcrumbs=40,          # keep breadcrumb buffer small
             integrations=[
                 FastApiIntegration(transaction_style="endpoint"),
                 AsyncioIntegration(),
                 LoggingIntegration(
-                    level=None,          # capture all log levels as breadcrumbs
-                    event_level="ERROR", # send ERROR+ as Sentry events
+                    level=_logging.WARNING,  # WARNING+ as breadcrumbs (not every INFO line)
+                    event_level=_logging.ERROR,
                 ),
             ],
             before_send=_sentry_before_send,
+            before_breadcrumb=_sentry_before_breadcrumb,
         )
         logger.info("Sentry initialised | env={}", settings.environment)
     except ImportError:
@@ -93,15 +96,35 @@ def _init_sentry() -> None:
         logger.error("Sentry init failed (non-fatal): {}", exc)
 
 
+# Transient errors that are expected and self-recovering — never worth an alert.
+_SENTRY_IGNORED_EXCEPTIONS = {
+    "WebSocketDisconnect",
+    "CancelledError",
+    "ClientDisconnect",
+    # Slack SDK race condition: monitor tears down stale session while a write
+    # is in flight.  The SDK reconnects automatically — no action needed.
+    "ClientConnectionResetError",
+    "ConnectionResetError",
+    "ServerConnectionError",
+}
+
+
 def _sentry_before_send(event, hint):
-    """Filter out noisy non-actionable errors before they reach Sentry."""
+    """Drop known-harmless transient exceptions before they reach Sentry."""
     exc_info = hint.get("exc_info")
-    if exc_info:
-        exc_type = exc_info[0]
-        # Don't track client disconnects or cancelled requests
-        if exc_type.__name__ in ("WebSocketDisconnect", "CancelledError", "ClientDisconnect"):
-            return None
+    if exc_info and exc_info[0].__name__ in _SENTRY_IGNORED_EXCEPTIONS:
+        return None
     return event
+
+
+def _sentry_before_breadcrumb(crumb, hint):
+    """Drop high-frequency / low-signal breadcrumbs to keep reports readable."""
+    category = crumb.get("category", "")
+    # Drop all raw HTTP breadcrumbs — they flood every report with Slack API
+    # calls, Qdrant pings, and Prometheus scrapes that add no debugging value.
+    if category in ("httplib", "http"):
+        return None
+    return crumb
 
 
 # ── Loguru and Sentry must init before any other imports that log ─────────────

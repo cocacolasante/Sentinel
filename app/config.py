@@ -43,10 +43,63 @@ class Settings(BaseSettings):
     domain: str = "localhost"
 
     # ── Google OAuth (Gmail + Calendar) ────────────────────────
+    # Primary account (backward-compatible)
     google_client_id: str = ""
     google_client_secret: str = ""
     google_refresh_token: str = ""
     google_calendar_id: str = "primary"
+    google_account_name: str = "personal"   # display label for the primary account
+
+    # Additional Google accounts (optional, up to 4 more)
+    google_account_2_name: str = ""
+    google_account_2_client_id: str = ""
+    google_account_2_client_secret: str = ""
+    google_account_2_refresh_token: str = ""
+    google_account_2_calendar_id: str = "primary"
+
+    google_account_3_name: str = ""
+    google_account_3_client_id: str = ""
+    google_account_3_client_secret: str = ""
+    google_account_3_refresh_token: str = ""
+    google_account_3_calendar_id: str = "primary"
+
+    google_account_4_name: str = ""
+    google_account_4_client_id: str = ""
+    google_account_4_client_secret: str = ""
+    google_account_4_refresh_token: str = ""
+    google_account_4_calendar_id: str = "primary"
+
+    google_account_5_name: str = ""
+    google_account_5_client_id: str = ""
+    google_account_5_client_secret: str = ""
+    google_account_5_refresh_token: str = ""
+    google_account_5_calendar_id: str = "primary"
+
+    @property
+    def google_accounts(self) -> list[dict]:
+        """Return all fully-configured Google accounts as a list of dicts."""
+        accounts: list[dict] = []
+        if self.google_client_id and self.google_client_secret and self.google_refresh_token:
+            accounts.append({
+                "name":          self.google_account_name or "personal",
+                "client_id":     self.google_client_id,
+                "client_secret": self.google_client_secret,
+                "refresh_token": self.google_refresh_token,
+                "calendar_id":   self.google_calendar_id,
+            })
+        for i in range(2, 6):
+            cid     = getattr(self, f"google_account_{i}_client_id", "")
+            csecret = getattr(self, f"google_account_{i}_client_secret", "")
+            rtoken  = getattr(self, f"google_account_{i}_refresh_token", "")
+            if cid and csecret and rtoken:
+                accounts.append({
+                    "name":          getattr(self, f"google_account_{i}_name", "") or f"account{i}",
+                    "client_id":     cid,
+                    "client_secret": csecret,
+                    "refresh_token": rtoken,
+                    "calendar_id":   getattr(self, f"google_account_{i}_calendar_id", "primary"),
+                })
+        return accounts
 
     # ── GitHub ─────────────────────────────────────────────────
     github_token: str = ""

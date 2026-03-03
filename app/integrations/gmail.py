@@ -12,6 +12,10 @@ Operations:
 
 Auth: Google OAuth 2.0 with a stored refresh token.
       Run scripts/google_auth.py once to obtain GOOGLE_REFRESH_TOKEN.
+
+Multi-account: use get_gmail_client(account_name) to get a client for a
+specific account.  Pass account_name=None (or call GmailClient() with no
+args) to use the primary / first configured account.
 """
 
 import asyncio
@@ -33,19 +37,45 @@ _SCOPES = [
 ]
 
 
+def _resolve_account(account_name: str | None) -> dict | None:
+    """Return the account config dict for *account_name*, or the primary account."""
+    accounts = settings.google_accounts
+    if not accounts:
+        return None
+    if account_name is None:
+        return accounts[0]
+    name_lower = account_name.lower()
+    for acc in accounts:
+        if acc["name"].lower() == name_lower:
+            return acc
+    return accounts[0]   # fallback to primary
+
+
+def get_gmail_client(account_name: str | None = None) -> "GmailClient":
+    """Factory: return a GmailClient for the named account (or primary)."""
+    return GmailClient(account_config=_resolve_account(account_name))
+
+
 class GmailClient:
-    def __init__(self) -> None:
+    def __init__(self, account_config: dict | None = None) -> None:
+        # Accept an explicit account dict, or resolve from primary
+        self._account = account_config if account_config is not None else _resolve_account(None)
         self._service = None
+
+    @property
+    def account_name(self) -> str:
+        return (self._account or {}).get("name", "unknown")
 
     def is_configured(self) -> bool:
         return bool(
-            settings.google_client_id
-            and settings.google_client_secret
-            and settings.google_refresh_token
+            self._account
+            and self._account.get("client_id")
+            and self._account.get("client_secret")
+            and self._account.get("refresh_token")
         )
 
     def _build_service(self):
-        """Build and return a Gmail API service object (cached)."""
+        """Build and return a Gmail API service object (cached per instance)."""
         if self._service is not None:
             return self._service
         from google.oauth2.credentials import Credentials
@@ -54,10 +84,10 @@ class GmailClient:
 
         creds = Credentials(
             token=None,
-            refresh_token=settings.google_refresh_token,
+            refresh_token=self._account["refresh_token"],
             token_uri="https://oauth2.googleapis.com/token",
-            client_id=settings.google_client_id,
-            client_secret=settings.google_client_secret,
+            client_id=self._account["client_id"],
+            client_secret=self._account["client_secret"],
             scopes=_SCOPES,
         )
         creds.refresh(Request())
@@ -125,7 +155,6 @@ class GmailClient:
     def _reply_email_sync(self, msg_id: str, body: str) -> dict:
         """Reply in the same thread as msg_id."""
         svc = self._build_service()
-        # Fetch original to get thread_id and headers
         orig = svc.users().messages().get(
             userId="me", id=msg_id, format="metadata",
             metadataHeaders=["From", "Subject", "Message-ID", "References"],
