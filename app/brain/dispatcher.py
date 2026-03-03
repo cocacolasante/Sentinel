@@ -86,6 +86,7 @@ def _build_skill_registry():
     from app.skills.skill_discovery    import SkillDiscoverySkill
     from app.skills.sentry_skill       import SentryReadSkill, SentryManageSkill
     from app.skills.server_shell_skill import ServerShellSkill
+    from app.skills.deploy_skill       import DeploySkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -135,6 +136,8 @@ def _build_skill_registry():
     reg.register(SentryManageSkill())
     # Server shell — filesystem navigation, builds, project scaffolding
     reg.register(ServerShellSkill())
+    # Self-deploy — rebuild Docker image and restart brain container
+    reg.register(DeploySkill())
     return reg
 
 
@@ -925,6 +928,28 @@ class Dispatcher:
                     if task_id:
                         self._update_write_task_status(task_id, "completed")
                     return f"💬 Note added to Sentry issue `{issue_id}`."
+
+            if action == "deploy_brain":
+                try:
+                    from app.worker.tasks import deploy_brain as _deploy_task
+                    reason = params.get("reason", "user-requested deploy")
+                    _deploy_task.delay(reason)
+                    logger.info("deploy_brain task queued | reason={}", reason)
+                except Exception as exc:
+                    logger.error("Could not queue deploy_brain task: {}", exc)
+                    return f"❌ Could not queue deploy task: `{exc}`"
+                task_id = pending.get("_task_id")
+                if task_id:
+                    self._update_write_task_status(task_id, "completed")
+                return (
+                    "✅ **Deploy queued.**\n\n"
+                    "The Celery worker will:\n"
+                    "  1. Pull latest code from GitHub\n"
+                    "  2. Rebuild the `sentinel-brain` Docker image (~45–90 s)\n"
+                    "  3. Hot-swap the running brain container\n\n"
+                    "⏱️ The brain will be offline for ~60 seconds during the restart.\n"
+                    "Watch #brain-alerts for the deploy status."
+                )
 
             return f"[Unknown pending action: {action}]"
 

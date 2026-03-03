@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import subprocess
 
 from app.worker.celery_app import celery_app
 
@@ -75,6 +77,27 @@ def run_health_check(self) -> dict:
 
 
 # ── On-demand tasks ───────────────────────────────────────────────────────────
+
+@celery_app.task(
+    bind=True,
+    name="app.worker.tasks.deploy_brain",
+    queue="celery",
+    max_retries=0,          # don't retry — a failed deploy needs human eyes
+    soft_time_limit=360,    # 6 min soft limit
+    time_limit=420,         # 7 min hard kill
+)
+def deploy_brain(self, reason: str = "") -> dict:
+    """
+    Pull latest code from GitHub → rebuild Brain Docker image → restart container.
+    Runs inside the Celery worker, which has /var/run/docker.sock and /sentinel-project mounted.
+    """
+    try:
+        return asyncio.run(_deploy_brain(reason))
+    except Exception as exc:
+        logger.error("deploy_brain task failed: %s", exc, exc_info=True)
+        post_alert_sync(f"❌ *Brain deploy FAILED*\n`{type(exc).__name__}: {exc}`")
+        return {"success": False, "error": str(exc)}
+
 
 @celery_app.task(
     bind=True,
@@ -165,6 +188,106 @@ def post_alert_sync(text: str) -> None:
     """Fire-and-forget sync Slack alert (used inside Celery tasks)."""
     from app.integrations.slack_notifier import post_alert_sync as _pas
     _pas(text)
+
+
+async def _deploy_brain(reason: str) -> dict:
+    """
+    1. Post 'deploy started' to Slack.
+    2. Sleep 5 s — gives the brain time to finish sending its response.
+    3. git pull origin main  (updates /sentinel-project = /root/sentinel on host).
+    4. docker compose build brain.
+    5. docker compose up -d brain  (hot-swap with new image).
+    6. Post result to Slack.
+    """
+    from app.integrations.slack_notifier import post_alert_sync as _notify
+
+    project_dir  = "/sentinel-project"
+    compose_file = f"{project_dir}/docker-compose.yml"
+    steps:  list[str] = []
+    errors: list[str] = []
+
+    _notify(
+        f"🔄 *Brain deploy started*\n"
+        f"Reason: _{reason or 'manual request'}_\n"
+        "_Pulling latest code and rebuilding image..._"
+    )
+
+    await asyncio.sleep(5)   # let the brain finish its HTTP/Slack response
+
+    # ── 1. git pull ───────────────────────────────────────────────────────────
+    try:
+        env = {**os.environ, "GIT_SSH_COMMAND": "ssh -o StrictHostKeyChecking=no"}
+        r = subprocess.run(
+            ["git", "-C", project_dir, "pull", "origin", "main"],
+            capture_output=True, text=True, timeout=60, env=env,
+        )
+        if r.returncode == 0:
+            steps.append(f"git pull: {r.stdout.strip() or 'already up to date'}")
+            logger.info("Deploy git pull OK: %s", r.stdout.strip())
+        else:
+            errors.append(f"git pull failed: {r.stderr.strip()}")
+            logger.error("Deploy git pull failed: %s", r.stderr.strip())
+    except Exception as exc:
+        errors.append(f"git pull error: {exc}")
+        logger.error("Deploy git pull exception: %s", exc)
+
+    if errors:
+        _notify(f"❌ *Brain deploy aborted — git pull failed*\n`{errors[0][:300]}`")
+        return {"success": False, "step": "git_pull", "errors": errors}
+
+    # ── 2. docker compose build brain ────────────────────────────────────────
+    try:
+        r = subprocess.run(
+            ["docker", "compose", "-p", "sentinel",
+             "-f", compose_file, "build", "brain"],
+            capture_output=True, text=True, timeout=300,
+            env={**os.environ, "DOCKER_BUILDKIT": "1"},
+        )
+        if r.returncode == 0:
+            steps.append("docker compose build: success")
+            logger.info("Deploy image build OK")
+        else:
+            err = (r.stderr or r.stdout)[-600:].strip()
+            errors.append(f"build failed: {err}")
+            logger.error("Deploy build failed: %s", err)
+    except Exception as exc:
+        errors.append(f"build error: {exc}")
+        logger.error("Deploy build exception: %s", exc)
+
+    if errors:
+        _notify(f"❌ *Brain deploy failed — image build error*\n```{errors[-1][:400]}```")
+        return {"success": False, "step": "docker_build", "steps": steps, "errors": errors}
+
+    # ── 3. docker compose up -d brain ────────────────────────────────────────
+    # --no-deps: only restart brain, don't touch postgres/redis/qdrant etc.
+    # -p sentinel: match the project name used when the stack was first started.
+    try:
+        r = subprocess.run(
+            ["docker", "compose", "-p", "sentinel",
+             "-f", compose_file, "up", "-d", "--no-deps", "brain"],
+            capture_output=True, text=True, timeout=60,
+        )
+        if r.returncode == 0:
+            steps.append("docker compose up -d brain: success")
+            logger.info("Deploy container restart OK")
+        else:
+            err = (r.stderr or r.stdout)[-400:].strip()
+            errors.append(f"restart failed: {err}")
+            logger.error("Deploy restart failed: %s", err)
+    except Exception as exc:
+        errors.append(f"restart error: {exc}")
+        logger.error("Deploy restart exception: %s", exc)
+
+    if errors:
+        _notify(f"❌ *Brain deploy failed — container restart error*\n```{errors[-1][:400]}```")
+        return {"success": False, "step": "docker_up", "steps": steps, "errors": errors}
+
+    _notify(
+        "✅ *Brain deploy complete!*\n"
+        "_New image is running. Brain should be back online within a few seconds._\n"
+        f"Steps: {' → '.join(steps)}"
+    )
+    return {"success": True, "steps": steps}
 
 
 async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:

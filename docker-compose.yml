@@ -158,6 +158,13 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    volumes:
+      # Docker socket — lets the worker run "docker compose build/up" for self-deploy
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Host project dir — gives docker compose access to Dockerfile + source
+      - /root/sentinel:/sentinel-project
+      # SSH key — needed for git pull during deploy
+      - ${HOME}/.ssh:/root/.ssh:ro
     networks:
       - brain-net
     restart: unless-stopped

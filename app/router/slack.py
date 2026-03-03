@@ -72,6 +72,7 @@ _INTENT_LABELS: dict[str, str] = {
     "sentry_manage":    "🐛 Sentry manage",
     "server_shell":     "🖥️ Server shell",
     "skill_discover":   "🔎 Skill discovery",
+    "deploy":           "🚀 Deploy",
     "chat":             "💭 Chat",
     "rate_limited":     "⏱️ Rate limited",
     "blocked":          "⛔ Blocked",

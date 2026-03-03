@@ -73,6 +73,7 @@ Intent-specific param examples:
   repo_read:      {{"action": "status" | "diff" | "list_files" | "read_file", "path": "app/main.py"}}
   repo_write:     {{"action": "write_file" | "patch_file", "path": "app/main.py", "content": "...", "old": "...", "new": "..."}}
   repo_commit:    {{"action": "commit" | "push" | "commit_push", "message": "Fix calendar timezone bug", "push": true}}
+  deploy:         {{"reason": "applied fix for contacts bug"}}
   sentry_read:    {{"action": "list" | "get" | "db", "project": "", "query": "is:unresolved", "issue_id": "", "limit": 20}}
   sentry_manage:  {{"action": "resolve" | "ignore" | "assign" | "comment", "issue_id": "123456", "assignee": "user@co.com", "text": "looking into this"}}
   server_shell:   {{"command": "ls -la /root/projects", "cwd": "/root"}}
@@ -81,6 +82,7 @@ Intent-specific param examples:
   chat:           {{}}
 
 Routing guidance:
+  - "deploy", "rebuild", "restart the brain", "redeploy", "apply changes", "push and deploy", "deploy the changes" → deploy
   - "improve X", "fix X", "optimize X", "refactor X", "enhance X" where X is a file/code → repo_read then repo_write
   - "review code", "check the code", "analyse the codebase" → repo_read
   - "write code for...", "implement a function...", "help me code..." → code
@@ -124,6 +126,7 @@ repo_commit     — commit and/or push changes in the Brain's repository to GitH
 sentry_read     — list, search, or inspect Sentry error issues; show recent errors
 sentry_manage   — resolve, ignore, assign, or comment on a Sentry issue
 server_shell    — run shell commands on the server: navigate filesystem, create dirs/projects, run builds, check disk/processes/logs
+deploy          — rebuild the Brain Docker image with latest committed code and restart the brain container
 code            — software engineering help, code review, debugging, architecture — no file edits
 skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
 chat            — anything else: analysis, writing, questions, conversation"""
