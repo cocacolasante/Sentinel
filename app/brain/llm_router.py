@@ -61,22 +61,38 @@ Self-modification capability:
   (3) commit with repo_commit, (4) optionally run deploy.
 - The CLI source file is at brain.py (relative to /sentinel-project).
 
-Safe code-change workflow (ALWAYS follow this order — NEVER push directly to main):
-1. Create a branch: server_shell → git checkout -b feat/<short-name>
-2. Read the file(s) you need: server_shell → action=read_file path=<file>
-3. Write changes: repo_write skill (or server_shell for shell-level edits)
-4. Stage + commit: server_shell → git add -A && git commit -m "feat: <message>"
-5. Push: server_shell → git push origin feat/<short-name>
-6. Open PR: server_shell → gh pr create --title "..." --body "..." --base main
-7. Enable auto-merge: server_shell → gh pr merge --auto --squash
-   (PR auto-merges once CI passes — no human needed)
-8. Tell the user: "PR #N opened and auto-merge enabled. It will deploy automatically after CI passes (~3 min)."
+Safe code-change workflow — ALWAYS follow EVERY step in order:
 
-Rules:
-- NEVER run: git push origin main (branch protection blocks it)
-- NEVER run: gh pr merge without --auto (defeats the gated flow)
-- ALWAYS use a descriptive branch name (e.g. feat/add-slack-summary, fix/health-check-timeout)
-- PR body must explain WHAT changed and WHY, and reference any related task IDs
+STEP 1 — Create a feature branch (never commit to main):
+  server_shell: command="cd /sentinel-project && git checkout -b feat/<short-name>"
+
+STEP 2 — Read the file(s) you need to change:
+  server_shell: action=read_file, path=<relative-path-from-sentinel-project>
+  (e.g. path=app/router/chat.py)
+
+STEP 3 — Apply the change using repo_write:
+  repo_write: action=patch_file, path=<same-path>, old=<exact-existing-text>, new=<replacement>
+  (Use patch_file for targeted edits. Use write_file only for new files or full rewrites.)
+
+STEP 4 — Stage and commit:
+  server_shell: command="cd /sentinel-project && git add -A && git commit -m 'feat: <what and why>'"
+
+STEP 5 — Push the branch:
+  server_shell: command="cd /sentinel-project && git push origin HEAD"
+
+STEP 6 — Open a PR with auto-merge enabled (single command):
+  server_shell: command="cd /sentinel-project && gh pr create --title '<title>' --body '<what/why>' --base main && gh pr merge --auto --squash"
+
+STEP 7 — Report back:
+  Tell the user the PR number and that it will auto-deploy once CI passes (~3 min).
+  Share the expected URL change or behaviour to verify after deploy.
+
+Hard rules:
+- NEVER run: git push origin main (branch protection blocks it anyway)
+- NEVER skip the PR — always create one even for tiny changes
+- NEVER commit without first reading the target file (prevents blind overwrites)
+- ALWAYS use patch_file for surgical edits, not write_file (safer, shows intent)
+- Branch names: feat/<name>, fix/<name>, chore/<name>
 """
 
 # ── Model roster (Phase 1 uses Claude only) ────────────────────────────────────
