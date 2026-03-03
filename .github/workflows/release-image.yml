@@ -43,7 +43,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: GIT_SHA=${{ github.event.workflow_run.head_sha }}
+          build-args: |
+            GIT_SHA=${{ github.event.workflow_run.head_sha }}
+            BUILD_TIMESTAMP=${{ github.event.workflow_run.updated_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

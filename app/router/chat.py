@@ -92,3 +92,17 @@ async def health():
         "postgres": postgres.ping(),
         "sha":      os.environ.get("GIT_SHA", "dev"),
     }
+
+
+@router.get("/version")
+async def version():
+    import os
+    from datetime import datetime, timezone
+    return {
+        "app":         "sentinel-brain",
+        "version":     "2.1.0",
+        "sha":         os.environ.get("GIT_SHA", "dev"),
+        "environment": settings.environment,
+        "built_at":    os.environ.get("BUILD_TIMESTAMP", "unknown"),
+        "checked_at":  datetime.now(timezone.utc).isoformat(),
+    }

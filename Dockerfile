@@ -42,7 +42,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 ARG GIT_SHA=dev
+ARG BUILD_TIMESTAMP=unknown
 ENV GIT_SHA=${GIT_SHA}
+ENV BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
 
 EXPOSE 8000
 
