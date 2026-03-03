@@ -28,7 +28,7 @@ class ContactsClient:
     def _search_sync(self, query: str, limit: int = 10) -> list[dict]:
         from app.db import postgres
         q = f"%{query.lower()}%"
-        rows = postgres.fetch(
+        rows = postgres.execute(
             """
             SELECT id, name, email, phone, whatsapp, company, github, slack_id, tags, notes
               FROM contacts
@@ -45,7 +45,7 @@ class ContactsClient:
 
     def _get_all_sync(self, limit: int = 100) -> list[dict]:
         from app.db import postgres
-        rows = postgres.fetch(
+        rows = postgres.execute(
             "SELECT id, name, email, phone, whatsapp, company, github, slack_id, tags, notes "
             "FROM contacts ORDER BY name LIMIT %s",
             (limit,),
@@ -54,7 +54,7 @@ class ContactsClient:
 
     def _get_by_id_sync(self, contact_id: int) -> dict | None:
         from app.db import postgres
-        rows = postgres.fetch(
+        rows = postgres.execute(
             "SELECT id, name, email, phone, whatsapp, company, github, slack_id, tags, notes "
             "FROM contacts WHERE id = %s",
             (contact_id,),
@@ -63,7 +63,7 @@ class ContactsClient:
 
     def _get_by_email_sync(self, email: str) -> dict | None:
         from app.db import postgres
-        rows = postgres.fetch(
+        rows = postgres.execute(
             "SELECT id, name, email, phone, whatsapp, company, github, slack_id, tags, notes "
             "FROM contacts WHERE lower(email) = lower(%s) LIMIT 1",
             (email,),
@@ -74,7 +74,7 @@ class ContactsClient:
         """Return contacts whose name contains the query (case-insensitive)."""
         from app.db import postgres
         q = f"%{name.lower()}%"
-        rows = postgres.fetch(
+        rows = postgres.execute(
             "SELECT id, name, email, phone, whatsapp, company, github, slack_id, tags, notes "
             "FROM contacts WHERE lower(name) LIKE %s ORDER BY name LIMIT 5",
             (q,),
@@ -94,7 +94,7 @@ class ContactsClient:
         notes: str = "",
     ) -> dict:
         from app.db import postgres
-        rows = postgres.fetch(
+        rows = postgres.execute(
             """
             INSERT INTO contacts (name, email, phone, whatsapp, company, github, slack_id, tags, notes)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
