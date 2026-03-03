@@ -76,7 +76,7 @@ def _build_skill_registry():
     from app.skills.ad_copy_skill          import AdCopySkill
     from app.skills.content_repurpose_skill import ContentRepurposeSkill
     from app.skills.content_calendar_skill import ContentCalendarSkill
-    from app.skills.repo_skill      import RepoReadSkill, RepoWriteSkill, RepoCommitSkill
+    from app.skills.repo_skill      import RepoReadSkill, RepoWriteSkill, RepoCommitSkill, CodeChangeSkill
     from app.skills.gmail_skill     import GmailReplySkill
     from app.skills.contacts_skill  import ContactsReadSkill, ContactsWriteSkill
     from app.skills.ionos_skill     import IONOSCloudSkill, IONOSDNSSkill
@@ -130,6 +130,7 @@ def _build_skill_registry():
     reg.register(RepoReadSkill())
     reg.register(RepoWriteSkill())
     reg.register(RepoCommitSkill())
+    reg.register(CodeChangeSkill())
     # Skill discovery
     reg.register(SkillDiscoverySkill())
     # Sentry error tracking
@@ -741,6 +742,25 @@ class Dispatcher:
                     f"Reply sent in-thread from **{client.account_name}** to **{result.get('to', '?')}**.\n"
                     f"Thread ID: `{result.get('thread_id', '?')}`"
                 )
+
+            if action == "code_change":
+                from app.skills.repo_skill import CodeChangeSkill
+                skill = CodeChangeSkill()
+                result = await asyncio.to_thread(
+                    skill._run_workflow,
+                    __import__("app.integrations.repo", fromlist=["RepoClient"]).RepoClient(),
+                    params.get("branch", ""),
+                    params.get("path", ""),
+                    params.get("old", ""),
+                    params.get("new", ""),
+                    params.get("commit_message", params.get("message", "chore: AI update")),
+                    params.get("pr_title", params.get("commit_message", "AI update")),
+                    params.get("pr_body", original),
+                )
+                task_id = pending.get("_task_id")
+                if task_id:
+                    self._update_write_task_status(task_id, "completed")
+                return result
 
             if action == "shell_exec":
                 from app.skills.server_shell_skill import _run_command

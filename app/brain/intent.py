@@ -88,6 +88,7 @@ Intent-specific param examples:
   repo_read:      {{"action": "status" | "diff" | "list_files" | "read_file", "path": "app/main.py"}}
   repo_write:     {{"action": "write_file" | "patch_file", "path": "app/main.py", "content": "...", "old": "...", "new": "..."}}
   repo_commit:    {{"action": "commit" | "push" | "commit_push", "message": "Fix calendar timezone bug", "push": true}}
+  code_change:    {{"branch": "feat/short-name", "path": "app/router/chat.py", "old": "exact existing text", "new": "replacement text", "commit_message": "feat: what changed and why", "pr_title": "feat: short description", "pr_body": "What changed and why"}}
   deploy:         {{"reason": "applied fix for contacts bug"}}
   sentry_read:    {{"action": "list" | "get" | "db", "project": "", "query": "is:unresolved", "issue_id": "", "limit": 20}}
   sentry_manage:  {{"action": "resolve" | "ignore" | "assign" | "comment", "issue_id": "123456", "assignee": "user@co.com", "text": "looking into this"}}
@@ -133,6 +134,7 @@ Routing guidance:
   - "deploy docker container X on server" → ionos_cloud action=deploy_docker
   - When the user asks to do MULTIPLE things in one message (e.g. "create a task AND set up a server"), pick the most complex/actionable intent. Mention in context_data that you will handle others afterward.
   - "deploy", "rebuild", "restart the brain", "redeploy", "apply changes", "push and deploy", "deploy the changes" → deploy
+  - "update X and deploy", "change X and ship it", "fix X and push", "make a code change to X", "edit X and create a PR" → code_change (full workflow: branch + patch + PR + auto-merge)
   - "improve X", "fix X", "optimize X", "refactor X", "enhance X" where X is a file/code → repo_read then repo_write
   - "review code", "check the code", "analyse the codebase" → repo_read
   - "write code for...", "implement a function...", "help me code..." → code
@@ -191,6 +193,7 @@ ionos_dns       — manage IONOS DNS zones and records (A, CNAME, MX, TXT, etc.)
 repo_read       — read, list, diff, or check status of the Brain's own codebase/files
 repo_write      — create or edit a file in the Brain's codebase; improve, refactor, or patch files
 repo_commit     — commit and/or push changes in the Brain's repository to GitHub
+code_change     — full autonomous code-change workflow: branch → patch file → commit → push → open PR + auto-merge in one shot
 sentry_read     — list, search, or inspect Sentry error issues; show recent errors
 sentry_manage   — resolve, ignore, assign, or comment on a Sentry issue
 server_shell    — run shell commands on the server: read/write files, search code, list dirs, run builds, inspect processes/logs, git push/commit/pull, docker restart (action=docker_restart), docker compose (action=docker_compose), inspect env vars (action=inspect_env)
