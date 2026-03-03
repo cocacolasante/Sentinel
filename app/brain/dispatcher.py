@@ -87,6 +87,7 @@ def _build_skill_registry():
     from app.skills.sentry_skill       import SentryReadSkill, SentryManageSkill
     from app.skills.server_shell_skill import ServerShellSkill
     from app.skills.deploy_skill       import DeploySkill
+    from app.skills.task_skill         import TaskCreateSkill, TaskReadSkill, TaskUpdateSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -138,6 +139,10 @@ def _build_skill_registry():
     reg.register(ServerShellSkill())
     # Self-deploy — rebuild Docker image and restart brain container
     reg.register(DeploySkill())
+    # Task board — create, list, and update tracked tasks
+    reg.register(TaskCreateSkill())
+    reg.register(TaskReadSkill())
+    reg.register(TaskUpdateSkill())
     return reg
 
 
@@ -175,6 +180,7 @@ class Dispatcher:
             qdrant_port=settings.qdrant_port,
             qdrant_collection=settings.qdrant_collection,
             flush_interval_turns=settings.memory_flush_interval_turns,
+            primary_session=settings.brain_primary_session,
         )
 
     # ── Public entry point ────────────────────────────────────────────────────
@@ -236,9 +242,14 @@ class Dispatcher:
                 await self.memory.persist_turn(session_id, message, reply, intent="cancel")
                 return DispatchResult(reply=reply, intent="cancel", session_id=session_id)
 
-        # 4. Classify intent (with registry-driven skill descriptions)
+        # 4. Classify intent (with registry-driven skill descriptions + conversation history
+        #    so short follow-up replies like "yes" / "personal" resolve correctly)
         available_skills = self.skills.list_all_descriptions()
-        classified = self.intent.classify(message, available_skills=available_skills)
+        classified = self.intent.classify(
+            message,
+            available_skills=available_skills,
+            history=mem_ctx.hot_history or None,
+        )
         intent     = classified.get("intent", "chat")
         params     = classified.get("params", {})
         confidence = classified.get("confidence", 1.0)
@@ -283,10 +294,55 @@ class Dispatcher:
             skill.name, intent, bool(result.context_data), sk_latency,
         )
 
+        # 6b. Task chaining — when a task is created, also infer and execute the
+        #     underlying skill implied by the task's title/description so that the
+        #     task is both *logged* (visible on the dashboard) AND *worked on*.
+        if (
+            intent == "task_create"
+            and result.context_data
+            and "[task_create failed" not in (result.context_data or "")
+            and not result.pending_action   # only chain if no existing confirmation needed
+        ):
+            _task_content = (
+                (params.get("title") or "") + " " + (params.get("description") or "")
+            ).strip() or message
+            try:
+                from app.skills.base import SkillResult as _SR
+                _sub = self.intent.classify(_task_content, history=None)
+                _sub_intent = _sub.get("intent", "chat")
+                _sub_params = _sub.get("params", {})
+                _NON_ACTIONABLE = {
+                    "chat", "task_create", "task_read", "task_update",
+                    "skill_discover", "code",
+                }
+                if _sub_intent not in _NON_ACTIONABLE:
+                    _sub_skill = self.skills.get(_sub_intent)
+                    if _sub_skill and _sub_skill.is_available():
+                        _sub_result = await _sub_skill.execute(_sub_params, _task_content)
+                        logger.info(
+                            "Task chaining | task_intent={} | sub_intent={} | has_pending={}",
+                            intent, _sub_intent, bool(_sub_result.pending_action),
+                        )
+                        # Merge sub-skill context and (if present) its pending_action
+                        result = _SR(
+                            context_data=(
+                                (result.context_data or "")
+                                + "\n\n[Working on task — "
+                                + _sub_intent
+                                + "]\n"
+                                + (_sub_result.context_data or "")
+                            ),
+                            pending_action=_sub_result.pending_action,
+                            skill_name=result.skill_name,
+                        )
+            except Exception as _chain_exc:
+                logger.debug("Task chaining skipped: {}", _chain_exc)
+
         # 7. Build augmented prompt
         augmented = self._build_augmented(
             message, intent, result.context_data,
             mem_ctx.warm_summary, mem_ctx.cold_matches,
+            mem_ctx.cross_session_context,
         )
 
         # 8. Call LLM
@@ -378,8 +434,29 @@ class Dispatcher:
         context_data: str,
         warm_summary: str,
         cold_matches: list[dict],
+        cross_session_context: str = "",
     ) -> str:
         parts: list[str] = []
+
+        # Autonomy mode — tell the LLM it can act without asking for permission
+        if settings.brain_autonomy:
+            parts.append(
+                "[FULL AUTONOMY MODE] You have complete permission to execute any operation "
+                "directly — shell commands, git commits, git push, docker restart, file writes, "
+                "code changes, deploys, and all integrations. "
+                "Do NOT ask the user for confirmation. Do NOT say 'reply confirm to proceed'. "
+                "Execute operations immediately and report the results. "
+                "You have full access to all environment variables and configured integrations. "
+                "The live code is at /sentinel-project inside the container."
+            )
+
+        # Cross-interface context — comes first so the LLM has full picture
+        if cross_session_context:
+            parts.append(
+                "[Cross-interface context — recent activity from other sessions "
+                "(Slack / CLI / REST)]:\n"
+                + cross_session_context
+            )
 
         if warm_summary:
             parts.append(f"[Session summary from prior conversations]:\n{warm_summary}")
@@ -403,12 +480,16 @@ class Dispatcher:
     @staticmethod
     def _needs_confirmation(skill, approval_level: int) -> bool:
         """Return True if this skill's write action requires user confirmation at the given level."""
+        # Autonomy mode: execute everything immediately — no confirmation ever
+        if settings.brain_autonomy:
+            return False
+
         from app.skills.base import ApprovalCategory
         cat = getattr(skill, "approval_category", ApprovalCategory.NONE)
         if cat == ApprovalCategory.NONE:
             return False
         if cat == ApprovalCategory.BREAKING:
-            return True                   # always confirm
+            return True                   # always confirm (unless autonomy mode above)
         if cat == ApprovalCategory.CRITICAL:
             return approval_level <= 2    # confirm at levels 1 & 2
         # STANDARD
@@ -727,73 +808,56 @@ class Dispatcher:
                     "Check GitHub Actions for the run status."
                 )
 
-            if action in ("ionos_create_datacenter", "create_datacenter",
-                          "ionos_start_server", "start_server",
-                          "ionos_stop_server", "stop_server",
-                          "ionos_reboot_server", "reboot_server",
-                          "ionos_create_server", "create_server",
-                          "ionos_delete_server", "delete_server",
-                          "ionos_delete_datacenter", "delete_datacenter",
-                          "ionos_ssh_exec", "ssh_exec",
-                          "ionos_deploy_docker", "deploy_docker",
-                          "ionos_configure_server", "configure_server",
-                          "ionos_reserve_ip", "reserve_ip") or (
-                pending.get("intent") == "ionos_cloud"
-            ):
+            if pending.get("intent") == "ionos_cloud":
                 from app.integrations.ionos import IONOSClient
                 import json as _json
-                client    = IONOSClient()
-                dc_id     = params.get("datacenter_id", "")
-                server_id = params.get("server_id", "")
-                real_act  = params.get("action", action)
+                client   = IONOSClient()
+                real_act = params.get("action", action)
 
-                if real_act == "create_datacenter":
-                    res = await client.create_datacenter(
-                        params.get("name", "brain-dc"),
-                        params.get("location", "us/las"),
-                        params.get("description", ""),
+                # provision_server gets rich step-by-step output
+                if real_act == "provision_server":
+                    res = await client.provision_server(
+                        name=params.get("name", "brain-server"),
+                        location=params.get("location", "us/las"),
+                        cores=int(params.get("cores", 2)),
+                        ram_mb=int(params.get("ram_mb", 2048)),
+                        storage_gb=int(params.get("storage_gb", 20)),
+                        ubuntu_version=str(params.get("ubuntu_version", "22")),
+                        ssh_keys=params.get("ssh_keys") or None,
+                        datacenter_id=params.get("datacenter_id", ""),
                     )
-                elif real_act == "create_server":
-                    res = await client.create_server(
-                        dc_id, params.get("name", "brain-server"),
-                        int(params.get("cores", 1)), int(params.get("ram_mb", 1024)),
+                    steps = res.pop("steps", [])
+                    task_id = pending.get("_task_id")
+                    if task_id:
+                        self._update_write_task_status(task_id, "completed")
+                    summary = "\n".join(f"  ✓ {s}" for s in steps)
+                    return (
+                        f"Ubuntu server **{res.get('name')}** provisioned successfully!\n\n"
+                        f"{summary}\n\n"
+                        f"**IDs:**\n"
+                        f"  • Datacenter: `{res.get('datacenter_id')}`\n"
+                        f"  • Server: `{res.get('server_id')}`\n"
+                        f"  • Volume: `{res.get('volume_id')}`\n"
+                        f"  • NIC: `{res.get('nic_id')}`\n\n"
+                        + (f"⚠️ Image password: `{res['image_password']}` (save this — shown once)\n\n"
+                           if res.get("image_password") else "")
+                        + f"_Note: {res.get('note', 'Server is provisioning — IP assigned within ~5 min.')}_"
                     )
-                elif real_act == "start_server":
-                    res = await client.start_server(dc_id, server_id)
-                elif real_act == "stop_server":
-                    res = await client.stop_server(dc_id, server_id)
-                elif real_act == "reboot_server":
-                    res = await client.reboot_server(dc_id, server_id)
-                elif real_act == "delete_server":
-                    res = await client.delete_server(dc_id, server_id)
-                elif real_act == "delete_datacenter":
-                    res = await client.delete_datacenter(dc_id)
-                elif real_act == "ssh_exec":
-                    res = await client.ssh_exec(
-                        params.get("host", ""), params.get("command", ""),
-                        params.get("username", "root"), int(params.get("port", 22)),
-                    )
-                elif real_act == "deploy_docker":
-                    res = await client.deploy_docker_app(
-                        params.get("host", ""), params.get("image", ""),
-                        params.get("container_name", "app"), params.get("port_map", "80:80"),
-                        params.get("env_vars"), params.get("username", "root"),
-                    )
-                elif real_act == "configure_server":
-                    res = await client.configure_server(
-                        params.get("host", ""), params.get("commands", []),
-                        params.get("username", "root"),
-                    )
-                elif real_act == "reserve_ip":
-                    res = await client.reserve_ip(
-                        params.get("location", "us/las"), int(params.get("size", 1)),
-                    )
-                else:
-                    res = {"error": f"Unknown IONOS action: {real_act}"}
+
+                # All other actions use the unified execute_action dispatch
+                try:
+                    res = await client.execute_action(real_act, params)
+                except ValueError as exc:
+                    task_id = pending.get("_task_id")
+                    if task_id:
+                        self._update_write_task_status(task_id, "failed", str(exc))
+                    return f"IONOS error: {exc}"
 
                 task_id = pending.get("_task_id")
                 if task_id:
                     self._update_write_task_status(task_id, "completed")
+                if isinstance(res, str):
+                    return f"IONOS `{real_act}` completed:\n```\n{res}\n```"
                 return f"IONOS `{real_act}` completed:\n```json\n{_json.dumps(res, indent=2)}\n```"
 
             if pending.get("intent") == "ionos_dns":
@@ -928,6 +992,64 @@ class Dispatcher:
                     if task_id:
                         self._update_write_task_status(task_id, "completed")
                     return f"💬 Note added to Sentry issue `{issue_id}`."
+
+            # ── Task board ──────────────────────────────────────────────────
+            if action == "task_update":
+                from app.db import postgres
+                _task_id = params.get("id") or params.get("task_id")
+                if not _task_id:
+                    return "[task_update: no task ID provided]"
+
+                _pri_to_text = {1: "low", 2: "low", 3: "normal", 4: "high", 5: "urgent"}
+                _pri_label   = {1: "Low", 2: "Minor", 3: "Normal", 4: "High", 5: "Critical"}
+                _apv_label   = {1: "auto-approve", 2: "needs review", 3: "requires sign-off"}
+
+                fields_sql: list[str] = []
+                upd_values: list      = []
+
+                if params.get("status"):
+                    fields_sql.append("status = %s")
+                    upd_values.append(params["status"])
+                if params.get("priority") is not None:
+                    pri_num = max(1, min(5, int(params["priority"])))
+                    fields_sql.append("priority_num = %s"); upd_values.append(pri_num)
+                    fields_sql.append("priority = %s");     upd_values.append(_pri_to_text[pri_num])
+                if params.get("approval_level") is not None:
+                    alv = max(1, min(3, int(params["approval_level"])))
+                    fields_sql.append("approval_level = %s"); upd_values.append(alv)
+                if params.get("title"):
+                    fields_sql.append("title = %s"); upd_values.append(params["title"])
+                if params.get("description"):
+                    fields_sql.append("description = %s"); upd_values.append(params["description"])
+                if params.get("tags") is not None:
+                    fields_sql.append("tags = %s"); upd_values.append(params["tags"] or None)
+                if params.get("assigned_to") is not None:
+                    fields_sql.append("assigned_to = %s"); upd_values.append(params["assigned_to"] or None)
+
+                if not fields_sql:
+                    return "[task_update: no changes to apply]"
+
+                fields_sql.append("updated_at = NOW()")
+                upd_values.append(int(_task_id))
+                upd_row = postgres.execute_one(
+                    f"UPDATE tasks SET {', '.join(fields_sql)} WHERE id = %s "
+                    "RETURNING id, title, status, priority_num, approval_level",
+                    upd_values,
+                )
+                write_task_id = pending.get("_task_id")
+                if write_task_id:
+                    self._update_write_task_status(write_task_id, "completed")
+                logger.info("Task updated | id={} | changes={}", _task_id, fields_sql)
+                if upd_row:
+                    pri  = upd_row.get("priority_num") or 3
+                    alv  = upd_row.get("approval_level") or 2
+                    return (
+                        f"✅ Task **#{upd_row['id']} — {upd_row['title']}** updated.\n"
+                        f"Status: {upd_row['status']} | "
+                        f"Priority: {_pri_label.get(pri, str(pri))} | "
+                        f"Approval: {_apv_label.get(alv, str(alv))}"
+                    )
+                return f"[Task #{_task_id} not found or no changes applied]"
 
             if action == "deploy_brain":
                 try:

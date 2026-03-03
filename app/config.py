@@ -144,10 +144,25 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 20
     rate_limit_per_hour:   int = 200
 
+    # ── Cross-interface memory ─────────────────────────────────
+    # All interfaces write to and read from this shared primary session.
+    # This is the "hub" that makes Slack, CLI, and REST share context.
+    brain_primary_session: str = "brain"
+
     # ── Repository (Brain self-modification) ───────────────────
     github_brain_repo_url: str = ""
-    repo_workspace: str = "/workspace/repo"
-    repo_ssh_key_path: str = "/root/.ssh/id_ed25519"
+    repo_workspace:        str = "/workspace/repo"
+    repo_ssh_key_path:     str = "/root/.ssh/id_ed25519"
+    # Local path of the Brain's own code inside the container.
+    # With Docker bind-mounts (/root/sentinel:/sentinel-project) this is the
+    # live code directory on the host — writes here persist across rebuilds.
+    repo_local_path:       str = "/sentinel-project"
+
+    # ── Autonomy mode ───────────────────────────────────────────
+    # When True: ALL pending actions (deploys, git push, file writes, shell
+    # commands, docker restart, etc.) execute immediately without requiring
+    # the user to reply "confirm". Set BRAIN_AUTONOMY=true in .env to enable.
+    brain_autonomy: bool = False
 
     # ── IONOS Cloud ─────────────────────────────────────────────
     ionos_token: str = ""           # Bearer token (preferred)

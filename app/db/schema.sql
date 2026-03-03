@@ -185,3 +185,13 @@ CREATE TABLE IF NOT EXISTS brain_settings (
     value       TEXT        NOT NULL,
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ── Task board: extended columns (added after initial schema) ─────────────────
+-- priority_num:   numeric 1–5 (1=low, 5=critical) — mirrors text priority field
+-- approval_level: 1=auto-approve, 2=needs review, 3=requires sign-off
+-- assigned_to:    free-text assignee name / email
+-- tags:           comma-separated labels
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority_num    SMALLINT    DEFAULT 3 CHECK (priority_num BETWEEN 1 AND 5);
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS approval_level  SMALLINT    DEFAULT 2 CHECK (approval_level BETWEEN 1 AND 3);
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to     TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tags            TEXT;

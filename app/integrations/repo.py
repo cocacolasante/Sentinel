@@ -28,9 +28,27 @@ from app.config import get_settings
 
 settings = get_settings()
 
-# Workspace inside the container (mounted volume)
-WORKSPACE = Path(settings.repo_workspace)
-SSH_KEY   = Path(settings.repo_ssh_key_path)
+SSH_KEY = Path(settings.repo_ssh_key_path)
+
+
+def _resolve_workspace() -> Path:
+    """
+    Pick the working directory for all repo operations.
+
+    Priority:
+      1. If GITHUB_BRAIN_REPO_URL is set, use REPO_WORKSPACE
+         (a dedicated clone that gets pulled/committed independently).
+      2. If REPO_LOCAL_PATH exists and has a .git dir, use it directly —
+         this is the bind-mounted live code directory inside the container.
+      3. Fall back to REPO_WORKSPACE anyway (will be created on first use).
+    """
+    if settings.github_brain_repo_url:
+        return Path(settings.repo_workspace)
+    local = Path(settings.repo_local_path)
+    if (local / ".git").exists():
+        return local
+    return Path(settings.repo_workspace)
+
 
 # Env for all git subprocess calls — ensures the correct SSH key is used
 def _git_env() -> dict:
@@ -57,31 +75,84 @@ def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> str:
 
 
 class RepoClient:
+    """
+    Git operations on the Brain's own codebase.
+
+    Works in two modes:
+      Remote mode  — GITHUB_BRAIN_REPO_URL is set.
+                     Clone/pull into REPO_WORKSPACE, commit, push to GitHub.
+      Local mode   — No remote URL, but REPO_LOCAL_PATH/.git exists.
+                     Read/write/commit directly in the bind-mounted live dir.
+                     Push still works if the remote is configured in that git repo.
+    """
+
+    def __init__(self) -> None:
+        self._workspace = _resolve_workspace()
+
     def is_configured(self) -> bool:
-        return bool(settings.github_brain_repo_url)
+        """Available whenever we can find a git repo to operate on."""
+        if settings.github_brain_repo_url:
+            return True
+        local = Path(settings.repo_local_path)
+        return (local / ".git").exists() or (self._workspace / ".git").exists()
+
+    @property
+    def workspace(self) -> Path:
+        return self._workspace
+
+    def _run(self, cmd: list[str], check: bool = True) -> str:
+        result = subprocess.run(
+            cmd,
+            cwd=str(self._workspace),
+            capture_output=True,
+            text=True,
+            env=_git_env(),
+        )
+        if check and result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+        return (result.stdout + result.stderr).strip()
 
     # ── Sync internals ────────────────────────────────────────────────────────
 
     def _ensure_repo_sync(self) -> str:
-        WORKSPACE.mkdir(parents=True, exist_ok=True)
-        git_dir = WORKSPACE / ".git"
-        if not git_dir.exists():
-            url = settings.github_brain_repo_url
-            logger.info("Cloning Brain repo | url={}", url)
-            _run(["git", "clone", url, str(WORKSPACE)], cwd=WORKSPACE.parent)
-            _run(["git", "config", "user.email", "brain@csuitecode.com"])
-            _run(["git", "config", "user.name",  "AI Brain"])
-            return f"Cloned {url} to {WORKSPACE}"
-        else:
-            out = _run(["git", "pull", "--ff-only"])
+        remote_url = settings.github_brain_repo_url
+
+        if remote_url:
+            # Remote mode: clone once, then pull
+            self._workspace.mkdir(parents=True, exist_ok=True)
+            if not (self._workspace / ".git").exists():
+                logger.info("Cloning Brain repo | url={}", remote_url)
+                subprocess.run(
+                    ["git", "clone", remote_url, str(self._workspace)],
+                    cwd=str(self._workspace.parent),
+                    capture_output=True, text=True, env=_git_env(),
+                )
+                self._run(["git", "config", "user.email", "brain@csuitecode.com"])
+                self._run(["git", "config", "user.name",  "AI Brain"])
+                return f"Cloned {remote_url} to {self._workspace}"
+            out = self._run(["git", "pull", "--ff-only"])
             return out or "Already up to date"
 
+        # Local mode: just verify the directory exists
+        if not self._workspace.exists():
+            raise RuntimeError(
+                f"Repo directory not found: {self._workspace}. "
+                "Set GITHUB_BRAIN_REPO_URL or REPO_LOCAL_PATH in .env."
+            )
+        # Ensure git identity is set (needed for commits)
+        try:
+            self._run(["git", "config", "user.email", "brain@csuitecode.com"], check=False)
+            self._run(["git", "config", "user.name",  "AI Brain"],             check=False)
+        except Exception:
+            pass
+        return f"Using local repo at {self._workspace}"
+
     def _status_sync(self) -> str:
-        return _run(["git", "status", "--short"])
+        return self._run(["git", "status", "--short"])
 
     def _diff_sync(self) -> str:
-        staged   = _run(["git", "diff", "--staged"], check=False)
-        unstaged = _run(["git", "diff"],             check=False)
+        staged   = self._run(["git", "diff", "--staged"], check=False)
+        unstaged = self._run(["git", "diff"],             check=False)
         parts = []
         if staged:
             parts.append(f"=== Staged ===\n{staged}")
@@ -90,36 +161,45 @@ class RepoClient:
         return "\n\n".join(parts) or "(no changes)"
 
     def _list_files_sync(self, path: str = "") -> str:
-        target = (WORKSPACE / path) if path else WORKSPACE
+        if path and Path(path).is_absolute():
+            target = Path(path)
+        else:
+            target = (self._workspace / path) if path else self._workspace
         if not target.exists():
-            raise FileNotFoundError(f"Path not found in repo: {path}")
+            raise FileNotFoundError(f"Path not found: {path}")
         try:
-            out = _run(["git", "ls-files", str(target)])
-            lines = [l.replace(str(WORKSPACE) + "/", "") for l in out.splitlines()]
+            out = self._run(["git", "ls-files", str(target)])
+            lines = [l.replace(str(self._workspace) + "/", "") for l in out.splitlines()]
             return "\n".join(lines) if lines else "(empty)"
         except Exception:
-            # Fall back to find if git ls-files fails
-            files = sorted(str(p.relative_to(WORKSPACE)) for p in target.rglob("*") if p.is_file())
+            files = sorted(
+                str(p.relative_to(self._workspace))
+                for p in target.rglob("*") if p.is_file()
+            )
             return "\n".join(files) or "(empty)"
 
     def _read_file_sync(self, path: str) -> str:
-        full = WORKSPACE / path
+        # Absolute paths are read directly from the filesystem (logs, configs, etc.)
+        # Relative paths are resolved against the workspace (git repo root).
+        if Path(path).is_absolute():
+            full = Path(path)
+        else:
+            full = self._workspace / path
         if not full.exists():
             raise FileNotFoundError(f"File not found: {path}")
         content = full.read_text(errors="replace")
-        # Return with line numbers for easier LLM reference
         lines = content.splitlines()
         numbered = "\n".join(f"{i+1:4} | {l}" for i, l in enumerate(lines))
         return f"=== {path} ({len(lines)} lines) ===\n{numbered}"
 
     def _write_file_sync(self, path: str, content: str) -> str:
-        full = WORKSPACE / path
+        full = self._workspace / path
         full.parent.mkdir(parents=True, exist_ok=True)
         full.write_text(content)
         return f"Written: {path} ({len(content.splitlines())} lines)"
 
     def _patch_file_sync(self, path: str, old: str, new: str) -> str:
-        full = WORKSPACE / path
+        full = self._workspace / path
         if not full.exists():
             raise FileNotFoundError(f"File not found: {path}")
         original = full.read_text()
@@ -130,15 +210,15 @@ class RepoClient:
         return f"Patched: {path}"
 
     def _commit_sync(self, message: str) -> str:
-        _run(["git", "add", "-A"])
-        status = _run(["git", "status", "--short"])
+        self._run(["git", "add", "-A"])
+        status = self._run(["git", "status", "--short"])
         if not status:
             return "Nothing to commit — working tree clean"
-        out = _run(["git", "commit", "-m", message])
+        out = self._run(["git", "commit", "-m", message])
         return out
 
     def _push_sync(self) -> str:
-        return _run(["git", "push", "origin", "HEAD"])
+        return self._run(["git", "push", "origin", "HEAD"])
 
     # ── Public async API ──────────────────────────────────────────────────────
 

@@ -8,20 +8,24 @@ integration calls, LLM augmentation, and Redis memory.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.brain.dispatcher  import Dispatcher
-from app.brain.llm_router  import get_telos_loader
+from app.brain.dispatcher    import Dispatcher
+from app.brain.llm_router    import get_telos_loader
+from app.config              import get_settings
 from app.memory.redis_client import RedisMemory
 
 router   = APIRouter()
 dispatch = Dispatcher()
 memory   = RedisMemory()
+settings = get_settings()
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
     message:    str = Field(..., min_length=1, max_length=8000)
-    session_id: str = Field(default="default", max_length=128)
+    # If omitted or "default", the primary shared session is used so that
+    # REST API requests participate in cross-interface memory.
+    session_id: str = Field(default="", max_length=128)
 
 
 class ChatResponse(BaseModel):
@@ -35,8 +39,14 @@ class ChatResponse(BaseModel):
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
+    # Map empty / "default" to the primary shared session so every interface
+    # contributes to and reads from the same warm-memory pool.
+    sid = req.session_id.strip()
+    if not sid or sid == "default":
+        sid = settings.brain_primary_session
+
     try:
-        result = await dispatch.process(req.message, req.session_id)
+        result = await dispatch.process(req.message, sid)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

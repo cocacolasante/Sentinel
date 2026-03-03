@@ -73,6 +73,9 @@ _INTENT_LABELS: dict[str, str] = {
     "server_shell":     "🖥️ Server shell",
     "skill_discover":   "🔎 Skill discovery",
     "deploy":           "🚀 Deploy",
+    "task_create":      "📋 Task created",
+    "task_read":        "📋 Tasks",
+    "task_update":      "📋 Task updated",
     "chat":             "💭 Chat",
     "rate_limited":     "⏱️ Rate limited",
     "blocked":          "⛔ Blocked",
@@ -82,9 +85,11 @@ _INTENT_LABELS: dict[str, str] = {
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _session_id(event: dict) -> str:
-    user    = event.get("user",    "unknown")
-    channel = event.get("channel", "dm")
-    return f"slack:{user}:{channel}"
+    # Keyed by user only — so memory is shared across DMs and channel mentions.
+    # This also feeds the cross-interface primary session so Slack context
+    # appears in CLI and REST API responses.
+    user = event.get("user", "unknown")
+    return f"slack:{user}"
 
 
 def _strip_mention(text: str) -> str:
@@ -115,16 +120,28 @@ def _build_skills_help() -> str:
         parts.append("\n*Needs API keys / configuration:*")
         parts.extend(unavailable_lines)
     parts.append(
-        "\n*Usage tips:*\n"
+        "\n*✏️ Codebase self-editing workflow:*\n"
+        "```\n"
+        "1. Read a file:    \"read app/brain/intent.py\"\n"
+        "2. Make a change:  \"patch app/brain/intent.py — add task_create routing hint\"\n"
+        "3. Confirm:        reply  confirm  (or  cancel  to abort)\n"
+        "4. Commit + push:  \"commit these changes with message: add task routing\"\n"
+        "5. Deploy:         \"deploy\" — rebuilds the Docker image from the latest code\n"
+        "```\n"
+        "You can also say _\"show git status\"_, _\"list files in app/skills\"_, or "
+        "_\"what changed since the last commit\"_.\n"
+    )
+    parts.append(
+        "*Usage tips:*\n"
         "• Be specific: _\"send an email to john@co.com about the meeting rescheduled to Friday\"_\n"
-        "• Code changes: _\"read app/brain/dispatcher.py\"_ → _\"patch the file to improve X\"_\n"
         "• Confirm writes: reply `confirm` or `cancel` when prompted\n"
+        "• Task board: _\"create a task: fix the login bug, priority 4\"_ / _\"list my tasks\"_\n"
         "• Type `help` anytime to see this list"
     )
     return "\n".join(parts)
 
 
-def _format_reply(result: DispatchResult) -> str:
+def _format_reply(result: DispatchResult, session_id: str = "") -> str:
     """Format a DispatchResult as a clean Slack message with intent header + summary."""
     intent = result.intent
     agent  = result.agent
@@ -135,8 +152,10 @@ def _format_reply(result: DispatchResult) -> str:
     header_parts = [f"✅ {label}"]
     if agent and agent not in ("default", ""):
         header_parts.append(f"_via {agent} agent_")
+    if session_id:
+        header_parts.append(f"_`{session_id}`_")
 
-    header = "  ·  ".join(header_parts)
+    header  = "  ·  ".join(header_parts)
     divider = "─" * 36
 
     return f"{header}\n{divider}\n{reply}"
@@ -168,7 +187,7 @@ async def _handle(event: dict, say, client) -> None:
     # 2. Dispatch through the Brain
     try:
         result = await dispatch.process(text, session_id)
-        reply  = _format_reply(result)
+        reply  = _format_reply(result, session_id=session_id)
     except Exception as exc:
         logger.error("Slack dispatch error: %s", exc, exc_info=True)
         reply = f"❌ *Error* — `{type(exc).__name__}: {exc}`"

@@ -99,20 +99,20 @@ Full reference — every variable the brain reads:
 
 ```bash
 # ── Core ──────────────────────────────────────────────────────────────────────
-SECRET_KEY=84b760f1f9c146b0918d52be49785566b2e5c64b54fdc47d30e6692079215a71
+SECRET_KEY=<generate: openssl rand -hex 32>
 ENVIRONMENT=production           # development | production
 
 # ── PostgreSQL ─────────────────────────────────────────────────────────────────
 POSTGRES_USER=brain
-POSTGRES_PASSWORD=Cola1994
+POSTGRES_PASSWORD=<strong password>
 POSTGRES_DB=aibrain
 
 # ── Redis ──────────────────────────────────────────────────────────────────────
-REDIS_PASSWORD=Cola1994
+REDIS_PASSWORD=<strong password>
 # REDIS_HOST and REDIS_PORT default to redis:6379 inside Docker
 
 # ── LLM APIs ───────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY=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
+ANTHROPIC_API_KEY=sk-ant-...     # required
 OPENAI_API_KEY=sk-...            # optional — enables real Qdrant embeddings
 
 # ── Slack ──────────────────────────────────────────────────────────────────────
@@ -123,9 +123,9 @@ SLACK_EVAL_CHANNEL=brain-evals   # Channel for weekly eval scorecards
 SLACK_ALERT_CHANNEL=brain-alerts # Channel for budget threshold alerts
 
 # ── n8n ────────────────────────────────────────────────────────────────────────
-N8N_HOST=csuitecoden8n.com
-N8N_USER=Colasante
-N8N_PASSWORD=Sonicajc1994$
+N8N_HOST=your-n8n-host.com
+N8N_USER=<n8n username>
+N8N_PASSWORD=<n8n password>
 N8N_WEBHOOK_URL=http://n8n:5678
 
 # ── Domain ─────────────────────────────────────────────────────────────────────
@@ -173,6 +173,14 @@ GRAFANA_USER=admin
 GRAFANA_PASSWORD=<strong password>
 FLOWER_USER=admin
 FLOWER_PASSWORD=<strong password>
+
+# ── Repository (Brain self-modification) ───────────────────────────────────────
+# Optional — set to clone a remote repo for isolated edits. If not set, the
+# brain reads/writes the bind-mounted live code at REPO_LOCAL_PATH.
+GITHUB_BRAIN_REPO_URL=git@github.com:your-username/your-repo.git
+REPO_WORKSPACE=/workspace/repo
+REPO_LOCAL_PATH=/app              # path to live code inside the container
+REPO_SSH_KEY_PATH=/root/.ssh/id_ed25519
 ```
 
 ---
@@ -450,11 +458,39 @@ What do I have tomorrow?
 What are my open GitHub issues in ai-brain?
 Turn off the living room lights
 Write an Instagram caption for my new product launch
+Create a task: fix the mobile login bug, priority 4
+List my open tasks
 confirm      ← executes a pending write action
 cancel       ← aborts a pending write action
 ```
 
-Write actions (send email, create calendar event) ask for `confirm` before executing.
+Write actions (send email, create calendar event, file edits) ask for `confirm` before executing.
+
+### Codebase self-editing from Slack
+
+The brain can read, edit, commit, and deploy its own code directly from Slack:
+
+```
+# 1. Read a file
+read app/brain/intent.py
+
+# 2. Make a targeted change
+patch app/brain/intent.py — add a routing hint for task_create
+
+# 3. Brain shows a preview and asks to confirm
+confirm
+
+# 4. Commit and push to GitHub
+commit these changes with message: improve task routing
+
+# 5. Rebuild and restart the container
+deploy
+```
+
+The brain operates on the bind-mounted live code directory by default (`REPO_LOCAL_PATH=/app`).
+If `GITHUB_BRAIN_REPO_URL` is set, it uses a dedicated clone in `REPO_WORKSPACE` instead.
+
+After `deploy`, the brain is offline for ~60 seconds while the Docker image rebuilds.
 
 ---
 

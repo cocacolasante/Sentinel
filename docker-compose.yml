@@ -9,11 +9,18 @@ services:
       - "127.0.0.1:8000:8000"
     env_file:
       - .env
+    environment:
+      # Point RepoClient at the bind-mounted live host code
+      REPO_LOCAL_PATH: /sentinel-project
     volumes:
       # SSH key for git push to GitHub (read-only)
       - ${HOME}/.ssh:/root/.ssh:ro
       # Persistent workspace where the Brain clones its own repo
       - brain-workspace:/workspace
+      # Docker socket — lets the brain run docker restart / docker compose
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Live host code — AI can read/write/commit/push from inside the container
+      - /root/sentinel:/sentinel-project
     depends_on:
       postgres:
         condition: service_healthy

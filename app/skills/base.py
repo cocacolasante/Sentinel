@@ -44,6 +44,10 @@ class BaseSkill(ABC):
     requires_confirmation: bool = False
     approval_category: ApprovalCategory = ApprovalCategory.NONE
 
+    # Names of env vars required for this skill.  Used by the dispatcher to
+    # produce a clear "missing: IONOS_TOKEN" message instead of asking the user.
+    config_vars: list[str] = []
+
     def is_available(self) -> bool:
         """Return True if the skill is properly configured and ready."""
         return True

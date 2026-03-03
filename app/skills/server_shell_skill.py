@@ -21,6 +21,7 @@ Output:
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import shlex
 
@@ -58,7 +59,9 @@ _FORBIDDEN_RE = re.compile(
     re.IGNORECASE,
 )
 
-_DEFAULT_CWD = "/root"
+# Use the bind-mounted live host code when available, fall back to container /app
+_CODE_ROOT   = "/sentinel-project" if os.path.isdir("/sentinel-project") else "/app"
+_DEFAULT_CWD = _CODE_ROOT
 _MAX_OUTPUT  = 8_000   # chars
 
 
@@ -99,9 +102,12 @@ async def _run_command(command: str, cwd: str) -> tuple[str, int]:
 class ServerShellSkill(BaseSkill):
     name        = "server_shell"
     description = (
-        "Execute shell commands on the server — navigate filesystem, create directories, "
-        "manage files, run builds (npm, pip, go, cargo, docker), inspect processes and logs, "
-        "scaffold new projects. Destructive commands require user confirmation."
+        "Execute shell commands on the server — navigate filesystem, read/write files, "
+        "search code with grep, create directories, run builds (npm, pip, docker), "
+        "inspect processes and logs, scaffold projects, push to GitHub, restart Docker services. "
+        "Actions: read_file, search_code, list_files, inspect_env, docker_restart, docker_compose. "
+        "Pass command= for raw shell. Destructive commands (rm -rf, kill, etc.) require confirmation. "
+        "git push/commit/pull, docker restart, and docker compose all execute immediately."
     )
     trigger_intents  = ["server_shell"]
     approval_category = ApprovalCategory.NONE   # set dynamically per command
@@ -110,14 +116,70 @@ class ServerShellSkill(BaseSkill):
         return True   # always available — no external credentials required
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
-        command = (params.get("command") or "").strip()
+        action  = (params.get("action") or "").strip().lower()
         cwd     = (params.get("cwd") or _DEFAULT_CWD).rstrip("/") or _DEFAULT_CWD
+
+        # ── Convenience actions (no raw command needed) ────────────────────────
+        if action == "read_file":
+            path = (params.get("path") or "").strip()
+            if not path:
+                return SkillResult(
+                    context_data="[read_file requires a 'path' param]",
+                    skill_name=self.name,
+                )
+            # Accept absolute paths or paths relative to the code root
+            if not path.startswith("/"):
+                path = f"{_CODE_ROOT}/{path}"
+            command = f"cat -n {shlex.quote(path)}"
+
+        elif action == "search_code":
+            pattern = (params.get("pattern") or params.get("query") or "").strip()
+            search_path = (params.get("path") or _CODE_ROOT).strip()
+            if not search_path.startswith("/"):
+                search_path = f"{_CODE_ROOT}/{search_path}"
+            if not pattern:
+                return SkillResult(
+                    context_data="[search_code requires a 'pattern' param]",
+                    skill_name=self.name,
+                )
+            command = (
+                f"grep -rn --include='*.py' --include='*.yaml' --include='*.yml' "
+                f"--include='*.json' --include='*.md' "
+                f"-i {shlex.quote(pattern)} {shlex.quote(search_path)} 2>/dev/null | head -80"
+            )
+
+        elif action == "list_files":
+            path = (params.get("path") or _CODE_ROOT).strip()
+            if not path.startswith("/"):
+                path = f"{_CODE_ROOT}/{path}"
+            command = f"find {shlex.quote(path)} -type f | sort | head -100 2>/dev/null"
+
+        elif action == "inspect_env":
+            # Show all environment variables so the AI knows what integrations are configured.
+            command = "printenv | sort"
+            cwd     = _DEFAULT_CWD
+
+        elif action == "docker_restart":
+            service = (
+                params.get("service") or params.get("container") or "ai-brain"
+            ).strip()
+            command = f"docker restart {shlex.quote(service)}"
+            cwd     = _DEFAULT_CWD
+
+        elif action == "docker_compose":
+            sub_cmd = (params.get("sub_command") or params.get("command") or "ps").strip()
+            compose_file = _CODE_ROOT + "/docker-compose.yml"
+            command = f"docker compose -f {shlex.quote(compose_file)} {sub_cmd}"
+            cwd     = _CODE_ROOT
+
+        else:
+            command = (params.get("command") or "").strip()
 
         if not command:
             return SkillResult(
                 context_data=(
-                    "[server_shell requires a 'command' param. "
-                    "Ask the user what they want to run.]"
+                    "[server_shell requires either a 'command' param or an 'action' of "
+                    "read_file / search_code / list_files. Ask the user what they want to run.]"
                 ),
                 skill_name=self.name,
             )

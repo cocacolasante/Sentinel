@@ -37,7 +37,7 @@ _SYSTEM = (
 )
 
 _USER_TEMPLATE = """Today's date: {today}  (use this to resolve relative dates like "Thursday" or "next week")
-
+{recent_context}
 Classify this message into one of these intents:
 
 {available_skills}
@@ -68,7 +68,22 @@ Intent-specific param examples:
   contacts_write: {{"action": "add" | "update" | "delete", "name": "Laura Smith", "email": "laura@co.com", "phone": "+12125551234", "company": "", "id": ""}}
   whatsapp_read:  {{"action": "list" | "get", "to": "+12125551234", "limit": 20}}
   whatsapp_send:  {{"to": "+12125551234", "body": "Hey, are we still on for tomorrow?"}}
-  ionos_cloud:    {{"action": "list_datacenters" | "list_servers" | "create_datacenter" | "start_server" | "stop_server" | "ssh_exec" | "deploy_docker", "datacenter_id": "", "server_id": "", "name": "", "location": "de/fra", "host": "1.2.3.4", "command": "uptime"}}
+  ionos_cloud:    {{"action": "<action>", ...params}}
+    Datacenter: list_datacenters | get_datacenter | create_datacenter | update_datacenter | delete_datacenter  (params: datacenter_id, name, location, description)
+    Server: list_servers | get_server | server_status | create_server | update_server | start_server | stop_server | reboot_server | suspend_server | delete_server | get_server_console  (params: datacenter_id, server_id, name, cores, ram_mb, cpu_family)
+    Provision: provision_server  (params: name, location, cores, ram_mb, storage_gb, ubuntu_version, datacenter_id)
+    SSH/Deploy: ssh_exec | deploy_docker | configure_server  (params: host, command, username, image, container_name, port_map)
+    Volume: list_volumes | get_volume | create_volume | update_volume | delete_volume | list_attached_volumes | attach_volume | detach_volume | create_volume_snapshot | restore_snapshot  (params: datacenter_id, volume_id, server_id, name, size_gb, volume_type, image_id, snapshot_id)
+    NIC: list_nics | get_nic | create_nic | update_nic | delete_nic  (params: datacenter_id, server_id, nic_id, lan_id, dhcp, ips)
+    LAN: list_lans | get_lan | create_lan | update_lan | delete_lan  (params: datacenter_id, lan_id, name, public)
+    Snapshot: list_snapshots | get_snapshot | update_snapshot | delete_snapshot  (params: snapshot_id, name, description)
+    Firewall: list_firewall_rules | get_firewall_rule | create_firewall_rule | delete_firewall_rule  (params: datacenter_id, server_id, nic_id, rule_id, name, protocol, direction, port_range_start, port_range_end, source_ip, target_ip)
+    IP Block: list_ips | get_ip_block | reserve_ip | update_ip_block | release_ip_block  (params: ip_block_id, location, size, name)
+    Load Balancer: list_load_balancers | get_load_balancer | create_load_balancer | delete_load_balancer | list_lb_nics | add_lb_nic | remove_lb_nic  (params: datacenter_id, lb_id, nic_id, name, ip, dhcp)
+    NAT Gateway: list_nat_gateways | get_nat_gateway | create_nat_gateway | delete_nat_gateway | list_nat_rules | create_nat_rule | delete_nat_rule  (params: datacenter_id, nat_id, rule_id, name, public_ips, rule_type, protocol, source_subnet)
+    Kubernetes: list_k8s_clusters | get_k8s_cluster | create_k8s_cluster | delete_k8s_cluster | list_k8s_nodepools | get_k8s_nodepool | create_k8s_nodepool | delete_k8s_nodepool | get_k8s_kubeconfig  (params: cluster_id, nodepool_id, name, k8s_version, datacenter_id, node_count, cores, ram_mb, storage_gb)
+    Images: list_images  (params: location, name_filter)
+    Request: get_request_status  (params: request_id)
   ionos_dns:      {{"action": "list_zones" | "list_records" | "upsert_record" | "delete_record", "zone_name": "example.com", "name": "www", "type": "A", "content": "1.2.3.4", "ttl": 3600}}
   repo_read:      {{"action": "status" | "diff" | "list_files" | "read_file", "path": "app/main.py"}}
   repo_write:     {{"action": "write_file" | "patch_file", "path": "app/main.py", "content": "...", "old": "...", "new": "..."}}
@@ -76,19 +91,61 @@ Intent-specific param examples:
   deploy:         {{"reason": "applied fix for contacts bug"}}
   sentry_read:    {{"action": "list" | "get" | "db", "project": "", "query": "is:unresolved", "issue_id": "", "limit": 20}}
   sentry_manage:  {{"action": "resolve" | "ignore" | "assign" | "comment", "issue_id": "123456", "assignee": "user@co.com", "text": "looking into this"}}
-  server_shell:   {{"command": "ls -la /root/projects", "cwd": "/root"}}
+  server_shell:   {{"command": "ls -la /sentinel-project", "cwd": "/sentinel-project", "action": "read_file" | "search_code" | "list_files" | "inspect_env" | "docker_restart" | "docker_compose", "path": "/sentinel-project/app/brain/dispatcher.py", "pattern": "def classify", "service": "ai-brain", "sub_command": "ps"}}
+  task_create:    {{"title": "Fix the login bug", "description": "Users can't log in on mobile", "priority": 3, "approval_level": 2, "due_date": "2026-03-10", "tags": "bug,mobile", "assigned_to": ""}}
+  task_read:      {{"action": "list" | "get", "status": "pending" | "in_progress" | "done" | "cancelled" | "", "priority": 4, "id": "", "limit": 20}}
+  task_update:    {{"id": 42, "status": "in_progress" | "done" | "cancelled" | "pending", "priority": 4, "approval_level": 1, "title": "", "description": "", "tags": "", "assigned_to": ""}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
 
 Routing guidance:
+  - "update the CLI", "improve the CLI", "rewrite the CLI", "edit the CLI", "fix the CLI", "make the CLI better", "update brain.py", "edit brain.py", "rewrite brain.py", "show me brain.py", "read brain.py", "open brain.py", "show the CLI code", "look at the CLI code", "read the CLI" → server_shell with action=read_file, path=brain.py
+  - "update your code", "edit your own code", "improve yourself", "rewrite yourself", "change your code", "look at yourself", "read your own code" → server_shell with action=list_files, path=/sentinel-project
+  - "deploy an ubuntu server", "provision a server", "spin up a VPS", "create a cloud server", "set up an ubuntu vps" → ionos_cloud action=provision_server
+  - "create a datacenter", "create a VDC", "new IONOS datacenter" → ionos_cloud action=create_datacenter
+  - "list my datacenters", "show IONOS datacenters" → ionos_cloud action=list_datacenters
+  - "list servers", "what servers do I have in DC X" → ionos_cloud action=list_servers, datacenter_id=X
+  - "start/stop/reboot server X" → ionos_cloud action=start_server|stop_server|reboot_server
+  - "list images", "available OS images", "what ubuntu images" → ionos_cloud action=list_images
+  - "list volumes", "show volumes in DC X" → ionos_cloud action=list_volumes, datacenter_id=X
+  - "create a volume", "add storage" → ionos_cloud action=create_volume
+  - "attach volume X to server Y" → ionos_cloud action=attach_volume
+  - "take a snapshot of volume X" → ionos_cloud action=create_volume_snapshot
+  - "list NICs", "show network interfaces" → ionos_cloud action=list_nics
+  - "list LANs", "show networks in DC" → ionos_cloud action=list_lans
+  - "list snapshots", "show my snapshots" → ionos_cloud action=list_snapshots
+  - "list firewall rules" → ionos_cloud action=list_firewall_rules
+  - "add firewall rule", "open port 80" → ionos_cloud action=create_firewall_rule
+  - "list IP blocks", "show reserved IPs" → ionos_cloud action=list_ips
+  - "reserve an IP", "allocate IP" → ionos_cloud action=reserve_ip
+  - "release IP block X" → ionos_cloud action=release_ip_block
+  - "list load balancers", "show LBs" → ionos_cloud action=list_load_balancers
+  - "create a load balancer" → ionos_cloud action=create_load_balancer
+  - "list NAT gateways", "show NAT" → ionos_cloud action=list_nat_gateways
+  - "create NAT gateway" → ionos_cloud action=create_nat_gateway
+  - "list Kubernetes clusters", "show k8s clusters" → ionos_cloud action=list_k8s_clusters
+  - "create a Kubernetes cluster" → ionos_cloud action=create_k8s_cluster
+  - "get kubeconfig for cluster X" → ionos_cloud action=get_k8s_kubeconfig, cluster_id=X
+  - "create a node pool", "add k8s nodes" → ionos_cloud action=create_k8s_nodepool
+  - "check request status X", "what's the status of IONOS request X" → ionos_cloud action=get_request_status
+  - "SSH into server at IP X", "run command X on server" → ionos_cloud action=ssh_exec
+  - "deploy docker container X on server" → ionos_cloud action=deploy_docker
+  - When the user asks to do MULTIPLE things in one message (e.g. "create a task AND set up a server"), pick the most complex/actionable intent. Mention in context_data that you will handle others afterward.
   - "deploy", "rebuild", "restart the brain", "redeploy", "apply changes", "push and deploy", "deploy the changes" → deploy
   - "improve X", "fix X", "optimize X", "refactor X", "enhance X" where X is a file/code → repo_read then repo_write
   - "review code", "check the code", "analyse the codebase" → repo_read
   - "write code for...", "implement a function...", "help me code..." → code
-  - "read file X", "show me X", "what is in X" → repo_read
+  - "read file X", "show me the code in X", "cat X", "open X" → server_shell with action=read_file, path=X
+  - "search for X in the code", "grep X", "find where X is defined" → server_shell with action=search_code, pattern=X
+  - "list files in X", "what files are in X", "show directory X" → server_shell with action=list_files, path=X
+  - "show me the codebase", "review the source", "look at the code" → server_shell with action=list_files, path=/sentinel-project
+  - "show me X" where X is a git operation (diff, status) → repo_read
   - Requests to edit/create a specific file with a path → repo_write
   - Ambiguous improvement requests without a specific file → code (let LLM suggest approach)
+  - "create a task", "add a task", "track this", "new task", "remember to", "log a task" → task_create
+  - "list tasks", "show tasks", "what tasks", "my tasks", "view tasks", "open tasks", "pending tasks" → task_read
+  - "mark task done", "complete task", "update task", "change priority", "close task", "set task status" → task_update
   - "go to /path", "navigate to", "cd to", "list files in", "what's in this directory" → server_shell
   - "create a directory", "mkdir", "make a folder", "scaffold a project" → server_shell
   - "run this command", "execute on the server", "check disk space", "show processes" → server_shell
@@ -96,11 +153,22 @@ Routing guidance:
   - "install packages", "pip install", "npm install", "apt install" → server_shell
   - "show me the logs", "tail the logs", "check server logs" → server_shell
   - "what's running", "ps aux", "top", "htop", "check memory / disk" → server_shell
+  - "push to github", "git push", "push the code", "push changes", "push commits" → server_shell with command="cd /sentinel-project && git push origin HEAD"
+  - "git commit", "commit the changes", "commit all changes" → server_shell with command="cd /sentinel-project && git add -A && git commit -m '<message>'"
+  - "git pull", "pull latest", "pull from github" → server_shell with command="cd /sentinel-project && git pull"
+  - "restart the brain", "restart ai-brain", "restart the container", "docker restart" → server_shell with action=docker_restart, service="ai-brain"
+  - "restart nginx", "restart the proxy", "docker restart nginx" → server_shell with action=docker_restart, service="ai-nginx"
+  - "docker ps", "what containers are running", "show docker status", "container status" → server_shell with action=docker_compose, sub_command="ps"
+  - "docker compose up", "bring up services" → server_shell with action=docker_compose, sub_command="up -d"
+  - "what env vars are set", "show configuration", "inspect the config", "what integrations are configured", "show me the env" → server_shell with action=inspect_env
+  - "update and deploy", "push and restart", "commit push and deploy", "make it live" → use server_shell for git ops then intent=deploy
+  - "show running services", "list docker containers", "docker status" → server_shell with command="docker ps"
 
 IMPORTANT for calendar_write: "date" must always be an absolute ISO date (YYYY-MM-DD).
 Never output day names like "Thursday" — resolve them using today's date above.
 
-Message: {message}"""
+Message: {message}
+{followup_hint}"""
 
 _DEFAULT_SKILLS = """gmail_read      — read, check, or search Gmail inbox; read a specific email; mark as read
 gmail_send      — compose, send, or draft an email
@@ -118,15 +186,18 @@ contacts_read   — search or look up a contact by name or email in the address 
 contacts_write  — add, update, or delete a contact in the address book
 whatsapp_read   — read or check recent WhatsApp messages
 whatsapp_send   — send a WhatsApp message to a contact or number
-ionos_cloud     — manage IONOS cloud: datacenters, servers (spin up/down), SSH, deploy apps
+ionos_cloud     — full IONOS DCD management: datacenters, servers (provision/start/stop/reboot/SSH), volumes (CRUD/attach/snapshot), NICs, LANs, firewall rules, IP blocks, load balancers, NAT gateways, Kubernetes clusters/nodepools, Docker deploy
 ionos_dns       — manage IONOS DNS zones and records (A, CNAME, MX, TXT, etc.)
 repo_read       — read, list, diff, or check status of the Brain's own codebase/files
 repo_write      — create or edit a file in the Brain's codebase; improve, refactor, or patch files
 repo_commit     — commit and/or push changes in the Brain's repository to GitHub
 sentry_read     — list, search, or inspect Sentry error issues; show recent errors
 sentry_manage   — resolve, ignore, assign, or comment on a Sentry issue
-server_shell    — run shell commands on the server: navigate filesystem, create dirs/projects, run builds, check disk/processes/logs
+server_shell    — run shell commands on the server: read/write files, search code, list dirs, run builds, inspect processes/logs, git push/commit/pull, docker restart (action=docker_restart), docker compose (action=docker_compose), inspect env vars (action=inspect_env)
 deploy          — rebuild the Brain Docker image with latest committed code and restart the brain container
+task_create     — create a new tracked task with title, priority (1–5), and approval level (1–3)
+task_read       — list, filter, or view existing tasks; check task status or priority
+task_update     — update a task's status, priority, approval level, or description
 code            — software engineering help, code review, debugging, architecture — no file edits
 skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
 chat            — anything else: analysis, writing, questions, conversation"""
@@ -144,14 +215,52 @@ class IntentClassifier:
             self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         return self._client
 
-    def classify(self, message: str, available_skills: str = "") -> dict:
+    @staticmethod
+    def _fmt_history(history: list[dict], max_turns: int = 4) -> str:
+        """
+        Format the last `max_turns` (user+assistant) pairs as a compact context block.
+        Truncates long messages so the Haiku prompt stays short.
+        """
+        if not history:
+            return ""
+        # history is a flat list: [user, assistant, user, assistant, ...]
+        # Take only the most recent pairs
+        pairs = history[-(max_turns * 2):]
+        lines = ["Recent conversation (use this to understand follow-up messages):"]
+        for turn in pairs:
+            role = "User" if turn.get("role") == "user" else "Assistant"
+            content = (turn.get("content") or "")[:300].replace("\n", " ")
+            lines.append(f"{role}: {content}")
+        return "\n".join(lines) + "\n"
+
+    def classify(
+        self,
+        message: str,
+        available_skills: str = "",
+        history: list[dict] | None = None,
+    ) -> dict:
         """
         Classify a message and return a dict with keys:
           intent (str), confidence (float), params (dict)
         Falls back to {"intent": "chat", "confidence": 0.5, "params": {}} on any error.
+
+        history: prior conversation turns (Anthropic format) — used so that short
+                 follow-up replies like "yes", "the first one", or "personal" are
+                 correctly resolved to their parent intent.
         """
         try:
             skill_list = available_skills.strip() if available_skills.strip() else _DEFAULT_SKILLS
+            recent_context = self._fmt_history(history) if history else ""
+
+            # Hint the classifier when the message is suspiciously short (likely a follow-up)
+            followup_hint = ""
+            if history and len(message.strip().split()) <= 6:
+                followup_hint = (
+                    "NOTE: This message is very short and likely a direct answer to the "
+                    "assistant's last question above. Use the conversation context to "
+                    "determine the correct intent and fill in missing params accordingly."
+                )
+
             response = self.client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=300,
@@ -162,6 +271,8 @@ class IntentClassifier:
                         message=message,
                         available_skills=skill_list,
                         today=_date.today().isoformat(),
+                        recent_context=recent_context,
+                        followup_hint=followup_hint,
                     ),
                 }],
             )
