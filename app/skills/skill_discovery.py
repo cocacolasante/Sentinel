@@ -139,6 +139,10 @@ class SkillGapHandler:
         "update", "delete", "remove", "get", "fetch", "list", "show",
         "connect", "integrate", "configure", "install", "run", "execute",
         "automate", "schedule", "monitor", "track", "notify", "alert",
+        # Code / improvement actions
+        "improve", "fix", "refactor", "optimize", "enhance", "rewrite",
+        "add", "edit", "patch", "change", "implement", "write", "modify",
+        "debug", "review", "analyse", "analyze",
     }
 
     @classmethod

@@ -57,14 +57,20 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     # Weekly Sunday 09:00 UTC — agent quality evals + Slack scorecard
     "weekly-agent-evals": {
-        "task":    "app.worker.tasks.run_weekly_agent_evals",
+        "task":     "app.worker.tasks.run_weekly_agent_evals",
         "schedule": crontab(day_of_week="sun", hour=9, minute=0),
-        "options": {"queue": "evals"},
+        "options":  {"queue": "evals"},
     },
-    # Nightly 02:00 UTC — integration reliability checks
+    # Nightly 02:00 UTC — integration reliability checks + Slack health post
     "nightly-integration-evals": {
-        "task":    "app.worker.tasks.run_nightly_integration_evals",
+        "task":     "app.worker.tasks.run_nightly_integration_evals",
         "schedule": crontab(hour=2, minute=0),
-        "options": {"queue": "evals"},
+        "options":  {"queue": "evals"},
+    },
+    # Every 30 min — Brain/Redis/Postgres health check; alerts Slack on failure
+    "health-check": {
+        "task":     "app.worker.tasks.run_health_check",
+        "schedule": crontab(minute="*/30"),
+        "options":  {"queue": "celery"},
     },
 }

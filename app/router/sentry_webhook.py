@@ -114,6 +114,41 @@ def _create_pending_task(task_id: str, title: str, params: dict, category: str) 
         logger.error("Could not create sentry pending task: {}", exc)
 
 
+_LEVEL_BADGE = {
+    "fatal":    "🔴",
+    "critical": "🔴",
+    "error":    "🟠",
+    "warning":  "🟡",
+}
+
+
+async def _maybe_slack_alert(
+    level: str,
+    title: str,
+    project: str,
+    permalink: str,
+    count: int,
+    issue_id: str,
+) -> None:
+    """Post a Slack alert for critical/fatal Sentry issues."""
+    if level not in ("fatal", "critical", "error"):
+        return
+    try:
+        from app.integrations.slack_notifier import post_alert
+        badge = _LEVEL_BADGE.get(level, "🟠")
+        count_str = f"{count:,}" if count else "?"
+        link_text = f"<{permalink}|View in Sentry>" if permalink else f"Issue `{issue_id}`"
+        text = (
+            f"{badge} *Sentry {level.upper()} — {project}*\n"
+            f"*{title}*\n"
+            f"Occurrences: *{count_str}*  ·  {link_text}\n"
+            f"_Brain approval task created — check the dashboard to review._"
+        )
+        await post_alert(text)
+    except Exception as exc:
+        logger.warning("Could not post Sentry Slack alert: {}", exc)
+
+
 async def _process_sentry_event(payload: dict) -> None:
     """Parse a Sentry webhook payload and create a Brain task if warranted."""
     try:
@@ -151,7 +186,7 @@ async def _process_sentry_event(payload: dict) -> None:
         _save_sentry_issue(issue_id, title, level, status, project, permalink,
                            count, platform, first_seen, category)
 
-        # info / debug → log only, no pending task
+        # info / debug → log only, no pending task, no alert
         if category == "none":
             return
 
@@ -169,6 +204,17 @@ async def _process_sentry_event(payload: dict) -> None:
         }
 
         _create_pending_task(task_id, task_title, task_params, category)
+
+        # Dispatch auto-investigation + fix in a Celery worker (non-blocking)
+        try:
+            from app.worker.tasks import investigate_and_fix_sentry_issue
+            investigate_and_fix_sentry_issue.delay(task_id, task_params)
+            logger.info("Dispatched auto-fix task | task_id={} | issue={}", task_id, issue_id)
+        except Exception as exc:
+            logger.warning("Could not dispatch auto-fix Celery task: {}", exc)
+
+        # Alert Slack for critical/fatal issues
+        await _maybe_slack_alert(level, title, project, permalink, count, issue_id)
 
     except Exception as exc:
         logger.error("Sentry webhook processing error: {}", exc)

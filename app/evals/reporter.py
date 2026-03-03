@@ -111,6 +111,57 @@ def format_scorecard(
     return "\n".join(lines)
 
 
+async def post_integration_health_to_slack(
+    results: list[IntegrationEvalResult],
+    channel: str | None = None,
+) -> bool:
+    """
+    Post nightly integration health summary to Slack alerts channel.
+    Only posts if there are any failures — no noise on all-green nights.
+    """
+    if not results:
+        return True
+
+    passed = [r for r in results if r.passed]
+    failed = [r for r in results if not r.passed]
+
+    # All passed — post a quiet confirmation to eval channel, not alerts
+    if not failed:
+        text = (
+            f"✅ *Nightly Integration Health — All Green*\n"
+            f"  {len(passed)}/{len(results)} integrations healthy\n"
+            f"  _Checked at {datetime.now(timezone.utc).strftime('%H:%M UTC')}_"
+        )
+        target = channel or getattr(get_settings(), "slack_eval_channel", "brain-evals")
+    else:
+        # Failures → alert channel
+        fail_list = "\n".join(
+            f"  • *{r.integration}* — {r.error or 'check failed'}"
+            for r in failed
+        )
+        text = (
+            f"⚠️ *Nightly Integration Health — {len(failed)} Failing*\n"
+            f"  {len(passed)}/{len(results)} healthy\n\n"
+            f"*Failing integrations:*\n{fail_list}\n\n"
+            f"_Check `GET /api/v1/integrations/status` for details_"
+        )
+        target = channel or getattr(get_settings(), "slack_alert_channel", "brain-alerts")
+
+    try:
+        from slack_sdk.web.async_client import AsyncWebClient
+        client = AsyncWebClient(token=get_settings().slack_bot_token)
+        resp   = await client.chat_postMessage(channel=target, text=text, mrkdwn=True)
+        return bool(resp.get("ok"))
+    except Exception as exc:
+        logger.error("Failed to post integration health to Slack: %s", exc)
+        return False
+
+
+def get_settings():
+    from app.config import get_settings as _gs
+    return _gs()
+
+
 async def post_scorecard_to_slack(
     summaries: list[AgentEvalSummary],
     integration_results: list[IntegrationEvalResult] | None = None,

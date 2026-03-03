@@ -8,6 +8,7 @@ Each task has a retry policy and time limit appropriate to its workload.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
 from app.worker.celery_app import celery_app
@@ -45,12 +46,52 @@ def run_weekly_agent_evals(self) -> dict:
     time_limit=660,
 )
 def run_nightly_integration_evals(self) -> dict:
-    """Read-only checks of all configured integrations."""
+    """Read-only checks of all configured integrations, post results to Slack."""
     try:
         return asyncio.run(_nightly_evals())
     except Exception as exc:
         logger.error("Nightly integration eval task failed: %s", exc)
         raise self.retry(exc=exc)
+
+
+@celery_app.task(
+    bind=True,
+    name="app.worker.tasks.run_health_check",
+    queue="celery",
+    max_retries=0,          # no retries — next run is in 30 min anyway
+    soft_time_limit=30,
+    time_limit=45,
+)
+def run_health_check(self) -> dict:
+    """
+    Check Brain API, Redis, and Postgres health every 30 minutes.
+    Posts a Slack alert to brain-alerts ONLY when something is degraded.
+    """
+    try:
+        return asyncio.run(_health_check())
+    except Exception as exc:
+        logger.error("Health check task failed: %s", exc)
+        return {"error": str(exc)}
+
+
+# ── On-demand tasks ───────────────────────────────────────────────────────────
+
+@celery_app.task(
+    bind=True,
+    name="app.worker.tasks.investigate_and_fix_sentry_issue",
+    queue="celery",
+    max_retries=1,
+    default_retry_delay=60,
+    soft_time_limit=300,   # 5 min soft limit
+    time_limit=360,        # 6 min hard kill
+)
+def investigate_and_fix_sentry_issue(self, task_id: str, issue_params: dict) -> dict:
+    """Auto-investigate a Sentry issue and attempt a code fix via LLM + RepoClient."""
+    try:
+        return asyncio.run(_investigate_and_fix(task_id, issue_params))
+    except Exception as exc:
+        logger.error("investigate_and_fix_sentry_issue failed: %s", exc, exc_info=True)
+        return {"error": str(exc)}
 
 
 # ── Async implementations ──────────────────────────────────────────────────────
@@ -76,8 +117,259 @@ async def _weekly_evals() -> dict:
 
 async def _nightly_evals() -> dict:
     from app.evals.integrations import run_all_integration_evals
+    from app.evals.reporter     import post_integration_health_to_slack
 
     results = await run_all_integration_evals()
     passed  = sum(1 for r in results if r.passed)
     logger.info("Nightly integration evals | %d/%d passed", passed, len(results))
+
+    # Post summary to Slack (quiet on all-green, loud on failures)
+    await post_integration_health_to_slack(results)
+
     return {"total": len(results), "passed": passed}
+
+
+async def _health_check() -> dict:
+    """Check Brain API health; alert Slack if anything is down."""
+    import httpx
+    from app.integrations.slack_notifier import post_alert
+
+    issues: list[str] = []
+
+    try:
+        async with httpx.AsyncClient() as http:
+            resp   = await http.get("http://brain:8000/api/v1/health", timeout=10)
+            health = resp.json()
+            if not health.get("redis"):
+                issues.append("Redis is *DOWN* or unreachable")
+            if not health.get("postgres"):
+                issues.append("PostgreSQL is *DOWN* or unreachable")
+    except Exception as exc:
+        issues.append(f"Brain API unreachable: `{type(exc).__name__}: {exc}`")
+
+    if issues:
+        text = (
+            "🚨 *Brain Health Alert*\n"
+            + "\n".join(f"  • {i}" for i in issues)
+            + "\n_Check `GET /api/v1/health` and container logs for details._"
+        )
+        post_alert_sync(text)
+        logger.warning("Health check failed: %s", issues)
+    else:
+        logger.debug("Health check passed — all systems nominal")
+
+    return {"issues": issues}
+
+
+def post_alert_sync(text: str) -> None:
+    """Fire-and-forget sync Slack alert (used inside Celery tasks)."""
+    from app.integrations.slack_notifier import post_alert_sync as _pas
+    _pas(text)
+
+
+async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
+    """
+    1. Mark task as executing in DB.
+    2. Fetch stack-trace context from Sentry API (if auth token configured).
+    3. Ask LLM (Haiku) for a structured fix plan as JSON.
+    4. Apply file patches via RepoClient → commit → push (if fixable and repo configured).
+    5. Resolve in Sentry (if LLM says it's fully addressed).
+    6. Post Slack summary to brain-alerts.
+    7. Mark task completed / failed.
+    """
+    from app.db import postgres
+    from app.config import get_settings
+    from app.integrations.slack_notifier import post_alert
+
+    settings = get_settings()
+
+    issue_id   = issue_params.get("issue_id", "")
+    title      = issue_params.get("title", "Unknown error")
+    level      = issue_params.get("level", "error")
+    project    = issue_params.get("project", "")
+    permalink  = issue_params.get("permalink", "")
+
+    # ── 1. Mark executing ──────────────────────────────────────────────────────
+    try:
+        postgres.execute(
+            "UPDATE pending_write_tasks SET status='executing', updated_at=NOW() WHERE task_id=%s",
+            (task_id,),
+        )
+    except Exception as exc:
+        logger.warning("Could not mark task executing: %s", exc)
+
+    # ── 2. Fetch Sentry stack trace ────────────────────────────────────────────
+    issue_context = ""
+    if settings.sentry_auth_token and issue_id:
+        try:
+            import httpx
+            headers = {"Authorization": f"Bearer {settings.sentry_auth_token}"}
+            async with httpx.AsyncClient() as http:
+                resp = await http.get(
+                    f"https://sentry.io/api/0/issues/{issue_id}/events/latest/",
+                    headers=headers,
+                    timeout=15,
+                )
+            if resp.status_code == 200:
+                event = resp.json()
+                for entry in event.get("entries", []):
+                    if entry.get("type") != "exception":
+                        continue
+                    for exc_val in (entry.get("data") or {}).get("values", [])[:2]:
+                        exc_type  = exc_val.get("type", "")
+                        exc_value = exc_val.get("value", "")
+                        issue_context += f"Exception: {exc_type}: {exc_value}\n"
+                        frames = (exc_val.get("stacktrace") or {}).get("frames", [])
+                        for frame in frames[-6:]:
+                            fname  = frame.get("filename", "")
+                            lineno = frame.get("lineno", "")
+                            func   = frame.get("function", "")
+                            ctx    = (frame.get("context_line") or "").strip()
+                            issue_context += f"  File {fname}:{lineno} in {func}\n"
+                            if ctx:
+                                issue_context += f"    {ctx}\n"
+        except Exception as exc:
+            logger.warning("Could not fetch Sentry event details: %s", exc)
+
+    # ── 3. LLM fix plan ───────────────────────────────────────────────────────
+    fix_plan: dict = {
+        "fixable":          False,
+        "root_cause":       "Analysis unavailable",
+        "patches":          [],
+        "commit_message":   f"fix: auto-fix for Sentry issue {issue_id}",
+        "resolve_in_sentry": False,
+        "summary":          "LLM analysis could not be completed",
+    }
+    try:
+        import anthropic
+        context_block = f"\nStack trace:\n{issue_context}" if issue_context else ""
+        prompt = (
+            f"You are an AI assistant that investigates and fixes software bugs reported in Sentry.\n\n"
+            f"Issue: {title}\nLevel: {level}\nProject: {project}{context_block}\n\n"
+            "Analyze this error and decide if it can be fixed with a targeted, surgical code patch.\n"
+            "Respond with ONLY a JSON object — no markdown, no explanation:\n"
+            "{\n"
+            '  "fixable": true/false,\n'
+            '  "root_cause": "brief explanation",\n'
+            '  "patches": [\n'
+            '    {"file": "path/to/file.py", "old": "exact text to replace", "new": "replacement"}\n'
+            "  ],\n"
+            '  "commit_message": "fix: what was changed",\n'
+            '  "resolve_in_sentry": true/false,\n'
+            '  "summary": "human-readable summary of analysis and what was done"\n'
+            "}\n\n"
+            "Rules:\n"
+            "- fixable=true only when you have HIGH confidence the patch will resolve the issue\n"
+            "- Each 'old' must be an exact, unique string from that file\n"
+            "- For environmental issues (network, config, external service): fixable=false\n"
+            "- resolve_in_sentry=true only if the patch fully addresses the root cause"
+        )
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        response = await asyncio.to_thread(
+            client.messages.create,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text.strip()
+        # Strip markdown code fences if the model wraps the JSON
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        fix_plan = json.loads(raw)
+    except Exception as exc:
+        logger.warning("LLM fix analysis failed: %s", exc)
+        fix_plan["summary"] = f"LLM analysis failed: {exc}"
+
+    # ── 4. Apply patches ──────────────────────────────────────────────────────
+    patches_applied: list[str] = []
+    patch_errors:    list[str] = []
+
+    if fix_plan.get("fixable") and fix_plan.get("patches"):
+        try:
+            from app.integrations.repo import RepoClient
+            repo = RepoClient()
+            if repo.is_configured():
+                await repo.ensure_repo()
+                for patch in fix_plan["patches"]:
+                    try:
+                        await repo.patch_file(patch["file"], patch["old"], patch["new"])
+                        patches_applied.append(patch["file"])
+                        logger.info("Patched %s for Sentry issue %s", patch["file"], issue_id)
+                    except Exception as exc:
+                        patch_errors.append(f"{patch['file']}: {exc}")
+                        logger.warning("Patch failed for %s: %s", patch["file"], exc)
+                if patches_applied:
+                    commit_msg = fix_plan.get("commit_message", f"fix: sentry issue {issue_id}")
+                    await repo.commit(f"{commit_msg}\n\nSentry issue: {issue_id}\nAuto-fixed by Brain")
+                    await repo.push()
+            else:
+                patch_errors.append("Repo not configured (GITHUB_BRAIN_REPO_URL not set)")
+        except Exception as exc:
+            patch_errors.append(f"Repo operation failed: {exc}")
+            logger.error("Repo patch/commit/push failed: %s", exc, exc_info=True)
+
+    # ── 5. Resolve in Sentry ──────────────────────────────────────────────────
+    if fix_plan.get("resolve_in_sentry") and patches_applied and settings.sentry_auth_token and issue_id:
+        try:
+            import httpx
+            async with httpx.AsyncClient() as http:
+                await http.put(
+                    f"https://sentry.io/api/0/issues/{issue_id}/",
+                    headers={"Authorization": f"Bearer {settings.sentry_auth_token}"},
+                    json={"status": "resolved"},
+                    timeout=15,
+                )
+            logger.info("Resolved Sentry issue %s", issue_id)
+        except Exception as exc:
+            logger.warning("Could not resolve Sentry issue %s: %s", issue_id, exc)
+
+    # ── 6. Slack summary ──────────────────────────────────────────────────────
+    try:
+        badge = "🔴" if level in ("fatal", "critical") else "🟠" if level == "error" else "🟡"
+        if patches_applied and not patch_errors:
+            status_line = f"✅ *Auto-fixed* — {len(patches_applied)} file(s) patched & pushed"
+        elif patches_applied and patch_errors:
+            status_line = f"⚠️ *Partially fixed* — {len(patches_applied)} patched, {len(patch_errors)} failed"
+        elif fix_plan.get("fixable") and patch_errors:
+            status_line = f"❌ *Fix failed* — {patch_errors[0]}"
+        else:
+            status_line = "🔍 *Investigated* — not auto-fixable (environmental or complex)"
+
+        link_text = f"<{permalink}|View in Sentry>" if permalink else f"Issue `{issue_id}`"
+        lines = [
+            f"{badge} *Sentry {level.upper()} — {project}*",
+            f"*{title[:120]}*",
+            link_text,
+            "─" * 36,
+            f"*Root cause:* {fix_plan.get('root_cause', 'Unknown')}",
+            status_line,
+        ]
+        if patches_applied:
+            lines.append(f"*Files:* {', '.join(f'`{f}`' for f in patches_applied)}")
+        if patch_errors:
+            lines.append(f"*Errors:* {patch_errors[0]}")
+        if fix_plan.get("summary"):
+            lines.append(f"_{fix_plan['summary']}_")
+
+        await post_alert("\n".join(lines))
+    except Exception as exc:
+        logger.warning("Could not post Sentry fix Slack alert: %s", exc)
+
+    # ── 7. Mark task done ─────────────────────────────────────────────────────
+    final_status = "completed" if not patch_errors or patches_applied else "failed"
+    error_text   = "; ".join(patch_errors[:3]) if patch_errors and not patches_applied else None
+    try:
+        postgres.execute(
+            "UPDATE pending_write_tasks SET status=%s, error=%s, updated_at=NOW() WHERE task_id=%s",
+            (final_status, error_text, task_id),
+        )
+    except Exception as exc:
+        logger.warning("Could not update task to %s: %s", final_status, exc)
+
+    return {
+        "task_id":         task_id,
+        "fixable":         fix_plan.get("fixable"),
+        "patches_applied": patches_applied,
+        "patch_errors":    patch_errors,
+        "status":          final_status,
+    }

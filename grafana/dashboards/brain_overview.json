@@ -1,13 +1,22 @@
 {
-  "title": "AI Brain — Single Pane of Glass",
+  "title": "AI Brain \u2014 Single Pane of Glass",
   "uid": "brain-overview",
   "description": "Unified observability: Brain health, LLM cost, task queue, errors, infrastructure, live logs",
   "timezone": "browser",
   "refresh": "30s",
-  "time": { "from": "now-3h", "to": "now" },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
   "schemaVersion": 39,
   "version": 7,
-  "tags": ["brain", "ai", "celery", "loki", "observability"],
+  "tags": [
+    "brain",
+    "ai",
+    "celery",
+    "loki",
+    "observability"
+  ],
   "templating": {
     "list": [
       {
@@ -15,357 +24,1308 @@
         "type": "textbox",
         "label": "Brain API URL",
         "description": "Base URL of the Brain API. Use http://localhost:8000 locally, or https://your-domain.com in production.",
-        "query": "http://localhost:8000",
-        "current": { "value": "http://localhost:8000", "text": "http://localhost:8000" },
-        "options": [{ "value": "http://localhost:8000", "text": "http://localhost:8000" }],
+        "query": "",
+        "current": {
+          "value": "",
+          "text": ""
+        },
+        "options": [
+          {
+            "value": "",
+            "text": ""
+          }
+        ],
         "hide": 0
       }
     ]
   },
   "panels": [
-
     {
-      "id": 100, "type": "row", "title": "Brain Health",
+      "id": 100,
+      "type": "row",
+      "title": "Brain Health",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
     },
-
     {
-      "id": 1, "type": "stat", "title": "Requests / sec",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))",
-        "legendFormat": "req/s", "refId": "A"
-      }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "reqps", "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":1},{"color":"red","value":5}] } } }
-    },
-
-    {
-      "id": 2, "type": "stat", "title": "p95 Latency",
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{job=\"brain\"}[5m]))) * 1000",
-        "legendFormat": "p95 ms", "refId": "A"
-      }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "ms", "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":3000},{"color":"red","value":8000}] } } }
-    },
-
-    {
-      "id": 3, "type": "stat", "title": "Error Rate %",
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "100 * sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m])) / (sum(rate(http_requests_total{job=\"brain\"}[1m])) > 0 or vector(0))",
-        "legendFormat": "error %", "refId": "A"
-      }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":1},{"color":"red","value":5}] } } }
-    },
-
-    {
-      "id": 4, "type": "stat", "title": "Active Sessions",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "brain_active_sessions",
-        "legendFormat": "sessions", "refId": "A"
-      }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{"color":"blue","value":null}] } } }
-    },
-
-    {
-      "id": 5, "type": "timeseries", "title": "Request Rate & Errors",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "id": 1,
+      "type": "stat",
+      "title": "Requests / sec",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
-        { "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))", "legendFormat": "total req/s", "refId": "A" },
-        { "expr": "sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m]))", "legendFormat": "errors/s", "refId": "B" }
+        {
+          "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))",
+          "legendFormat": "req/s",
+          "refId": "A"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [{ "matcher": { "id": "byName", "options": "errors/s" }, "properties": [{"id":"color","value":{"mode":"fixed","fixedColor":"red"}}] }] },
-      "options": { "tooltip": { "mode": "multi" } }
-    },
-
-    {
-      "id": 6, "type": "timeseries", "title": "Response Latency Percentiles",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "histogram_quantile(0.50, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000", "legendFormat": "p50", "refId": "A" },
-        { "expr": "histogram_quantile(0.95, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000", "legendFormat": "p95", "refId": "B" },
-        { "expr": "histogram_quantile(0.99, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000", "legendFormat": "p99", "refId": "C" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ms" } },
-      "options": { "tooltip": { "mode": "multi" } }
-    },
-
-    {
-      "id": 200, "type": "row", "title": "LLM Cost & Usage",
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 }
-    },
-
-    {
-      "id": 7, "type": "gauge", "title": "Daily Spend",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 14 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "brain_cost_usd_daily", "legendFormat": "spent today", "refId": "A" }],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
-        "minVizWidth": 75, "minVizHeight": 75,
-        "orientation": "auto", "showThresholdLabels": false, "showThresholdMarkers": true
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyUSD", "min": 0, "max": 20,
-          "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":5},{"color":"red","value":15}] }
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
         }
       }
     },
-
     {
-      "id": 8, "type": "barchart", "title": "Cost by Model (today)",
-      "gridPos": { "h": 6, "w": 9, "x": 6, "y": 14 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "sum by(model) (brain_llm_cost_usd_total)",
-        "legendFormat": "{{model}}", "refId": "A", "instant": true
-      }],
-      "options": { "orientation": "horizontal", "groupWidth": 0.7, "barRadius": 0.05 },
-      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
-    },
-
-    {
-      "id": 9, "type": "timeseries", "title": "Tokens / min by Model",
-      "gridPos": { "h": 6, "w": 9, "x": 15, "y": 14 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "sum by(model, direction) (rate(brain_llm_tokens_total[1m]) * 60)",
-        "legendFormat": "{{model}} {{direction}}", "refId": "A"
-      }],
-      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "options": { "tooltip": { "mode": "multi" } }
-    },
-
-    {
-      "id": 10, "type": "timeseries", "title": "Requests by Agent",
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 20 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "sum by(agent) (rate(brain_llm_requests_total[5m]))",
-        "legendFormat": "{{agent}}", "refId": "A"
-      }],
-      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 8 } } },
-      "options": { "tooltip": { "mode": "multi" } }
-    },
-
-    {
-      "id": 11, "type": "timeseries", "title": "Daily Cost Accumulation",
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 20 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "id": 2,
+      "type": "stat",
+      "title": "p95 Latency",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
-        { "expr": "brain_cost_usd_daily",   "legendFormat": "spent USD", "refId": "A" },
-        { "expr": "brain_cost_ceiling_usd", "legendFormat": "ceiling USD", "refId": "B" }
+        {
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{job=\"brain\"}[5m]))) * 1000",
+          "legendFormat": "p95 ms",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3000
+              },
+              {
+                "color": "red",
+                "value": 8000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Error Rate %",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m])) / (sum(rate(http_requests_total{job=\"brain\"}[1m])) > 0 or vector(0))",
+          "legendFormat": "error %",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Active Sessions",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "brain_active_sessions",
+          "legendFormat": "sessions",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Request Rate & Errors",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))",
+          "legendFormat": "total req/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m]))",
+          "legendFormat": "errors/s",
+          "refId": "B"
+        }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "currencyUSD" },
-        "overrides": [{ "matcher": { "id": "byName", "options": "ceiling USD" }, "properties": [{"id":"color","value":{"mode":"fixed","fixedColor":"red"}},{"id":"custom.lineStyle","value":{"fill":"dash"}}] }]
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "errors/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
-      "options": { "tooltip": { "mode": "multi" } }
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     },
-
     {
-      "id": 300, "type": "row", "title": "Task Queue",
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 }
-    },
-
-    {
-      "id": 12, "type": "stat", "title": "Active Workers",
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 27 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "celery_workers_online", "legendFormat": "workers", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
-      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{"color":"red","value":null},{"color":"green","value":1}] } } }
-    },
-
-    {
-      "id": 13, "type": "stat", "title": "Active Tasks",
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 27 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "sum(celery_tasks_active)", "legendFormat": "active", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "short" } }
-    },
-
-    {
-      "id": 14, "type": "stat", "title": "Queue Depth",
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 27 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "sum(celery_queue_length)", "legendFormat": "queued", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
-      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":10},{"color":"red","value":50}] } } }
-    },
-
-    {
-      "id": 15, "type": "stat", "title": "Failed Tasks (1h)",
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 27 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "increase(celery_tasks_failed_total[1h])", "legendFormat": "failed", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
-      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":1},{"color":"red","value":5}] } } }
-    },
-
-    {
-      "id": 16, "type": "stat", "title": "Task Success Rate",
-      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 27 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "100 * rate(celery_tasks_succeeded_total[5m]) / (rate(celery_tasks_total[5m]) > 0 or vector(1))", "legendFormat": "success %", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [{"color":"red","value":null},{"color":"yellow","value":80},{"color":"green","value":95}] } } }
-    },
-
-    {
-      "id": 17, "type": "timeseries", "title": "Task Throughput by State",
-      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 31 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "id": 6,
+      "type": "timeseries",
+      "title": "Response Latency Percentiles",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
-        { "expr": "sum by(state) (rate(celery_tasks_total[5m]))", "legendFormat": "{{state}}", "refId": "A" }
+        {
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 8 } } },
-      "options": { "tooltip": { "mode": "multi" } }
-    },
-
-    {
-      "id": 400, "type": "row", "title": "Errors (Sentry)",
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 }
-    },
-
-    {
-      "id": 18, "type": "stat", "title": "Unresolved Issues",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 39 },
-      "datasource": { "type": "grafana-sentry-datasource", "uid": "sentry" },
-      "targets": [{ "queryType": "issues", "projectIds": [], "query": "is:unresolved", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["count"] }, "colorMode": "background" },
-      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":5},{"color":"red","value":20}] } } }
-    },
-
-    {
-      "id": 19, "type": "timeseries", "title": "HTTP Error Rate (5xx / min)",
-      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 39 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) * 60",
-        "legendFormat": "5xx errors/min",
-        "refId": "A"
-      },{
-        "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) * 60",
-        "legendFormat": "4xx errors/min",
-        "refId": "B"
-      }],
       "fieldConfig": {
-        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } },
-        "overrides": [{ "matcher": {"id":"byName","options":"5xx errors/min"}, "properties": [{"id":"color","value":{"mode":"fixed","fixedColor":"red"}}] }]
+        "defaults": {
+          "unit": "ms"
+        }
       },
-      "options": { "tooltip": { "mode": "multi" } }
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     },
-
     {
-      "id": 20, "type": "table", "title": "Top Errors by Frequency",
-      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 39 },
-      "datasource": { "type": "grafana-sentry-datasource", "uid": "sentry" },
-      "targets": [{ "queryType": "issues", "projectIds": [], "query": "is:unresolved", "limit": 5, "refId": "A" }],
-      "options": { "sortBy": [{ "displayName": "Events", "desc": true }] },
-      "fieldConfig": { "defaults": {} }
-    },
-
-    {
-      "id": 500, "type": "row", "title": "Infrastructure",
+      "id": 200,
+      "type": "row",
+      "title": "LLM Cost & Usage",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 47 }
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      }
     },
-
     {
-      "id": 21, "type": "timeseries", "title": "CPU % per Container",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "sum by(name) (rate(container_cpu_usage_seconds_total{name=~\"ai-.+\"}[1m])) * 100",
-        "legendFormat": "{{name}}", "refId": "A"
-      }],
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 } },
-      "options": { "tooltip": { "mode": "multi" } }
+      "id": 7,
+      "type": "gauge",
+      "title": "Daily Spend",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "brain_cost_usd_daily",
+          "legendFormat": "spent today",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "minVizWidth": 75,
+        "minVizHeight": 75,
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "min": 0,
+          "max": 20,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 15
+              }
+            ]
+          }
+        }
+      }
     },
-
     {
-      "id": 22, "type": "timeseries", "title": "Memory MB per Container",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "container_memory_usage_bytes{name=~\"ai-.+\"} / 1024 / 1024",
-        "legendFormat": "{{name}}", "refId": "A"
-      }],
-      "fieldConfig": { "defaults": { "unit": "megabytes" } },
-      "options": { "tooltip": { "mode": "multi" } }
+      "id": 8,
+      "type": "barchart",
+      "title": "Cost by Model (today)",
+      "gridPos": {
+        "h": 6,
+        "w": 9,
+        "x": 6,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by(model) (brain_llm_cost_usd_total)",
+          "legendFormat": "{{model}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "groupWidth": 0.7,
+        "barRadius": 0.05
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        }
+      }
     },
-
     {
-      "id": 23, "type": "stat", "title": "Disk Available",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 56 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"}", "legendFormat": "available", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
-      "fieldConfig": { "defaults": { "unit": "bytes", "thresholds": { "mode": "absolute", "steps": [{"color":"red","value":null},{"color":"yellow","value":5368709120},{"color":"green","value":10737418240}] } } }
+      "id": 9,
+      "type": "timeseries",
+      "title": "Tokens / min by Model",
+      "gridPos": {
+        "h": 6,
+        "w": 9,
+        "x": 15,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by(model, direction) (rate(brain_llm_tokens_total[1m]) * 60)",
+          "legendFormat": "{{model}} {{direction}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     },
-
     {
-      "id": 24, "type": "stat", "title": "Redis Memory",
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 56 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "redis_memory_used_bytes", "legendFormat": "used", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
-      "fieldConfig": { "defaults": { "unit": "bytes", "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":524288000},{"color":"red","value":1073741824}] } } }
+      "id": 10,
+      "type": "timeseries",
+      "title": "Requests by Agent",
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by(agent) (rate(brain_llm_requests_total[5m]))",
+          "legendFormat": "{{agent}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 8
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     },
-
     {
-      "id": 25, "type": "stat", "title": "PostgreSQL Connections",
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 56 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "pg_stat_activity_count", "legendFormat": "connections", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
-      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null},{"color":"yellow","value":50},{"color":"red","value":80}] } } }
+      "id": 11,
+      "type": "timeseries",
+      "title": "Daily Cost Accumulation",
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "brain_cost_usd_daily",
+          "legendFormat": "spent USD",
+          "refId": "A"
+        },
+        {
+          "expr": "brain_cost_ceiling_usd",
+          "legendFormat": "ceiling USD",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ceiling USD"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     },
-
     {
-      "id": 26, "type": "timeseries", "title": "Redis Hit Rate",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 56 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "100 * rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]) > 0 or vector(1))",
-        "legendFormat": "hit rate %", "refId": "A"
-      }],
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } }
-    },
-
-    {
-      "id": 600, "type": "row", "title": "Live Logs",
+      "id": 300,
+      "type": "row",
+      "title": "Task Queue",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 60 }
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      }
     },
-
     {
-      "id": 27, "type": "logs", "title": "Brain — Live Log Stream",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 61 },
-      "datasource": { "type": "loki", "uid": "loki" },
-      "targets": [{
-        "expr": "{job=\"docker\", level=~\".+\"}",
-        "legendFormat": "", "refId": "A"
-      }],
+      "id": 12,
+      "type": "stat",
+      "title": "Active Workers",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 27
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "celery_workers_online",
+          "legendFormat": "workers",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Active Tasks",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 27
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(celery_tasks_active)",
+          "legendFormat": "active",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Queue Depth",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 27
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(celery_queue_length)",
+          "legendFormat": "queued",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Failed Tasks (1h)",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 27
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "increase(celery_tasks_failed_total[1h])",
+          "legendFormat": "failed",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Task Success Rate",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 27
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "100 * rate(celery_tasks_succeeded_total[5m]) / (rate(celery_tasks_total[5m]) > 0 or vector(1))",
+          "legendFormat": "success %",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Task Throughput by State",
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by(state) (rate(celery_tasks_total[5m]))",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 8
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 400,
+      "type": "row",
+      "title": "Errors (Sentry)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      }
+    },
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "Unresolved Issues",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 39
+      },
+      "datasource": {
+        "type": "grafana-sentry-datasource",
+        "uid": "sentry"
+      },
+      "targets": [
+        {
+          "queryType": "issues",
+          "projectIds": [],
+          "query": "is:unresolved",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "count"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "HTTP Error Rate (5xx / min)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 6,
+        "y": 39
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) * 60",
+          "legendFormat": "5xx errors/min",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) * 60",
+          "legendFormat": "4xx errors/min",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx errors/min"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Top Errors by Frequency",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 39
+      },
+      "datasource": {
+        "type": "grafana-sentry-datasource",
+        "uid": "sentry"
+      },
+      "targets": [
+        {
+          "queryType": "issues",
+          "projectIds": [],
+          "query": "is:unresolved",
+          "limit": 5,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "Events",
+            "desc": true
+          }
+        ]
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "id": 500,
+      "type": "row",
+      "title": "Infrastructure",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "CPU % per Container",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by(name) (rate(container_cpu_usage_seconds_total{name=~\"ai-.+\"}[1m])) * 100",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Memory MB per Container",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "container_memory_usage_bytes{name=~\"ai-.+\"} / 1024 / 1024",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "megabytes"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "type": "stat",
+      "title": "Disk Available",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 56
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"}",
+          "legendFormat": "available",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5368709120
+              },
+              {
+                "color": "green",
+                "value": 10737418240
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": "stat",
+      "title": "Redis Memory",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 56
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "redis_memory_used_bytes",
+          "legendFormat": "used",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 524288000
+              },
+              {
+                "color": "red",
+                "value": 1073741824
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "stat",
+      "title": "PostgreSQL Connections",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 56
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "pg_stat_activity_count",
+          "legendFormat": "connections",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "Redis Hit Rate",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 56
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "100 * rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]) > 0 or vector(1))",
+          "legendFormat": "hit rate %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      }
+    },
+    {
+      "id": 600,
+      "type": "row",
+      "title": "Live Logs",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 60
+      }
+    },
+    {
+      "id": 27,
+      "type": "logs",
+      "title": "Brain \u2014 Live Log Stream",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 61
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\", level=~\".+\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
@@ -376,15 +1336,27 @@
         "wrapLogMessage": false
       }
     },
-
     {
-      "id": 28, "type": "logs", "title": "Brain — Errors Only",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 71 },
-      "datasource": { "type": "loki", "uid": "loki" },
-      "targets": [{
-        "expr": "{job=\"docker\", level=\"ERROR\"}",
-        "legendFormat": "", "refId": "A"
-      }],
+      "id": 28,
+      "type": "logs",
+      "title": "Brain \u2014 Errors Only",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 71
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\", level=\"ERROR\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
@@ -393,15 +1365,27 @@
         "wrapLogMessage": false
       }
     },
-
     {
-      "id": 29, "type": "logs", "title": "n8n + Other Container Logs",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 71 },
-      "datasource": { "type": "loki", "uid": "loki" },
-      "targets": [{
-        "expr": "{job=\"docker\", level=\"\"} |= \"n8n\"",
-        "legendFormat": "", "refId": "A"
-      }],
+      "id": 29,
+      "type": "logs",
+      "title": "n8n + Other Container Logs",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 71
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\", level=\"\"} |= \"n8n\"",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
@@ -410,54 +1394,89 @@
         "wrapLogMessage": false
       }
     },
-
     {
-      "id": 700, "type": "row", "title": "Brain Controls",
+      "id": 700,
+      "type": "row",
+      "title": "Brain Controls",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 79 }
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 79
+      }
     },
-
     {
-      "id": 700, "type": "row", "title": "Approval Controls",
+      "id": 700,
+      "type": "row",
+      "title": "Approval Controls",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 79 }
-    },
-
-    {
-      "id": 701, "type": "text", "title": "Write Approval Level",
-      "gridPos": { "h": 7, "w": 10, "x": 0, "y": 80 },
-      "options": {
-        "mode": "html",
-        "content": "<div style=\"font-family:monospace;background:#111827;padding:14px;height:100%;box-sizing:border-box\"><div style=\"font-size:12px;color:#9ca3af;margin-bottom:10px\">GLOBAL APPROVAL LEVEL</div><div id=\"level-badge\" style=\"font-size:22px;font-weight:bold;margin-bottom:12px;color:#73bf69\">Loading...</div><div id=\"level-desc\" style=\"font-size:11px;color:#9ca3af;margin-bottom:16px;min-height:28px\"></div><div style=\"display:flex;gap:8px;flex-wrap:wrap\"><button onclick=\"setLvl(1)\" id=\"b1\" style=\"flex:1;padding:8px;border:2px solid transparent;border-radius:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold;background:#1f2937;color:#fca5a5\">Level 1<br><span style=\"font-weight:normal;font-size:10px\">All writes</span></button><button onclick=\"setLvl(2)\" id=\"b2\" style=\"flex:1;padding:8px;border:2px solid transparent;border-radius:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold;background:#1f2937;color:#fde68a\">Level 2<br><span style=\"font-weight:normal;font-size:10px\">Critical only</span></button><button onclick=\"setLvl(3)\" id=\"b3\" style=\"flex:1;padding:8px;border:2px solid transparent;border-radius:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold;background:#1f2937;color:#86efac\">Level 3<br><span style=\"font-weight:normal;font-size:10px\">Breaking only</span></button></div></div><script>var B='[[brain_url]]';var INFO={1:{c:'#f87171',d:'All write operations need your approval before executing'},2:{c:'#fbbf24',d:'Only critical/breaking writes need approval — standard writes execute directly'},3:{c:'#34d399',d:'Only potentially breaking changes need approval'}};async function load(){try{var r=await fetch(B+'/api/v1/approval/level');var d=await r.json();var lvl=d.level||1;var info=INFO[lvl];document.getElementById('level-badge').textContent='Level '+lvl;document.getElementById('level-badge').style.color=info.c;document.getElementById('level-desc').textContent=info.d;[1,2,3].forEach(function(n){var btn=document.getElementById('b'+n);btn.style.border='2px solid '+(n===lvl?INFO[n].c:'transparent');});}catch(e){document.getElementById('level-badge').textContent='Error';}}async function setLvl(n){try{await fetch(B+'/api/v1/approval/level',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level:n})});load();}catch(e){}}load();setInterval(load,10000);</script>"
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 79
       }
     },
-
     {
-      "id": 702, "type": "text", "title": "Pending Approvals",
-      "gridPos": { "h": 7, "w": 14, "x": 10, "y": 80 },
+      "id": 701,
+      "type": "text",
+      "title": "Write Approval Level",
+      "gridPos": {
+        "h": 7,
+        "w": 10,
+        "x": 0,
+        "y": 80
+      },
       "options": {
         "mode": "html",
-        "content": "<div style=\"font-family:monospace;background:#111827;padding:14px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span style=\"font-size:12px;color:#9ca3af\">PENDING WRITE TASKS</span><button onclick=\"load()\" style=\"background:#374151;color:#9ca3af;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:10px\">Refresh</button></div><div id=\"pt-status\" style=\"font-size:11px;color:#6b7280\"></div><div id=\"pt-table\" style=\"flex:1;overflow-y:auto\"></div></div><script>var B='[[brain_url]]';var CAT={standard:{c:'#93c5fd',l:'standard'},critical:{c:'#fbbf24',l:'critical'},breaking:{c:'#f87171',l:'breaking'}};async function approve(id){document.getElementById('pt-status').textContent='Approving...';await fetch(B+'/api/v1/approval/approve/'+id,{method:'POST'});load();}async function cancel(id){await fetch(B+'/api/v1/approval/cancel/'+id,{method:'POST'});load();}async function load(){try{var r=await fetch(B+'/api/v1/approval/pending');var d=await r.json();var tasks=d.tasks||[];var el=document.getElementById('pt-table');if(!tasks.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No pending approvals</div>';document.getElementById('pt-status').textContent='';return;}var rows=tasks.map(function(t){var ci=CAT[t.category]||{c:'#9ca3af',l:t.category};var ts=new Date(t.created_at).toLocaleTimeString();return'<tr style=\"border-bottom:1px solid #1f2937\"><td style=\"padding:4px 6px;font-size:11px;color:'+ci.c+'\">'+ci.l+'</td><td style=\"padding:4px 6px;font-size:11px;color:#d1d5db;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+t.title+'</td><td style=\"padding:4px 6px;font-size:10px;color:#6b7280\">'+ts+'</td><td style=\"padding:4px 6px;white-space:nowrap\"><button onclick=\"approve(\\\"'+t.task_id+'\\\")\" style=\"background:#14532d;color:#86efac;border:none;padding:2px 7px;border-radius:3px;cursor:pointer;font-size:11px;margin-right:4px\">Approve</button><button onclick=\"cancel(\\\"'+t.task_id+'\\\")\" style=\"background:#7f1d1d;color:#fca5a5;border:none;padding:2px 7px;border-radius:3px;cursor:pointer;font-size:11px\">Cancel</button></td></tr>';}).join('');el.innerHTML='<table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"padding:4px 6px;text-align:left;font-size:10px;color:#6b7280\">Category</th><th style=\"padding:4px 6px;text-align:left;font-size:10px;color:#6b7280\">Task</th><th style=\"padding:4px 6px;text-align:left;font-size:10px;color:#6b7280\">Time</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';document.getElementById('pt-status').textContent=tasks.length+' waiting';}catch(e){document.getElementById('pt-status').textContent='Error: '+e.message;}}load();setInterval(load,5000);</script>"
+        "content": "<div style=\"font-family:monospace;background:#111827;padding:14px;height:100%;box-sizing:border-box\"><div style=\"font-size:12px;color:#9ca3af;margin-bottom:10px\">GLOBAL APPROVAL LEVEL</div><div id=\"level-badge\" style=\"font-size:22px;font-weight:bold;margin-bottom:12px;color:#73bf69\">Loading...</div><div id=\"level-desc\" style=\"font-size:11px;color:#9ca3af;margin-bottom:16px;min-height:28px\"></div><div style=\"display:flex;gap:8px;flex-wrap:wrap\"><button onclick=\"setLvl(1)\" id=\"b1\" style=\"flex:1;padding:8px;border:2px solid transparent;border-radius:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold;background:#1f2937;color:#fca5a5\">Level 1<br><span style=\"font-weight:normal;font-size:10px\">All writes</span></button><button onclick=\"setLvl(2)\" id=\"b2\" style=\"flex:1;padding:8px;border:2px solid transparent;border-radius:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold;background:#1f2937;color:#fde68a\">Level 2<br><span style=\"font-weight:normal;font-size:10px\">Critical only</span></button><button onclick=\"setLvl(3)\" id=\"b3\" style=\"flex:1;padding:8px;border:2px solid transparent;border-radius:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold;background:#1f2937;color:#86efac\">Level 3<br><span style=\"font-weight:normal;font-size:10px\">Breaking only</span></button></div></div><script>var B='';var INFO={1:{c:'#f87171',d:'All write operations need your approval before executing'},2:{c:'#fbbf24',d:'Only critical/breaking writes need approval \u2014 standard writes execute directly'},3:{c:'#34d399',d:'Only potentially breaking changes need approval'}};async function load(){try{var r=await fetch(B+'/api/v1/approval/level');var d=await r.json();var lvl=d.level||1;var info=INFO[lvl];document.getElementById('level-badge').textContent='Level '+lvl;document.getElementById('level-badge').style.color=info.c;document.getElementById('level-desc').textContent=info.d;[1,2,3].forEach(function(n){var btn=document.getElementById('b'+n);btn.style.border='2px solid '+(n===lvl?INFO[n].c:'transparent');});}catch(e){document.getElementById('level-badge').textContent='Error';}}async function setLvl(n){try{await fetch(B+'/api/v1/approval/level',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level:n})});load();}catch(e){}}load();setInterval(load,10000);</script>"
       }
     },
-
     {
-      "id": 30, "type": "text", "title": "Chat with Brain",
-      "gridPos": { "h": 20, "w": 14, "x": 0, "y": 80 },
+      "id": 702,
+      "type": "text",
+      "title": "Pending Approvals",
+      "gridPos": {
+        "h": 7,
+        "w": 14,
+        "x": 10,
+        "y": 80
+      },
       "options": {
         "mode": "html",
-        "content": "<div id=\"brain-chat\" style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Brain Chat</span><button onclick=\"clearSession()\" style=\"background:#374151;color:#9ca3af;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Clear</button></div><div id=\"msgs\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0\"></div><div style=\"display:flex;gap:6px\"><textarea id=\"inp\" rows=\"2\" placeholder=\"Message Brain... (Enter to send)\" style=\"flex:1;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:8px;font-size:13px;font-family:monospace;resize:none\"></textarea><button onclick=\"sendMsg()\" id=\"sendBtn\" style=\"background:#3b82f6;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;align-self:flex-end\">Send</button></div><div id=\"chat-status\" style=\"font-size:11px;color:#6b7280\"></div></div><script>var _sid='dashboard-'+Math.random().toString(36).slice(2,8);function addMsg(role,text){var msgs=document.getElementById('msgs');var d=document.createElement('div');d.style.cssText='padding:8px 10px;border-radius:6px;max-width:92%;word-break:break-word;font-size:13px;line-height:1.5;white-space:pre-wrap;'+(role==='user'?'background:#1e3a5f;color:#93c5fd;align-self:flex-end':'background:#1f2937;color:#d1d5db;align-self:flex-start');d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;}async function sendMsg(){var inp=document.getElementById('inp');var btn=document.getElementById('sendBtn');var msg=inp.value.trim();if(!msg)return;addMsg('user',msg);inp.value='';btn.disabled=true;document.getElementById('chat-status').textContent='Thinking...';try{var r=await fetch('[[brain_url]]/api/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,session_id:_sid})});var data=await r.json();addMsg('brain',data.reply||data.detail||'No response');document.getElementById('chat-status').textContent='intent: '+data.intent+' | agent: '+data.agent;}catch(e){addMsg('brain','Error: '+e.message);document.getElementById('chat-status').textContent='';}btn.disabled=false;}function clearSession(){fetch('[[brain_url]]/api/v1/chat/'+_sid,{method:'DELETE'});document.getElementById('msgs').innerHTML='';document.getElementById('chat-status').textContent='Session cleared';}document.getElementById('inp').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}});</script>"
+        "content": "<div style=\"font-family:monospace;background:#111827;padding:14px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span style=\"font-size:12px;color:#9ca3af\">PENDING WRITE TASKS</span><button onclick=\"load()\" style=\"background:#374151;color:#9ca3af;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:10px\">Refresh</button></div><div id=\"pt-status\" style=\"font-size:11px;color:#6b7280\"></div><div id=\"pt-table\" style=\"flex:1;overflow-y:auto\"></div></div><script>var B='';var CAT={standard:{c:'#93c5fd',l:'standard'},critical:{c:'#fbbf24',l:'critical'},breaking:{c:'#f87171',l:'breaking'}};async function approve(id){document.getElementById('pt-status').textContent='Approving...';await fetch(B+'/api/v1/approval/approve/'+id,{method:'POST'});load();}async function cancel(id){await fetch(B+'/api/v1/approval/cancel/'+id,{method:'POST'});load();}async function load(){try{var r=await fetch(B+'/api/v1/approval/pending');var d=await r.json();var tasks=d.tasks||[];var el=document.getElementById('pt-table');if(!tasks.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No pending approvals</div>';document.getElementById('pt-status').textContent='';return;}var rows=tasks.map(function(t){var ci=CAT[t.category]||{c:'#9ca3af',l:t.category};var ts=new Date(t.created_at).toLocaleTimeString();return'<tr style=\"border-bottom:1px solid #1f2937\"><td style=\"padding:4px 6px;font-size:11px;color:'+ci.c+'\">'+ci.l+'</td><td style=\"padding:4px 6px;font-size:11px;color:#d1d5db;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+t.title+'</td><td style=\"padding:4px 6px;font-size:10px;color:#6b7280\">'+ts+'</td><td style=\"padding:4px 6px;white-space:nowrap\"><button onclick=\"approve(\\\"'+t.task_id+'\\\")\" style=\"background:#14532d;color:#86efac;border:none;padding:2px 7px;border-radius:3px;cursor:pointer;font-size:11px;margin-right:4px\">Approve</button><button onclick=\"cancel(\\\"'+t.task_id+'\\\")\" style=\"background:#7f1d1d;color:#fca5a5;border:none;padding:2px 7px;border-radius:3px;cursor:pointer;font-size:11px\">Cancel</button></td></tr>';}).join('');el.innerHTML='<table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"padding:4px 6px;text-align:left;font-size:10px;color:#6b7280\">Category</th><th style=\"padding:4px 6px;text-align:left;font-size:10px;color:#6b7280\">Task</th><th style=\"padding:4px 6px;text-align:left;font-size:10px;color:#6b7280\">Time</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';document.getElementById('pt-status').textContent=tasks.length+' waiting';}catch(e){document.getElementById('pt-status').textContent='Error: '+e.message;}}load();setInterval(load,5000);</script>"
       }
     },
-
     {
-      "id": 31, "type": "text", "title": "Task Queue Control",
-      "gridPos": { "h": 20, "w": 10, "x": 14, "y": 80 },
+      "id": 30,
+      "type": "text",
+      "title": "Chat with Brain",
+      "gridPos": {
+        "h": 20,
+        "w": 14,
+        "x": 0,
+        "y": 80
+      },
       "options": {
         "mode": "html",
-        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Task Queue</span><div style=\"display:flex;gap:4px;flex-wrap:wrap\"><button onclick=\"pauseWorkers()\" style=\"background:#7f1d1d;color:#fca5a5;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Pause Workers</button><button onclick=\"resumeWorkers()\" style=\"background:#14532d;color:#86efac;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Resume Workers</button><button onclick=\"loadTasks()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Refresh</button></div></div><div id=\"task-status\" style=\"font-size:11px;color:#6b7280\"></div><div id=\"task-table\" style=\"flex:1;overflow-y:auto\"></div></div><script>function renderTasks(data){var all=[];['active','reserved','scheduled'].forEach(function(type){Object.entries(data[type]||{}).forEach(function(kv){(kv[1]||[]).forEach(function(t){all.push(Object.assign({_type:type,_worker:kv[0]},t));});});});var el=document.getElementById('task-table');if(!all.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No tasks — queue is idle</div>';return;}var clr={active:'#86efac',reserved:'#93c5fd',scheduled:'#fde68a'};var rows=all.map(function(t){return'<tr><td style=\"padding:4px 6px\"><span style=\"color:'+(clr[t._type]||'#9ca3af')+';font-size:11px\">'+t._type+'</span></td><td style=\"padding:4px 6px;color:#d1d5db;font-size:11px\">'+((t.name||'').split('.').pop())+'</td><td style=\"padding:4px 6px;color:#6b7280;font-size:10px\">'+((t.id||'').slice(0,8))+'…</td><td style=\"padding:4px 6px\"><button onclick=\"revoke(\\\"'+t.id+'\\\")\" style=\"background:#374151;color:#f87171;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px\">Revoke</button></td></tr>';}).join('');el.innerHTML='<table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">State</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">Task</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">ID</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';}async function loadTasks(){document.getElementById('task-status').textContent='Loading...';try{var r=await fetch('[[brain_url]]/api/v1/tasks');if(!r.ok)throw new Error(r.statusText);renderTasks(await r.json());document.getElementById('task-status').textContent='Updated '+new Date().toLocaleTimeString();}catch(e){document.getElementById('task-status').textContent='Error: '+e.message;}}async function revoke(id){document.getElementById('task-status').textContent='Revoking '+id.slice(0,8)+'...';await fetch('[[brain_url]]/api/v1/tasks/'+id+'?terminate=true',{method:'DELETE'});loadTasks();}async function pauseWorkers(){await fetch('[[brain_url]]/api/v1/workers/pause',{method:'POST'});document.getElementById('task-status').textContent='Workers paused — finishing current tasks then stopping';}async function resumeWorkers(){await fetch('[[brain_url]]/api/v1/workers/resume',{method:'POST'});document.getElementById('task-status').textContent='Workers resumed — pulling from queue';}loadTasks();setInterval(loadTasks,15000);</script>"
+        "content": "<div id=\"brain-chat\" style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Brain Chat</span><button onclick=\"clearSession()\" style=\"background:#374151;color:#9ca3af;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Clear</button></div><div id=\"msgs\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0\"></div><div style=\"display:flex;gap:6px\"><textarea id=\"inp\" rows=\"2\" placeholder=\"Message Brain... (Enter to send)\" style=\"flex:1;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:8px;font-size:13px;font-family:monospace;resize:none\"></textarea><button onclick=\"sendMsg()\" id=\"sendBtn\" style=\"background:#3b82f6;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;align-self:flex-end\">Send</button></div><div id=\"chat-status\" style=\"font-size:11px;color:#6b7280\"></div></div><script>var _sid='dashboard-'+Math.random().toString(36).slice(2,8);function addMsg(role,text){var msgs=document.getElementById('msgs');var d=document.createElement('div');d.style.cssText='padding:8px 10px;border-radius:6px;max-width:92%;word-break:break-word;font-size:13px;line-height:1.5;white-space:pre-wrap;'+(role==='user'?'background:#1e3a5f;color:#93c5fd;align-self:flex-end':'background:#1f2937;color:#d1d5db;align-self:flex-start');d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;}async function sendMsg(){var inp=document.getElementById('inp');var btn=document.getElementById('sendBtn');var msg=inp.value.trim();if(!msg)return;addMsg('user',msg);inp.value='';btn.disabled=true;document.getElementById('chat-status').textContent='Thinking...';try{var r=await fetch('/api/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,session_id:_sid})});var data=await r.json();addMsg('brain',data.reply||data.detail||'No response');document.getElementById('chat-status').textContent='intent: '+data.intent+' | agent: '+data.agent;}catch(e){addMsg('brain','Error: '+e.message);document.getElementById('chat-status').textContent='';}btn.disabled=false;}function clearSession(){fetch('/api/v1/chat/'+_sid,{method:'DELETE'});document.getElementById('msgs').innerHTML='';document.getElementById('chat-status').textContent='Session cleared';}document.getElementById('inp').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}});</script>"
+      }
+    },
+    {
+      "id": 31,
+      "type": "text",
+      "title": "Task Queue Control",
+      "gridPos": {
+        "h": 20,
+        "w": 10,
+        "x": 14,
+        "y": 80
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Task Queue</span><div style=\"display:flex;gap:4px;flex-wrap:wrap\"><button onclick=\"pauseWorkers()\" style=\"background:#7f1d1d;color:#fca5a5;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Pause Workers</button><button onclick=\"resumeWorkers()\" style=\"background:#14532d;color:#86efac;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Resume Workers</button><button onclick=\"loadTasks()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Refresh</button></div></div><div id=\"task-status\" style=\"font-size:11px;color:#6b7280\"></div><div id=\"task-table\" style=\"flex:1;overflow-y:auto\"></div></div><script>function renderTasks(data){var all=[];['active','reserved','scheduled'].forEach(function(type){Object.entries(data[type]||{}).forEach(function(kv){(kv[1]||[]).forEach(function(t){all.push(Object.assign({_type:type,_worker:kv[0]},t));});});});var el=document.getElementById('task-table');if(!all.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No tasks \u2014 queue is idle</div>';return;}var clr={active:'#86efac',reserved:'#93c5fd',scheduled:'#fde68a'};var rows=all.map(function(t){return'<tr><td style=\"padding:4px 6px\"><span style=\"color:'+(clr[t._type]||'#9ca3af')+';font-size:11px\">'+t._type+'</span></td><td style=\"padding:4px 6px;color:#d1d5db;font-size:11px\">'+((t.name||'').split('.').pop())+'</td><td style=\"padding:4px 6px;color:#6b7280;font-size:10px\">'+((t.id||'').slice(0,8))+'\u2026</td><td style=\"padding:4px 6px\"><button onclick=\"revoke(\\\"'+t.id+'\\\")\" style=\"background:#374151;color:#f87171;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px\">Revoke</button></td></tr>';}).join('');el.innerHTML='<table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">State</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">Task</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">ID</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';}async function loadTasks(){document.getElementById('task-status').textContent='Loading...';try{var r=await fetch('/api/v1/tasks');if(!r.ok)throw new Error(r.statusText);renderTasks(await r.json());document.getElementById('task-status').textContent='Updated '+new Date().toLocaleTimeString();}catch(e){document.getElementById('task-status').textContent='Error: '+e.message;}}async function revoke(id){document.getElementById('task-status').textContent='Revoking '+id.slice(0,8)+'...';await fetch('/api/v1/tasks/'+id+'?terminate=true',{method:'DELETE'});loadTasks();}async function pauseWorkers(){await fetch('/api/v1/workers/pause',{method:'POST'});document.getElementById('task-status').textContent='Workers paused \u2014 finishing current tasks then stopping';}async function resumeWorkers(){await fetch('/api/v1/workers/resume',{method:'POST'});document.getElementById('task-status').textContent='Workers resumed \u2014 pulling from queue';}loadTasks();setInterval(loadTasks,15000);</script>"
       }
     }
-
   ]
 }
