@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 
-from app.skills.base import BaseSkill, SkillResult
+from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
 
 class SmartHomeSkill(BaseSkill):
     name = "smart_home"
     description = "Control or query smart home devices (lights, thermostat, locks, etc.)"
     trigger_intents = ["smart_home"]
+    approval_category = ApprovalCategory.CRITICAL
 
     def is_available(self) -> bool:
         from app.integrations.smarthome import SmartHomeClient

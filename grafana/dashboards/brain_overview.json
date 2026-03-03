@@ -6,7 +6,7 @@
   "refresh": "30s",
   "time": { "from": "now-3h", "to": "now" },
   "schemaVersion": 39,
-  "version": 6,
+  "version": 7,
   "tags": ["brain", "ai", "celery", "loki", "observability"],
   "templating": {
     "list": [
@@ -415,6 +415,30 @@
       "id": 700, "type": "row", "title": "Brain Controls",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 79 }
+    },
+
+    {
+      "id": 700, "type": "row", "title": "Approval Controls",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 79 }
+    },
+
+    {
+      "id": 701, "type": "text", "title": "Write Approval Level",
+      "gridPos": { "h": 7, "w": 10, "x": 0, "y": 80 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"font-family:monospace;background:#111827;padding:14px;height:100%;box-sizing:border-box\"><div style=\"font-size:12px;color:#9ca3af;margin-bottom:10px\">GLOBAL APPROVAL LEVEL</div><div id=\"level-badge\" style=\"font-size:22px;font-weight:bold;margin-bottom:12px;color:#73bf69\">Loading...</div><div id=\"level-desc\" style=\"font-size:11px;color:#9ca3af;margin-bottom:16px;min-height:28px\"></div><div style=\"display:flex;gap:8px;flex-wrap:wrap\"><button onclick=\"setLvl(1)\" id=\"b1\" style=\"flex:1;padding:8px;border:2px solid transparent;border-radius:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold;background:#1f2937;color:#fca5a5\">Level 1<br><span style=\"font-weight:normal;font-size:10px\">All writes</span></button><button onclick=\"setLvl(2)\" id=\"b2\" style=\"flex:1;padding:8px;border:2px solid transparent;border-radius:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold;background:#1f2937;color:#fde68a\">Level 2<br><span style=\"font-weight:normal;font-size:10px\">Critical only</span></button><button onclick=\"setLvl(3)\" id=\"b3\" style=\"flex:1;padding:8px;border:2px solid transparent;border-radius:6px;cursor:pointer;font-family:monospace;font-size:12px;font-weight:bold;background:#1f2937;color:#86efac\">Level 3<br><span style=\"font-weight:normal;font-size:10px\">Breaking only</span></button></div></div><script>var B='[[brain_url]]';var INFO={1:{c:'#f87171',d:'All write operations need your approval before executing'},2:{c:'#fbbf24',d:'Only critical/breaking writes need approval — standard writes execute directly'},3:{c:'#34d399',d:'Only potentially breaking changes need approval'}};async function load(){try{var r=await fetch(B+'/api/v1/approval/level');var d=await r.json();var lvl=d.level||1;var info=INFO[lvl];document.getElementById('level-badge').textContent='Level '+lvl;document.getElementById('level-badge').style.color=info.c;document.getElementById('level-desc').textContent=info.d;[1,2,3].forEach(function(n){var btn=document.getElementById('b'+n);btn.style.border='2px solid '+(n===lvl?INFO[n].c:'transparent');});}catch(e){document.getElementById('level-badge').textContent='Error';}}async function setLvl(n){try{await fetch(B+'/api/v1/approval/level',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level:n})});load();}catch(e){}}load();setInterval(load,10000);</script>"
+      }
+    },
+
+    {
+      "id": 702, "type": "text", "title": "Pending Approvals",
+      "gridPos": { "h": 7, "w": 14, "x": 10, "y": 80 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"font-family:monospace;background:#111827;padding:14px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span style=\"font-size:12px;color:#9ca3af\">PENDING WRITE TASKS</span><button onclick=\"load()\" style=\"background:#374151;color:#9ca3af;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:10px\">Refresh</button></div><div id=\"pt-status\" style=\"font-size:11px;color:#6b7280\"></div><div id=\"pt-table\" style=\"flex:1;overflow-y:auto\"></div></div><script>var B='[[brain_url]]';var CAT={standard:{c:'#93c5fd',l:'standard'},critical:{c:'#fbbf24',l:'critical'},breaking:{c:'#f87171',l:'breaking'}};async function approve(id){document.getElementById('pt-status').textContent='Approving...';await fetch(B+'/api/v1/approval/approve/'+id,{method:'POST'});load();}async function cancel(id){await fetch(B+'/api/v1/approval/cancel/'+id,{method:'POST'});load();}async function load(){try{var r=await fetch(B+'/api/v1/approval/pending');var d=await r.json();var tasks=d.tasks||[];var el=document.getElementById('pt-table');if(!tasks.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No pending approvals</div>';document.getElementById('pt-status').textContent='';return;}var rows=tasks.map(function(t){var ci=CAT[t.category]||{c:'#9ca3af',l:t.category};var ts=new Date(t.created_at).toLocaleTimeString();return'<tr style=\"border-bottom:1px solid #1f2937\"><td style=\"padding:4px 6px;font-size:11px;color:'+ci.c+'\">'+ci.l+'</td><td style=\"padding:4px 6px;font-size:11px;color:#d1d5db;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+t.title+'</td><td style=\"padding:4px 6px;font-size:10px;color:#6b7280\">'+ts+'</td><td style=\"padding:4px 6px;white-space:nowrap\"><button onclick=\"approve(\\\"'+t.task_id+'\\\")\" style=\"background:#14532d;color:#86efac;border:none;padding:2px 7px;border-radius:3px;cursor:pointer;font-size:11px;margin-right:4px\">Approve</button><button onclick=\"cancel(\\\"'+t.task_id+'\\\")\" style=\"background:#7f1d1d;color:#fca5a5;border:none;padding:2px 7px;border-radius:3px;cursor:pointer;font-size:11px\">Cancel</button></td></tr>';}).join('');el.innerHTML='<table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"padding:4px 6px;text-align:left;font-size:10px;color:#6b7280\">Category</th><th style=\"padding:4px 6px;text-align:left;font-size:10px;color:#6b7280\">Task</th><th style=\"padding:4px 6px;text-align:left;font-size:10px;color:#6b7280\">Time</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';document.getElementById('pt-status').textContent=tasks.length+' waiting';}catch(e){document.getElementById('pt-status').textContent='Error: '+e.message;}}load();setInterval(load,5000);</script>"
+      }
     },
 
     {

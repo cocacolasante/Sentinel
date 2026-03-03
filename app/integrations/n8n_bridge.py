@@ -86,6 +86,74 @@ class N8nBridge:
         """Trigger the daily briefing workflow."""
         return await self.trigger("brain/daily-brief", {})
 
+    # ── Workflow Management (n8n REST API) ────────────────────────────────────
+
+    def _api_client(self) -> "httpx.AsyncClient":
+        """Separate client for n8n REST API (different base URL + API key auth)."""
+        import httpx as _httpx
+        base = f"{settings.n8n_webhook_url}"
+        headers: dict = {"Content-Type": "application/json"}
+        if settings.n8n_api_key:
+            headers["X-N8N-API-KEY"] = settings.n8n_api_key
+        return _httpx.AsyncClient(base_url=base, headers=headers, timeout=30.0,
+                                  auth=(settings.n8n_user, settings.n8n_password) if not settings.n8n_api_key else None)
+
+    async def list_workflows(self) -> list[dict]:
+        """List all workflows via the n8n REST API."""
+        async with self._api_client() as c:
+            r = await c.get("/api/v1/workflows")
+            r.raise_for_status()
+            data = r.json()
+            items = data if isinstance(data, list) else data.get("data", [])
+            return [
+                {
+                    "id":     w.get("id"),
+                    "name":   w.get("name"),
+                    "active": w.get("active", False),
+                    "nodes":  len(w.get("nodes", [])),
+                }
+                for w in items
+            ]
+
+    async def get_workflow(self, workflow_id: str) -> dict:
+        async with self._api_client() as c:
+            r = await c.get(f"/api/v1/workflows/{workflow_id}")
+            r.raise_for_status()
+            return r.json()
+
+    async def create_workflow(self, name: str, nodes: list[dict], connections: dict | None = None) -> dict:
+        """Create a new n8n workflow via the REST API."""
+        body = {
+            "name":        name,
+            "nodes":       nodes,
+            "connections": connections or {},
+            "settings":    {"executionOrder": "v1"},
+            "staticData":  None,
+        }
+        async with self._api_client() as c:
+            r = await c.post("/api/v1/workflows", json=body)
+            r.raise_for_status()
+            data = r.json()
+            return {"id": data.get("id"), "name": data.get("name"), "active": data.get("active")}
+
+    async def activate_workflow(self, workflow_id: str) -> dict:
+        async with self._api_client() as c:
+            r = await c.patch(f"/api/v1/workflows/{workflow_id}/activate")
+            r.raise_for_status()
+            return {"id": workflow_id, "active": True}
+
+    async def deactivate_workflow(self, workflow_id: str) -> dict:
+        async with self._api_client() as c:
+            r = await c.patch(f"/api/v1/workflows/{workflow_id}/deactivate")
+            r.raise_for_status()
+            return {"id": workflow_id, "active": False}
+
+    async def delete_workflow(self, workflow_id: str) -> dict:
+        async with self._api_client() as c:
+            r = await c.delete(f"/api/v1/workflows/{workflow_id}")
+            r.raise_for_status()
+            return {"deleted": True, "id": workflow_id}
+
     async def health(self) -> bool:
         """Check if n8n is reachable."""
         try:

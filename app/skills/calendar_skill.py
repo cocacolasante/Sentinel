@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from app.skills.base import BaseSkill, SkillResult
+from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
 
 class CalendarReadSkill(BaseSkill):
@@ -34,6 +34,7 @@ class CalendarWriteSkill(BaseSkill):
     description = "Create, update, reschedule, or cancel a Google Calendar event"
     trigger_intents = ["calendar_write"]
     requires_confirmation = True
+    approval_category = ApprovalCategory.STANDARD
 
     def is_available(self) -> bool:
         from app.integrations.google_calendar import CalendarClient
@@ -53,10 +54,11 @@ class CalendarWriteSkill(BaseSkill):
             "params":   params,
             "original": original_message,
         }
-        title    = params.get("title", "New Event")
-        date     = params.get("date", "TBD")
-        time_str = params.get("time", "TBD")
-        duration = params.get("duration_min", 60)
+        title     = params.get("title", "New Event")
+        date      = params.get("date", "TBD")
+        time_str  = params.get("time", "TBD")
+        duration  = params.get("duration_min", 60)
+        attendees = [e for e in params.get("attendees", []) if "@" in str(e)]
         context = (
             f"Show the user the calendar event you are about to create:\n"
             f"  Title: {title}\n"
@@ -64,7 +66,9 @@ class CalendarWriteSkill(BaseSkill):
             f"  Time: {time_str} ({duration} min)\n"
             f"  Description: {params.get('description', '')}\n"
             f"  Location: {params.get('location', '')}\n"
-            "Format it clearly and ask the user to reply **confirm** to add it or **cancel** to abort."
+            + (f"  Invite: {', '.join(attendees)}\n" if attendees else "")
+            + ("  (A personal Gmail invite will also be sent to each attendee.)\n" if attendees else "")
+            + "Format it clearly and ask the user to reply **confirm** to add it or **cancel** to abort."
         )
         return SkillResult(
             context_data=context,

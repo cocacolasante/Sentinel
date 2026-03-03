@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from app.config import get_settings
-from app.skills.base import BaseSkill, SkillResult
+from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
 settings = get_settings()
 
@@ -42,6 +42,7 @@ class GitHubWriteSkill(BaseSkill):
     name = "github_write"
     description = "Create a GitHub issue, comment on a PR, or close an issue"
     trigger_intents = ["github_write"]
+    approval_category = ApprovalCategory.CRITICAL
 
     def is_available(self) -> bool:
         from app.integrations.github import GitHubClient

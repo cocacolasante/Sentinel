@@ -43,3 +43,9 @@ flower==2.0.1
 
 # Prometheus metrics
 prometheus-fastapi-instrumentator==7.0.0
+
+# WhatsApp / Twilio (optional — leave TWILIO_* blank in .env to disable)
+twilio==9.4.1
+
+# Form parsing for webhooks (required for WhatsApp + any multipart endpoint)
+python-multipart==0.0.20

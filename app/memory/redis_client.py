@@ -103,3 +103,19 @@ class RedisMemory:
     def clear_pending_action(self, session_id: str) -> None:
         """Delete the pending action for a session."""
         self.client.delete(f"pending:{session_id}")
+
+    # ── Approval level (global) ────────────────────────────────────────────────
+
+    _APPROVAL_KEY = "brain:approval_level"
+
+    def get_approval_level(self) -> int:
+        """Return global approval level (1, 2, or 3). Default is 1."""
+        val = self.client.get(self._APPROVAL_KEY)
+        try:
+            return max(1, min(3, int(val))) if val else 1
+        except (ValueError, TypeError):
+            return 1
+
+    def set_approval_level(self, level: int) -> None:
+        """Persist global approval level (1-3, no TTL — permanent until changed)."""
+        self.client.set(self._APPROVAL_KEY, str(max(1, min(3, level))))

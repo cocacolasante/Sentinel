@@ -9,6 +9,11 @@ services:
       - "127.0.0.1:8000:8000"
     env_file:
       - .env
+    volumes:
+      # SSH key for git push to GitHub (read-only)
+      - ${HOME}/.ssh:/root/.ssh:ro
+      # Persistent workspace where the Brain clones its own repo
+      - brain-workspace:/workspace
     depends_on:
       postgres:
         condition: service_healthy
@@ -328,3 +333,4 @@ volumes:
   grafana-data:
   loki_data:
   ha-config:
+  brain-workspace:

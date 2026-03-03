@@ -59,13 +59,19 @@ CREATE TABLE IF NOT EXISTS contacts (
     id          BIGSERIAL   PRIMARY KEY,
     name        TEXT        NOT NULL,
     email       TEXT,
+    phone       TEXT,        -- E.164 format, e.g. +12125551234
+    whatsapp    TEXT,        -- WhatsApp number, defaults to phone if blank
+    company     TEXT,
     github      TEXT,
     slack_id    TEXT,
+    tags        TEXT,        -- comma-separated tags
     notes       TEXT,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_email  ON contacts (email);
 CREATE INDEX IF NOT EXISTS idx_contacts_github ON contacts (github);
+CREATE INDEX IF NOT EXISTS idx_contacts_name   ON contacts (lower(name) text_pattern_ops);
 
 -- Key-value user profile store
 CREATE TABLE IF NOT EXISTS user_profile (
@@ -137,3 +143,27 @@ CREATE TABLE IF NOT EXISTS integration_eval_results (
     checked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_integration_eval_integration ON integration_eval_results (integration, checked_at DESC);
+
+-- ── Approval system: write-action audit trail ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS pending_write_tasks (
+    task_id     TEXT        PRIMARY KEY,
+    session_id  TEXT        NOT NULL,
+    action      TEXT        NOT NULL,
+    title       TEXT,
+    params      JSONB       DEFAULT '{}',
+    category    TEXT        NOT NULL DEFAULT 'standard',
+    status      TEXT        NOT NULL DEFAULT 'awaiting_approval'
+                            CHECK (status IN ('awaiting_approval','executing','completed','cancelled','failed')),
+    error       TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_write_tasks_status  ON pending_write_tasks (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_write_tasks_session ON pending_write_tasks (session_id, created_at DESC);
+
+-- ── Brain settings (key-value) ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS brain_settings (
+    key         TEXT        PRIMARY KEY,
+    value       TEXT        NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

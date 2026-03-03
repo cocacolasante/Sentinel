@@ -95,6 +95,34 @@ class CalendarClient:
         return events
 
     @staticmethod
+    def _resolve_date(date_str: str) -> str:
+        """
+        Resolve a date string to ISO YYYY-MM-DD.
+        Handles: ISO dates, 'today', 'tomorrow', and weekday names (next occurrence).
+        Returns empty string if unresolvable (triggers the +1-hour fallback in caller).
+        """
+        from datetime import date as date_cls
+        s = (date_str or "").strip().lower()
+        if not s:
+            return ""
+        # Already ISO
+        if len(s) == 10 and s[4] == "-" and s[7] == "-":
+            return s
+        today = date_cls.today()
+        if s == "today":
+            return today.isoformat()
+        if s == "tomorrow":
+            return (today + timedelta(days=1)).isoformat()
+        _DAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        if s in _DAY_NAMES:
+            target = _DAY_NAMES.index(s)
+            days_ahead = (target - today.weekday()) % 7
+            if days_ahead == 0:
+                days_ahead = 7  # "Monday" means next Monday when said on a Monday
+            return (today + timedelta(days=days_ahead)).isoformat()
+        return ""
+
+    @staticmethod
     def _validated_tz(tz_name: str) -> str:
         """Return tz_name if it's a valid IANA timezone, else fall back to UTC."""
         try:
@@ -108,10 +136,13 @@ class CalendarClient:
     def _create_event_sync(self, params: dict, calendar_id: str) -> dict:
         svc = self._build_service()
         # Parse date + time from params
-        date     = params.get("date", "")
+        raw_date = params.get("date", "")
         time_str = params.get("time", "09:00")
         duration = int(params.get("duration_min", 60))
         tz_name  = self._validated_tz(params.get("timezone", settings.timezone))
+
+        # Resolve relative date names → ISO date
+        date = self._resolve_date(raw_date)
 
         # Normalise time_str — accept "HH:MM" or "HH:MM:SS"
         if time_str.count(":") == 1:
@@ -121,8 +152,10 @@ class CalendarClient:
             try:
                 start_dt = datetime.fromisoformat(f"{date}T{time_str}")
             except ValueError:
+                logger.warning("Could not parse date='{}' time='{}' — defaulting to +1h", date, time_str)
                 start_dt = datetime.now(tz=timezone.utc) + timedelta(hours=1)
         else:
+            logger.warning("No resolvable date from '{}' — defaulting to +1h", raw_date)
             start_dt = datetime.now(tz=timezone.utc) + timedelta(hours=1)
 
         end_dt = start_dt + timedelta(minutes=duration)
@@ -134,15 +167,22 @@ class CalendarClient:
             "start":       {"dateTime": start_dt.isoformat(), "timeZone": tz_name},
             "end":         {"dateTime": end_dt.isoformat(),   "timeZone": tz_name},
         }
-        if "attendees" in params:
-            body["attendees"] = [{"email": e} for e in params["attendees"]]
+        attendees = [e for e in params.get("attendees", []) if "@" in str(e)]
+        if attendees:
+            body["attendees"] = [{"email": e} for e in attendees]
 
-        created = svc.events().insert(calendarId=calendar_id, body=body).execute()
+        # sendUpdates='all' makes Google Calendar email each attendee a calendar invite
+        created = svc.events().insert(
+            calendarId=calendar_id,
+            body=body,
+            sendUpdates="all" if attendees else "none",
+        ).execute()
         return {
-            "id":    created.get("id"),
-            "title": created.get("summary"),
-            "start": created.get("start", {}).get("dateTime"),
-            "link":  created.get("htmlLink"),
+            "id":        created.get("id"),
+            "title":     created.get("summary"),
+            "start":     created.get("start", {}).get("dateTime"),
+            "link":      created.get("htmlLink"),
+            "attendees": attendees,
         }
 
     def _find_free_slots_sync(self, date: str, duration_min: int, calendar_id: str) -> list[dict]:

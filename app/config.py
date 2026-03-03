@@ -87,6 +87,26 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 20
     rate_limit_per_hour:   int = 200
 
+    # ── Repository (Brain self-modification) ───────────────────
+    github_brain_repo_url: str = ""
+    repo_workspace: str = "/workspace/repo"
+    repo_ssh_key_path: str = "/root/.ssh/id_ed25519"
+
+    # ── IONOS Cloud ─────────────────────────────────────────────
+    ionos_token: str = ""           # Bearer token (preferred)
+    ionos_username: str = ""        # Basic auth fallback
+    ionos_password: str = ""
+    ionos_ssh_private_key: str = "" # PEM-encoded SSH key for server access
+    ionos_ssh_public_key: str = ""  # Corresponding public key
+
+    # ── Twilio / WhatsApp ───────────────────────────────────────
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_whatsapp_from: str = ""  # e.g. whatsapp:+14155238886
+
+    # ── n8n API key (for workflow management) ──────────────────
+    n8n_api_key: str = ""
+
     # ── Memory ─────────────────────────────────────────────────
     openai_embedding_model: str = "text-embedding-3-small"
     qdrant_collection: str = "brain_memories"

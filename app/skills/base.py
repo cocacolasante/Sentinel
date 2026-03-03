@@ -10,6 +10,20 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class ApprovalCategory(str, Enum):
+    """Controls when a skill requires user confirmation based on global approval level.
+
+    Level 1  — confirm STANDARD, CRITICAL, BREAKING  (strictest)
+    Level 2  — confirm CRITICAL, BREAKING             (critical writes only)
+    Level 3  — confirm only BREAKING                  (breaking changes only)
+    """
+    NONE     = "none"      # read ops — never require confirmation
+    STANDARD = "standard"  # normal writes: email, calendar event
+    CRITICAL = "critical"  # significant writes: GitHub, smart-home state changes
+    BREAKING = "breaking"  # irreversible/destructive — always confirm
 
 
 @dataclass
@@ -28,6 +42,7 @@ class BaseSkill(ABC):
     description: str = ""
     trigger_intents: list[str] = []
     requires_confirmation: bool = False
+    approval_category: ApprovalCategory = ApprovalCategory.NONE
 
     def is_available(self) -> bool:
         """Return True if the skill is properly configured and ready."""

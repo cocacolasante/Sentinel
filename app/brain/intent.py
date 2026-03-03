@@ -18,6 +18,7 @@ Intents:
 
 import json
 import logging
+from datetime import date as _date
 
 import anthropic
 
@@ -34,7 +35,9 @@ _SYSTEM = (
     "parameters as JSON. Be precise. Never add explanations — return only JSON."
 )
 
-_USER_TEMPLATE = """Classify this message into one of these intents:
+_USER_TEMPLATE = """Today's date: {today}  (use this to resolve relative dates like "Thursday" or "next week")
+
+Classify this message into one of these intents:
 
 {available_skills}
 
@@ -48,27 +51,58 @@ Return ONLY valid JSON matching this schema exactly:
 }}
 
 Intent-specific param examples:
-  gmail_read:    {{"query": "from:boss", "max_results": 5}}
-  gmail_send:    {{"to": "sarah@co.com", "subject": "Re: meeting", "body_hint": "I'll be 10 min late"}}
-  calendar_read: {{"period": "today" | "tomorrow" | "this week" | "next week"}}
-  calendar_write:{{"title": "Sprint review", "date": "2026-03-05", "time": "14:00", "duration_min": 60, "description": "", "timezone": "America/New_York"}}
-  github_read:   {{"repo": "owner/name", "resource": "issues" | "prs" | "notifications"}}
-  github_write:  {{"repo": "owner/name", "action": "create_issue", "title": "...", "body": "..."}}
-  smart_home:    {{"action": "turn_on" | "turn_off" | "toggle" | "set" | "status", "entity": "light.living_room", "value": null}}
-  n8n_execute:   {{"workflow": "daily_brief", "payload": {{}}}}
-  chat:          {{}}
+  gmail_read:     {{"action": "list" | "read" | "mark_read" | "labels", "query": "is:unread", "max_results": 10, "msg_id": ""}}
+  gmail_send:     {{"to": "sarah@co.com", "subject": "Re: meeting", "body_hint": "I'll be 10 min late"}}
+  gmail_reply:    {{"msg_id": "abc123", "body_hint": "sounds good, see you then"}}
+  calendar_read:  {{"period": "today" | "tomorrow" | "this week" | "next week"}}
+  calendar_write: {{"title": "Sprint review", "date": "2026-03-05", "time": "14:00", "duration_min": 60, "description": "", "timezone": "America/New_York", "attendees": ["person@example.com"]}}
+  github_read:    {{"repo": "owner/name", "resource": "issues" | "prs" | "notifications"}}
+  github_write:   {{"repo": "owner/name", "action": "create_issue", "title": "...", "body": "..."}}
+  smart_home:     {{"action": "turn_on" | "turn_off" | "toggle" | "set" | "status", "entity": "light.living_room", "value": null}}
+  n8n_execute:    {{"workflow": "daily_brief", "payload": {{}}}}
+  n8n_manage:     {{"action": "list" | "get" | "create" | "activate" | "deactivate" | "delete", "workflow_id": "", "name": ""}}
+  cicd_read:      {{"action": "list_workflows" | "list_runs" | "get_run", "repo": "owner/name", "workflow_id": "", "run_id": ""}}
+  cicd_trigger:   {{"repo": "owner/name", "workflow_id": "deploy.yml", "ref": "main", "inputs": {{}}}}
+  contacts_read:  {{"action": "search" | "list" | "lookup_email", "query": "Laura", "email": ""}}
+  contacts_write: {{"action": "add" | "update" | "delete", "name": "Laura Smith", "email": "laura@co.com", "phone": "+12125551234", "company": "", "id": ""}}
+  whatsapp_read:  {{"action": "list" | "get", "to": "+12125551234", "limit": 20}}
+  whatsapp_send:  {{"to": "+12125551234", "body": "Hey, are we still on for tomorrow?"}}
+  ionos_cloud:    {{"action": "list_datacenters" | "list_servers" | "create_datacenter" | "start_server" | "stop_server" | "ssh_exec" | "deploy_docker", "datacenter_id": "", "server_id": "", "name": "", "location": "de/fra", "host": "1.2.3.4", "command": "uptime"}}
+  ionos_dns:      {{"action": "list_zones" | "list_records" | "upsert_record" | "delete_record", "zone_name": "example.com", "name": "www", "type": "A", "content": "1.2.3.4", "ttl": 3600}}
+  repo_read:      {{"action": "status" | "diff" | "list_files" | "read_file", "path": "app/main.py"}}
+  repo_write:     {{"action": "write_file" | "patch_file", "path": "app/main.py", "content": "...", "old": "...", "new": "..."}}
+  repo_commit:    {{"action": "commit" | "push" | "commit_push", "message": "Fix calendar timezone bug", "push": true}}
+  skill_discover: {{}}
+  chat:           {{}}
+
+IMPORTANT for calendar_write: "date" must always be an absolute ISO date (YYYY-MM-DD).
+Never output day names like "Thursday" — resolve them using today's date above.
 
 Message: {message}"""
 
-_DEFAULT_SKILLS = """gmail_read    — read, check, or search emails
-gmail_send    — compose, send, or draft an email
-calendar_read — check schedule, events, or availability
-calendar_write — create, update, reschedule, or cancel a calendar event
-github_read   — check issues, PRs, notifications, or repo info
-github_write  — create an issue, comment on a PR, close an issue
-smart_home    — control or query a smart home device (lights, thermostat, locks, etc.)
-n8n_execute   — run a specific n8n workflow by name
-chat          — anything else: analysis, writing, code, questions, conversation"""
+_DEFAULT_SKILLS = """gmail_read      — read, check, or search Gmail inbox; read a specific email; mark as read
+gmail_send      — compose, send, or draft an email
+gmail_reply     — reply to a specific email in-thread
+calendar_read   — check schedule, events, or availability
+calendar_write  — create, update, reschedule, or cancel a calendar event
+github_read     — check issues, PRs, notifications, or repo info
+github_write    — create an issue, comment on a PR, close an issue
+smart_home      — control or query a smart home device (lights, thermostat, locks, etc.)
+n8n_execute     — run a specific n8n workflow by name
+n8n_manage      — list, create, activate, or delete n8n workflows
+cicd_read       — check CI/CD pipelines: list GitHub Actions workflows, view run status
+cicd_trigger    — trigger a GitHub Actions workflow manually
+contacts_read   — search or look up a contact by name or email in the address book
+contacts_write  — add, update, or delete a contact in the address book
+whatsapp_read   — read or check recent WhatsApp messages
+whatsapp_send   — send a WhatsApp message to a contact or number
+ionos_cloud     — manage IONOS cloud: datacenters, servers (spin up/down), SSH, deploy apps
+ionos_dns       — manage IONOS DNS zones and records (A, CNAME, MX, TXT, etc.)
+repo_read       — read, list, diff, or check status of the Brain's own codebase/files
+repo_write      — create or edit a file in the Brain's codebase
+repo_commit     — commit and/or push changes in the Brain's repository to GitHub
+skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
+chat            — anything else: analysis, writing, code, questions, conversation"""
 
 
 # ── Classifier ────────────────────────────────────────────────────────────────
@@ -100,6 +134,7 @@ class IntentClassifier:
                     "content": _USER_TEMPLATE.format(
                         message=message,
                         available_skills=skill_list,
+                        today=_date.today().isoformat(),
                     ),
                 }],
             )

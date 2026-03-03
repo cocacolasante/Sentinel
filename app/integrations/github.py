@@ -140,6 +140,21 @@ class GitHubClient:
             "state":  data.get("state"),
         }
 
+    async def trigger_workflow(self, repo: str, workflow_id: str, ref: str = "main", inputs: dict | None = None) -> dict:
+        """Dispatch a workflow_dispatch event to trigger a workflow manually."""
+        if not repo:
+            repo = settings.github_default_repo
+        body: dict = {"ref": ref}
+        if inputs:
+            body["inputs"] = inputs
+        # workflow_id can be a numeric ID or the filename (e.g. "deploy.yml")
+        r = await self.client.post(
+            f"/repos/{repo}/actions/workflows/{workflow_id}/dispatches",
+            json=body,
+        )
+        r.raise_for_status()
+        return {"triggered": True, "repo": repo, "workflow": workflow_id, "ref": ref}
+
     async def list_repos(self, per_page: int = 30) -> list[dict]:
         data = await self._get("/user/repos", params={"per_page": per_page, "sort": "updated"})
         return [

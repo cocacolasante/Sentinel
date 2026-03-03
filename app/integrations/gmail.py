@@ -5,7 +5,10 @@ Operations:
   list_emails(query, max_results) — search / list emails
   get_email(msg_id)               — fetch full email body
   send_email(to, subject, body)   — send via Gmail API
+  reply_email(msg_id, body)       — reply in-thread
+  mark_read(msg_id)               — mark a message as read
   create_draft(to, subject, body) — save draft without sending
+  list_labels()                   — list all Gmail labels
 
 Auth: Google OAuth 2.0 with a stored refresh token.
       Run scripts/google_auth.py once to obtain GOOGLE_REFRESH_TOKEN.
@@ -13,8 +16,8 @@ Auth: Google OAuth 2.0 with a stored refresh token.
 
 import asyncio
 import base64
-import email as email_lib
 import logging
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from app.config import get_settings
@@ -26,6 +29,7 @@ _SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/gmail.modify",
 ]
 
 
@@ -118,6 +122,49 @@ class GmailClient:
         sent = svc.users().messages().send(userId="me", body={"raw": raw}).execute()
         return {"id": sent.get("id"), "thread_id": sent.get("threadId")}
 
+    def _reply_email_sync(self, msg_id: str, body: str) -> dict:
+        """Reply in the same thread as msg_id."""
+        svc = self._build_service()
+        # Fetch original to get thread_id and headers
+        orig = svc.users().messages().get(
+            userId="me", id=msg_id, format="metadata",
+            metadataHeaders=["From", "Subject", "Message-ID", "References"],
+        ).execute()
+        headers = {h["name"]: h["value"] for h in orig.get("payload", {}).get("headers", [])}
+        thread_id   = orig.get("threadId", "")
+        to_addr     = headers.get("From", "")
+        subject     = headers.get("Subject", "")
+        if not subject.lower().startswith("re:"):
+            subject = f"Re: {subject}"
+        orig_msg_id = headers.get("Message-ID", "")
+        references  = headers.get("References", "") + f" {orig_msg_id}".strip()
+
+        mime_msg = MIMEText(body)
+        mime_msg["to"]          = to_addr
+        mime_msg["subject"]     = subject
+        mime_msg["In-Reply-To"] = orig_msg_id
+        mime_msg["References"]  = references.strip()
+        raw = base64.urlsafe_b64encode(mime_msg.as_bytes()).decode()
+        sent = svc.users().messages().send(
+            userId="me", body={"raw": raw, "threadId": thread_id}
+        ).execute()
+        return {"id": sent.get("id"), "thread_id": thread_id, "to": to_addr}
+
+    def _mark_read_sync(self, msg_id: str) -> dict:
+        svc = self._build_service()
+        svc.users().messages().modify(
+            userId="me", id=msg_id, body={"removeLabelIds": ["UNREAD"]}
+        ).execute()
+        return {"id": msg_id, "marked_read": True}
+
+    def _list_labels_sync(self) -> list[dict]:
+        svc = self._build_service()
+        result = svc.users().labels().list(userId="me").execute()
+        return [
+            {"id": l["id"], "name": l["name"]}
+            for l in result.get("labels", [])
+        ]
+
     def _create_draft_sync(self, to: str, subject: str, body: str) -> dict:
         svc = self._build_service()
         mime_msg = MIMEText(body)
@@ -139,6 +186,15 @@ class GmailClient:
 
     async def send_email(self, to: str, subject: str, body: str) -> dict:
         return await asyncio.to_thread(self._send_email_sync, to, subject, body)
+
+    async def reply_email(self, msg_id: str, body: str) -> dict:
+        return await asyncio.to_thread(self._reply_email_sync, msg_id, body)
+
+    async def mark_read(self, msg_id: str) -> dict:
+        return await asyncio.to_thread(self._mark_read_sync, msg_id)
+
+    async def list_labels(self) -> list[dict]:
+        return await asyncio.to_thread(self._list_labels_sync)
 
     async def create_draft(self, to: str, subject: str, body: str) -> dict:
         return await asyncio.to_thread(self._create_draft_sync, to, subject, body)

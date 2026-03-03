@@ -9,7 +9,8 @@
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:api.slack.com)",
       "WebFetch(domain:docs.slack.dev)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(curl:*)"
     ]
   }
 }
