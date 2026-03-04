@@ -14,6 +14,11 @@ Intents:
   smart_home       — control or query HA devices
   n8n_execute      — trigger a named n8n workflow
   server_shell     — run shell commands on the server (navigate, build, scaffold)
+  project_create   — create a new coding project, scaffold and build autonomously
+  project_build    — trigger/re-trigger a project build
+  project_deploy   — deploy a project to an IONOS staging server
+  project_status   — check the status of a project
+  project_list     — list all projects
   chat             — general reasoning / writing / coding (no external action)
 """
 
@@ -171,6 +176,21 @@ Routing guidance:
   - "what env vars are set", "show configuration", "inspect the config", "what integrations are configured", "show me the env" → server_shell with action=inspect_env
   - "update and deploy", "push and restart", "commit push and deploy", "make it live" → use server_shell for git ops then intent=deploy
   - "show running services", "list docker containers", "docker status" → server_shell with command="docker ps"
+  - "build me a ...", "create a project", "build a project", "make a ... app", "build an app", "scaffold a project", "I want to build ...", "write a ... application", "create a ... service" → project_create with name=<project name>, description=<full description>, tech_stack=<detected stack>, deploy=<true if user mentions staging/deploy/server>
+  - "build and deploy ...", "create and host ...", "build ... and spin up a server", "deploy to staging" included in creation → project_create with deploy=true, ionos_location=<detected or 'eu'>
+  - "deploy project ...", "spin up a server for ...", "deploy ... to ionos", "host project ...", "put it on a server" → project_deploy with project_id or slug
+  - "rebuild project", "re-run the build", "try building again", "restart the build" → project_build
+  - "project status", "how is the build going", "check project ...", "is ... done building" → project_status
+  - "list my projects", "show projects", "what projects exist", "all projects" → project_list
+  Tech stack detection for project_create:
+    - "python", "fastapi", "flask", "django", "rest api" in description → tech_stack=python or fastapi/flask/django
+    - "react", "frontend", "ui" → tech_stack=react
+    - "next", "nextjs" → tech_stack=nextjs
+    - "node", "express", "javascript backend" → tech_stack=node
+    - "go", "golang" → tech_stack=go
+    - "rust" → tech_stack=rust
+    - "html", "static", "landing page", "website" → tech_stack=static
+    - default → tech_stack=python
 
 IMPORTANT for calendar_write: "date" must always be an absolute ISO date (YYYY-MM-DD).
 Never output day names like "Thursday" — resolve them using today's date above.

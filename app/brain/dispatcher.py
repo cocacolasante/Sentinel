@@ -88,6 +88,7 @@ def _build_skill_registry():
     from app.skills.server_shell_skill import ServerShellSkill
     from app.skills.deploy_skill       import DeploySkill
     from app.skills.task_skill         import TaskCreateSkill, TaskReadSkill, TaskUpdateSkill
+    from app.skills.project_skill      import ProjectSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -144,6 +145,8 @@ def _build_skill_registry():
     reg.register(TaskCreateSkill())
     reg.register(TaskReadSkill())
     reg.register(TaskUpdateSkill())
+    # Project — scaffold, build, and deploy coding projects
+    reg.register(ProjectSkill())
     return reg
 
 
