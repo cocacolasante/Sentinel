@@ -1,109 +1,128 @@
+"""
+Log monitor — polls the Loki "Errors & Warnings" stream.
+
+Uses the same LogQL query as the Grafana "Errors & Warnings" panel:
+  {job="docker"} |~ "(?i)(error|exception|traceback|critical|warning)"
+
+Every 30 s it fetches new log lines from Loki, extracts the container name
+from the Loki stream labels, and feeds each matching line into ErrorCollector
+so remediation tasks can be auto-created.
+"""
+
 import asyncio
-import re
-from datetime import datetime, timedelta
+import time
 from typing import Dict, Any
 from loguru import logger
-import docker
+
+import httpx
+
 from app.services.error_logger import error_collector
+
+_LOKI_URL = "http://loki:3100"
+_QUERY = '{job="docker"} |~ "(?i)(error|exception|traceback|critical|warning)"'
+_POLL_INTERVAL = 30   # seconds between Loki polls
+_LOOK_BACK = 60       # seconds to look back on the very first poll
+
+
+def _classify_line(line: str) -> str:
+    """Map a log line to a broad error_type label."""
+    low = line.lower()
+    if "traceback" in low or "exception" in low:
+        return "exception"
+    if "critical" in low:
+        return "critical"
+    if "warning" in low or "warn" in low:
+        return "warning"
+    return "error"
 
 
 class LogMonitor:
-    """Monitors live logs from all Sentinel services via Docker."""
+    """Polls Loki for new error/warning log lines across all Sentinel containers."""
 
     def __init__(self):
-        self.client = docker.from_env()
-        self.monitored_containers = [
-            "ai-brain",
-            "ai-celery-worker",
-            "ai-celery-worker-workspace",
-            "ai-celery-beat",
-            "ai-postgres",
-            "ai-redis",
-        ]
-        self.error_patterns = [
-            (r"ERROR|FATAL|CRITICAL", "error"),
-            (r"ConnectionError|TimeoutError|DatabaseError", "connection"),
-            (r"PermissionError|AccessDenied", "permission"),
-            (r"OutOfMemory|MemoryError", "memory"),
-            (r"FileNotFound|IOError", "io"),
-            (r"ValueError|TypeError|KeyError", "type"),
-        ]
-        self.last_log_time: Dict[str, datetime] = {}
+        self._last_ts_ns: int = 0   # nanosecond timestamp of the newest line seen
 
     async def start_monitoring(self) -> None:
-        """Start monitoring all containers."""
-        logger.info("Starting live log monitoring for all services")
-        tasks = [
-            self._monitor_container(container_name)
-            for container_name in self.monitored_containers
-        ]
-        await asyncio.gather(*tasks)
+        """Run the polling loop indefinitely (call once as a background task)."""
+        logger.info("LogMonitor: starting Loki-based error stream polling")
+        # Seed last_ts so the first poll only looks back _LOOK_BACK seconds
+        self._last_ts_ns = (int(time.time()) - _LOOK_BACK) * 1_000_000_000
 
-    async def _monitor_container(self, container_name: str) -> None:
-        """Monitor logs from a single container."""
-        try:
-            container = self.client.containers.get(container_name)
-            logger.info("Monitoring {}", container_name)
+        while True:
+            try:
+                await self._poll()
+            except Exception as e:
+                logger.error("LogMonitor poll error: {}", e)
+            await asyncio.sleep(_POLL_INTERVAL)
 
-            while True:
-                try:
-                    logs = container.logs(
-                        stdout=True, stderr=True, follow=False, timestamps=True
-                    )
-                    for line in logs.decode("utf-8", errors="ignore").split("\n"):
-                        if line.strip():
-                            await self._process_log_line(container_name, line)
+    async def _poll(self) -> None:
+        """Fetch new error/warning lines from Loki since the last seen timestamp."""
+        start_ns = self._last_ts_ns + 1          # exclusive lower bound
+        end_ns   = int(time.time()) * 1_000_000_000
 
-                    self.last_log_time[container_name] = datetime.utcnow()
-                    await asyncio.sleep(5)
+        params = {
+            "query": _QUERY,
+            "start": str(start_ns),
+            "end":   str(end_ns),
+            "limit": "500",
+            "direction": "forward",
+        }
 
-                except docker.errors.NotFound:
-                    logger.warning("Container {} not found, retrying...", container_name)
-                    await asyncio.sleep(10)
-                except Exception as e:
-                    logger.error("Error reading logs from {}: {}", container_name, e)
-                    await asyncio.sleep(5)
-        except docker.errors.NotFound:
-            logger.warning("Container {} does not exist", container_name)
-        except Exception as e:
-            logger.error("Failed to monitor {}: {}", container_name, e)
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{_LOKI_URL}/loki/api/v1/query_range", params=params)
 
-    async def _process_log_line(self, container_name: str, line: str) -> None:
-        """Process a single log line and detect errors."""
-        try:
-            for pattern, error_type in self.error_patterns:
-                if re.search(pattern, line, re.IGNORECASE):
-                    await error_collector.log_error(
-                        service=container_name,
-                        error_type=error_type,
-                        message=line[:200],
-                        context={"container": container_name, "full_log": line},
-                    )
-                    break
-        except Exception as e:
-            logger.error("Error processing log line: {}", e)
+        if resp.status_code != 200:
+            logger.warning("Loki returned {}: {}", resp.status_code, resp.text[:200])
+            return
+
+        data = resp.json()
+        results = data.get("data", {}).get("result", [])
+
+        newest_ts = self._last_ts_ns
+        count = 0
+
+        for stream in results:
+            labels: Dict[str, str] = stream.get("stream", {})
+            # Derive a human-readable service name from available labels
+            container = (
+                labels.get("container_name")
+                or labels.get("container_id")
+                or labels.get("source")
+                or labels.get("agent")
+                or "unknown"
+            )
+            service = container.replace("ai-", "").replace("brain-", "")
+
+            for ts_str, log_line in stream.get("values", []):
+                ts_ns = int(ts_str)
+                if ts_ns > newest_ts:
+                    newest_ts = ts_ns
+
+                error_type = _classify_line(log_line)
+                await error_collector.log_error(
+                    service=service,
+                    error_type=error_type,
+                    message=log_line[:300],
+                    context={"loki_labels": labels, "ts_ns": ts_ns},
+                )
+                count += 1
+
+        if count:
+            logger.debug("LogMonitor: ingested {} line(s) from Loki", count)
+
+        self._last_ts_ns = newest_ts
 
     async def get_service_health(self) -> Dict[str, Dict[str, Any]]:
-        """Get health status of all monitored services."""
-        health: Dict[str, Dict[str, Any]] = {}
-        for container_name in self.monitored_containers:
-            try:
-                container = self.client.containers.get(container_name)
-                health[container_name] = {
-                    "status": container.status,
-                    "running": container.status == "running",
-                    "uptime": container.attrs["State"]["StartedAt"],
-                    "error_count": len(
-                        error_collector.get_errors_by_service(container_name)
-                    ),
-                }
-            except docker.errors.NotFound:
-                health[container_name] = {
-                    "status": "not_found",
-                    "running": False,
-                    "error_count": 0,
-                }
-        return health
+        """Return error counts per service from the in-memory buffer."""
+        services: Dict[str, int] = {}
+        for entry in error_collector.error_buffer:
+            svc = entry["service"]
+            services[svc] = services.get(svc, 0) + 1
+
+        return {
+            svc: {"error_count": cnt, "source": "loki"}
+            for svc, cnt in services.items()
+        }
 
 
 log_monitor = LogMonitor()
