@@ -1,5 +1,4 @@
-"""
-Log monitor — polls the Loki "Errors & Warnings" stream.
+"""Log monitor — polls the Loki "Errors & Warnings" stream.
 
 Uses the same LogQL query as the Grafana "Errors & Warnings" panel:
   {job="docker"} |~ "(?i)(error|exception|traceback|critical|warning)"
@@ -68,14 +67,22 @@ class LogMonitor:
             "direction": "forward",
         }
 
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(f"{_LOKI_URL}/loki/api/v1/query_range", params=params)
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(f"{_LOKI_URL}/loki/api/v1/query_range", params=params)
+                
+                if resp.status_code != 200:
+                    logger.warning("Loki returned {}: {}", resp.status_code, resp.text[:200])
+                    return
 
-        if resp.status_code != 200:
-            logger.warning("Loki returned {}: {}", resp.status_code, resp.text[:200])
+                data = resp.json()
+        except httpx.RequestError as e:
+            logger.error("Loki request failed: {}", e)
             return
-
-        data = resp.json()
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse Loki response: {}", e)
+            return
+            
         results = data.get("data", {}).get("result", [])
 
         newest_ts = self._last_ts_ns
@@ -94,17 +101,26 @@ class LogMonitor:
             service = container.replace("ai-", "").replace("brain-", "")
 
             for ts_str, log_line in stream.get("values", []):
-                ts_ns = int(ts_str)
+                try:
+                    ts_ns = int(ts_str)
+                except (ValueError, TypeError):
+                    logger.warning("Invalid timestamp format: {}", ts_str)
+                    continue
+                    
                 if ts_ns > newest_ts:
                     newest_ts = ts_ns
 
                 error_type = _classify_line(log_line)
-                await error_collector.log_error(
-                    service=service,
-                    error_type=error_type,
-                    message=log_line[:300],
-                    context={"loki_labels": labels, "ts_ns": ts_ns},
-                )
+                try:
+                    await error_collector.log_error(
+                        service=service,
+                        error_type=error_type,
+                        message=log_line[:300],
+                        context={"loki_labels": labels, "ts_ns": ts_ns},
+                    )
+                except Exception as e:
+                    logger.error("Error logging error record: {}", e)
+                    continue
                 count += 1
 
         if count:
