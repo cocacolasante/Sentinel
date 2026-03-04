@@ -385,7 +385,7 @@ def _pick_session() -> str:
     print()
 
     try:
-        choice = input(f"{C.CYAN}Pick a session (1–{len(sessions)}, or n for new):{C.RESET} ").strip().lower()
+        choice = input(f"\001{C.CYAN}\002Pick a session (1–{len(sessions)}, or n for new):\001{C.RESET}\002 ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         print()
         sys.exit(0)
@@ -1061,9 +1061,14 @@ def repl(session_id: str) -> None:
     print("  ".join(footer_parts))
     print(f"{C.DIM}{'─' * min(width - 1, 72)}{C.RESET}\n")
 
+    # Wrap ANSI codes in \001/\002 so readline knows they are zero-width.
+    # Without these markers readline miscounts the prompt length, causing
+    # typed text to wrap back to column 0 and overwrite itself.
+    _rl_prompt = "\001" + C.GREEN + "\002>\001" + C.RESET + "\002 "
+
     while True:
         try:
-            line = input(f"{C.GREEN}>{C.RESET} ").strip()
+            line = input(_rl_prompt).strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
