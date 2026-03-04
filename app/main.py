@@ -182,6 +182,12 @@ async def lifespan(app: FastAPI):
     # Launch Slack Socket Mode in the background (non-blocking)
     asyncio.create_task(start_socket_mode())
 
+    # Launch Loki error stream monitor (polls every 30 s, creates remediation tasks)
+    if settings.log_monitor_enabled:
+        from app.services.log_monitor import log_monitor
+        asyncio.create_task(log_monitor.start_monitoring())
+        logger.info("Loki log monitor started")
+
     # Eval scheduling is handled by the Celery Beat container.
     # APScheduler is not started here — see app/worker/celery_app.py.
 
