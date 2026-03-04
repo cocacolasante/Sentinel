@@ -212,3 +212,82 @@ async def cancel_task(task_id: int):
     if not row:
         raise HTTPException(status_code=404, detail=f"Task #{task_id} not found")
     return {"message": f"Task #{task_id} cancelled", "task": row}
+
+
+@router.delete("/board/tasks/{task_id}/purge")
+async def purge_task(task_id: int):
+    """Hard-delete a single task (no soft cancel — permanently removed)."""
+    row = postgres.execute_one(
+        "DELETE FROM tasks WHERE id = %s RETURNING id, title",
+        (task_id,),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Task #{task_id} not found")
+    return {"deleted": True, "id": row["id"], "title": row["title"]}
+
+
+class TaskPurge(BaseModel):
+    statuses: list[str]  # e.g. ["pending", "in_progress", "cancelled"]
+
+
+@router.post("/board/tasks/purge")
+async def purge_tasks_bulk(body: TaskPurge):
+    """Hard-delete all tasks matching the given statuses."""
+    _VALID = {"pending", "in_progress", "cancelled", "done", "failed"}
+    statuses = [s for s in body.statuses if s in _VALID]
+    if not statuses:
+        raise HTTPException(status_code=400, detail="No valid statuses provided")
+    placeholders = ", ".join(["%s"] * len(statuses))
+    rows = postgres.execute(
+        f"DELETE FROM tasks WHERE status IN ({placeholders}) RETURNING id",
+        statuses,
+    )
+    return {"deleted": len(rows or []), "statuses": statuses}
+
+
+@router.get("/board/activity")
+async def get_activity():
+    """Live AI activity feed: in-progress tasks, pending queue, recent milestones."""
+    in_progress = postgres.execute(
+        """
+        SELECT id, title, description, status, assigned_to, priority_num, updated_at
+        FROM   tasks
+        WHERE  status = 'in_progress'
+        ORDER  BY updated_at DESC
+        """,
+        [],
+    ) or []
+
+    pending_next = postgres.execute(
+        """
+        SELECT id, title, status, priority_num
+        FROM   tasks
+        WHERE  status = 'pending'
+        ORDER  BY priority_num DESC, created_at ASC
+        LIMIT  5
+        """,
+        [],
+    ) or []
+
+    recent_milestones = postgres.execute(
+        """
+        SELECT action, intent, summary, agent, triggered_at
+        FROM   ai_milestones
+        ORDER  BY triggered_at DESC
+        LIMIT  8
+        """,
+        [],
+    ) or []
+
+    def _fmt(row: dict) -> dict:
+        r = dict(row)
+        for k, v in r.items():
+            if hasattr(v, "isoformat"):
+                r[k] = v.isoformat()
+        return r
+
+    return {
+        "in_progress":        [_fmt(r) for r in in_progress],
+        "pending_next":       [_fmt(r) for r in pending_next],
+        "recent_milestones":  [_fmt(r) for r in recent_milestones],
+    }

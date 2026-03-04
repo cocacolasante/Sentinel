@@ -818,11 +818,27 @@
       },
       "id": 9010,
       "options": {
-        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">Task Board</span>\n  <div style=\"display:flex;gap:6px;align-items:center;flex-wrap:wrap\">\n    <span id=\"tb-updated\" style=\"color:#4b5563;font-size:10px\"></span>\n    <select id=\"tb-filter\" onchange=\"loadBoard()\" style=\"background:#1f2937;color:#9ca3af;border:1px solid #374151;padding:3px 6px;border-radius:4px;font-size:11px\">\n      <option value=\"\">All</option>\n      <option value=\"pending\">Pending</option>\n      <option value=\"in_progress\">In Progress</option>\n      <option value=\"done\">Done</option>\n      <option value=\"cancelled\">Cancelled</option>\n    </select>\n    <button onclick=\"loadBoard()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n  </div>\n</div>\n<div id=\"tb-status\" style=\"font-size:11px;color:#6b7280\"></div>\n<div id=\"tb-table\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar TB_BASE='[[brain_url]]';\nvar TB_PRI_COL={1:'#86efac',2:'#6ee7b7',3:'#fde68a',4:'#fb923c',5:'#f87171'};\nvar TB_ST_COL={pending:'#93c5fd',in_progress:'#fde68a',done:'#86efac',failed:'#f87171',cancelled:'#6b7280'};\nvar TB_ST_ICO={pending:'\u23f3',in_progress:'\ud83d\udd04',done:'\u2705',failed:'\u274c',cancelled:'\u2014'};\nvar TB_APR={1:'<span title=\"auto-approve\" style=\"color:#86efac;font-size:10px\">\u25cf</span>',\n            2:'<span title=\"needs review\" style=\"color:#fbbf24;font-size:10px\">\ud83d\udd12</span>',\n            3:'<span title=\"requires sign-off\" style=\"color:#f87171;font-size:10px\">\ud83d\udd10</span>'};\nfunction loadBoard(){\n  var st=document.getElementById('tb-status');\n  var filter=document.getElementById('tb-filter').value;\n  var url=TB_BASE+'/api/v1/board/tasks?limit=50'+(filter?'&status='+filter:'');\n  fetch(url).then(function(r){return r.json();}).then(function(data){\n    var tasks=data.tasks||[];\n    st.textContent=tasks.length+' task'+(tasks.length!==1?'s':'');\n    document.getElementById('tb-updated').textContent='updated '+new Date().toLocaleTimeString();\n    var el=document.getElementById('tb-table');\n    if(!tasks.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No tasks found</div>';return;}\n    var rows=tasks.map(function(t){\n      var pri=t.priority_num||3;\n      var pcol=TB_PRI_COL[pri]||'#9ca3af';\n      var scol=TB_ST_COL[t.status]||'#9ca3af';\n      var sico=TB_ST_ICO[t.status]||'?';\n      var apr=TB_APR[t.approval_level||2]||'';\n      var tags=t.tags?'<span style=\"color:#8b5cf6;font-size:10px\"> ['+t.tags+']</span>':'';\n      var upd=t.updated_at?(t.updated_at+'').slice(5,16).replace('T',' '):'';\n      var approveBtn=(t.approval_level||2)>=2 && (t.status==='pending')?\n        '<button onclick=\"tbApprove('+t.id+')\" title=\"Approve (set auto-run)\" style=\"background:#1c3a1c;color:#86efac;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2713 Approve</button> ':'';\n      return '<tr style=\"border-bottom:1px solid #1f2937\">'\n        +'<td style=\"padding:5px 6px;color:#6b7280;font-size:10px\">#'+t.id+'</td>'\n        +'<td style=\"padding:5px 6px;color:#d1d5db;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\" title=\"'+t.title+'\">'+t.title+tags+'</td>'\n        +'<td style=\"padding:5px 4px;text-align:center\">'+apr+'</td>'\n        +'<td style=\"padding:5px 4px\"><span style=\"color:'+pcol+';font-size:10px\">P'+pri+'</span></td>'\n        +'<td style=\"padding:5px 4px\"><span style=\"color:'+scol+';font-size:10px\">'+sico+' '+t.status+'</span></td>'\n        +'<td style=\"padding:5px 4px;color:#4b5563;font-size:9px;white-space:nowrap\">'+upd+'</td>'\n        +'<td style=\"padding:5px 4px;white-space:nowrap\">'\n          +approveBtn\n          +'<button onclick=\"tbSet('+t.id+',\\'in_progress\\')\" title=\"Mark in progress\" style=\"background:#1e3a5f;color:#93c5fd;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u25b6</button> '\n          +'<button onclick=\"tbSet('+t.id+',\\'done\\')\" title=\"Mark done\" style=\"background:#14532d;color:#86efac;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2713</button> '\n          +'<button onclick=\"tbSet('+t.id+',\\'cancelled\\')\" title=\"Cancel\" style=\"background:#3b1515;color:#f87171;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2715</button>'\n        +'</td>'\n        +'</tr>';\n    });\n    el.innerHTML='<table style=\"width:100%;border-collapse:collapse\">'\n      +'<thead><tr style=\"border-bottom:1px solid #374151\">'\n      +'<th style=\"text-align:left;padding:4px 6px;color:#6b7280;font-size:10px\">#</th>'\n      +'<th style=\"text-align:left;padding:4px 6px;color:#6b7280;font-size:10px\">Title</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\" title=\"Approval\">Appr</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Pri</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Status</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Updated</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Actions</th>'\n      +'</tr></thead>'\n      +'<tbody>'+rows.join('')+'</tbody></table>';\n  }).catch(function(e){st.textContent='Error: '+e.message;});\n}\nfunction tbSet(id,status){\n  fetch(TB_BASE+'/api/v1/board/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:status})})\n    .then(function(){loadBoard();})\n    .catch(function(e){document.getElementById('tb-status').textContent='Update failed: '+e.message;});\n}\nfunction tbApprove(id){\n  fetch(TB_BASE+'/api/v1/board/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({approval_level:1})})\n    .then(function(){loadBoard();})\n    .catch(function(e){document.getElementById('tb-status').textContent='Approve failed: '+e.message;});\n}\nsetTimeout(loadBoard,300);\nsetInterval(loadBoard,15000);\n</script>",
+        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">Task Board</span>\n  <div style=\"display:flex;gap:6px;align-items:center;flex-wrap:wrap\">\n    <span id=\"tb-updated\" style=\"color:#4b5563;font-size:10px\"></span>\n    <select id=\"tb-filter\" onchange=\"loadBoard()\" style=\"background:#1f2937;color:#9ca3af;border:1px solid #374151;padding:3px 6px;border-radius:4px;font-size:11px\">\n      <option value=\"\">All</option>\n      <option value=\"pending\">Pending</option>\n      <option value=\"in_progress\">In Progress</option>\n      <option value=\"done\">Done</option>\n      <option value=\"failed\">Failed</option>\n      <option value=\"cancelled\">Cancelled</option>\n    </select>\n    <button onclick=\"loadBoard()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n    <button onclick=\"clearQueue()\" title=\"Delete all pending, in-progress &amp; cancelled tasks\" style=\"background:#3b1515;color:#f87171;border:1px solid #5a2020;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">\ud83d\uddd1 Clear Queue</button>\n  </div>\n</div>\n<div id=\"tb-status\" style=\"font-size:11px;color:#6b7280\"></div>\n<div id=\"tb-table\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar TB_BASE='[[brain_url]]';\nvar TB_PRI_COL={1:'#86efac',2:'#6ee7b7',3:'#fde68a',4:'#fb923c',5:'#f87171'};\nvar TB_ST_COL={pending:'#93c5fd',in_progress:'#fde68a',done:'#86efac',failed:'#f87171',cancelled:'#6b7280'};\nvar TB_ST_ICO={pending:'\u23f3',in_progress:'\ud83d\udd04',done:'\u2705',failed:'\u274c',cancelled:'\u2014'};\nvar TB_APR={1:'<span title=\"auto-approve\" style=\"color:#86efac;font-size:10px\">\u25cf</span>',\n            2:'<span title=\"needs review\" style=\"color:#fbbf24;font-size:10px\">\ud83d\udd12</span>',\n            3:'<span title=\"requires sign-off\" style=\"color:#f87171;font-size:10px\">\ud83d\udd10</span>'};\nfunction loadBoard(){\n  var st=document.getElementById('tb-status');\n  var filter=document.getElementById('tb-filter').value;\n  var url=TB_BASE+'/api/v1/board/tasks?limit=50'+(filter?'&status='+filter:'');\n  fetch(url).then(function(r){return r.json();}).then(function(data){\n    var tasks=data.tasks||[];\n    st.textContent=tasks.length+' task'+(tasks.length!==1?'s':'');\n    document.getElementById('tb-updated').textContent='updated '+new Date().toLocaleTimeString();\n    var el=document.getElementById('tb-table');\n    if(!tasks.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No tasks found</div>';return;}\n    var rows=tasks.map(function(t){\n      var pri=t.priority_num||3;\n      var pcol=TB_PRI_COL[pri]||'#9ca3af';\n      var scol=TB_ST_COL[t.status]||'#9ca3af';\n      var sico=TB_ST_ICO[t.status]||'?';\n      var apr=TB_APR[t.approval_level||2]||'';\n      var tags=t.tags?'<span style=\"color:#8b5cf6;font-size:10px\"> ['+t.tags+']</span>':'';\n      var upd=t.updated_at?(t.updated_at+'').slice(5,16).replace('T',' '):'';\n      var approveBtn=(t.approval_level||2)>=2 && (t.status==='pending')?\n        '<button onclick=\"tbApprove('+t.id+')\" title=\"Approve (set auto-run)\" style=\"background:#1c3a1c;color:#86efac;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2713 Approve</button> ':'';\n      var clearBtn=(t.status==='done'||t.status==='failed'||t.status==='cancelled')?\n        '<button onclick=\"tbPurge('+t.id+')\" title=\"Permanently delete this task\" style=\"background:#1f1212;color:#ef4444;border:1px solid #3b1515;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\ud83d\uddd1</button> ':'';\n      return '<tr style=\"border-bottom:1px solid #1f2937\">'\n        +'<td style=\"padding:5px 6px;color:#6b7280;font-size:10px\">#'+t.id+'</td>'\n        +'<td style=\"padding:5px 6px;color:#d1d5db;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\" title=\"'+t.title+'\">'+t.title+tags+'</td>'\n        +'<td style=\"padding:5px 4px;text-align:center\">'+apr+'</td>'\n        +'<td style=\"padding:5px 4px\"><span style=\"color:'+pcol+';font-size:10px\">P'+pri+'</span></td>'\n        +'<td style=\"padding:5px 4px\"><span style=\"color:'+scol+';font-size:10px\">'+sico+' '+t.status+'</span></td>'\n        +'<td style=\"padding:5px 4px;color:#4b5563;font-size:9px;white-space:nowrap\">'+upd+'</td>'\n        +'<td style=\"padding:5px 4px;white-space:nowrap\">'\n          +approveBtn\n          +clearBtn\n          +'<button onclick=\"tbSet('+t.id+',\\'in_progress\\')\" title=\"Mark in progress\" style=\"background:#1e3a5f;color:#93c5fd;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u25b6</button> '\n          +'<button onclick=\"tbSet('+t.id+',\\'done\\')\" title=\"Mark done\" style=\"background:#14532d;color:#86efac;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2713</button> '\n          +'<button onclick=\"tbSet('+t.id+',\\'cancelled\\')\" title=\"Cancel\" style=\"background:#3b1515;color:#f87171;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2715</button>'\n        +'</td>'\n        +'</tr>';\n    });\n    el.innerHTML='<table style=\"width:100%;border-collapse:collapse\">'\n      +'<thead><tr style=\"border-bottom:1px solid #374151\">'\n      +'<th style=\"text-align:left;padding:4px 6px;color:#6b7280;font-size:10px\">#</th>'\n      +'<th style=\"text-align:left;padding:4px 6px;color:#6b7280;font-size:10px\">Title</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\" title=\"Approval\">Appr</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Pri</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Status</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Updated</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Actions</th>'\n      +'</tr></thead>'\n      +'<tbody>'+rows.join('')+'</tbody></table>';\n  }).catch(function(e){st.textContent='Error: '+e.message;});\n}\nfunction tbSet(id,status){\n  fetch(TB_BASE+'/api/v1/board/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:status})})\n    .then(function(){loadBoard();})\n    .catch(function(e){document.getElementById('tb-status').textContent='Update failed: '+e.message;});\n}\nfunction tbApprove(id){\n  fetch(TB_BASE+'/api/v1/board/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({approval_level:1})})\n    .then(function(){loadBoard();})\n    .catch(function(e){document.getElementById('tb-status').textContent='Approve failed: '+e.message;});\n}\nfunction tbPurge(id){\n  fetch(TB_BASE+'/api/v1/board/tasks/'+id+'/purge',{method:'DELETE'})\n    .then(function(){loadBoard();})\n    .catch(function(e){document.getElementById('tb-status').textContent='Delete failed: '+e.message;});\n}\nfunction clearQueue(){\n  if(!confirm('Permanently delete ALL pending, in-progress, and cancelled tasks?')) return;\n  fetch(TB_BASE+'/api/v1/board/tasks/purge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({statuses:['pending','in_progress','cancelled']})})\n    .then(function(r){return r.json();})\n    .then(function(d){\n      document.getElementById('tb-status').textContent='Cleared '+d.deleted+' task'+(d.deleted!==1?'s':'');\n      loadBoard();\n    })\n    .catch(function(e){document.getElementById('tb-status').textContent='Clear failed: '+e.message;});\n}\nsetTimeout(loadBoard,300);\nsetInterval(loadBoard,15000);\n</script>",
         "mode": "html"
       },
       "title": "Task Board",
       "type": "text"
+    },
+    {
+      "id": 9300,
+      "title": "AI Activity Monitor",
+      "type": "text",
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "options": {
+        "content": "<div style=\"font-family:monospace;background:#0d1117;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">\ud83e\udd16 AI Activity \u2014 Live</span>\n  <div style=\"display:flex;gap:8px;align-items:center\">\n    <span id=\"act-dot\" style=\"font-size:14px;color:#374151\" title=\"Idle\">\u25cf</span>\n    <span id=\"act-time\" style=\"color:#4b5563;font-size:10px\"></span>\n    <button onclick=\"loadActivity()\" style=\"background:#1f2937;color:#9ca3af;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n  </div>\n</div>\n<div id=\"act-body\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar ACT_BASE='[[brain_url]]';\nfunction actAgo(iso){\n  var d=new Date(iso),now=new Date(),s=Math.floor((now-d)/1000);\n  if(s<60) return s+'s ago';\n  if(s<3600) return Math.floor(s/60)+'m ago';\n  if(s<86400) return Math.floor(s/3600)+'h ago';\n  return Math.floor(s/86400)+'d ago';\n}\nfunction loadActivity(){\n  fetch(ACT_BASE+'/api/v1/board/activity',{cache:'no-store'})\n    .then(function(r){return r.json();})\n    .then(function(data){\n      var dot=document.getElementById('act-dot');\n      var body=document.getElementById('act-body');\n      document.getElementById('act-time').textContent=new Date().toLocaleTimeString();\n      var html='';\n      if(data.in_progress&&data.in_progress.length){\n        dot.style.color='#fbbf24';dot.title='Active';\n        html+='<div style=\"margin-bottom:10px\">';\n        html+='<div style=\"color:#fbbf24;font-size:10px;font-weight:bold;margin-bottom:6px;letter-spacing:0.05em\">\u26a1 IN PROGRESS</div>';\n        data.in_progress.forEach(function(t){\n          html+='<div style=\"background:#1a1a2e;border:1px solid #2a2a4a;border-left:3px solid #fbbf24;padding:8px;margin-bottom:6px;border-radius:4px\">';\n          html+='<div style=\"display:flex;justify-content:space-between;align-items:center\">';\n          html+='<span style=\"color:#e2e8f0;font-size:12px;font-weight:bold\">#'+t.id+' '+(t.title||'')+'</span>';\n          html+='<span style=\"color:#4b5563;font-size:10px\">'+actAgo(t.updated_at)+'</span>';\n          html+='</div>';\n          if(t.description){var desc=(t.description||'').substring(0,140);html+='<div style=\"color:#9ca3af;font-size:10px;margin-top:4px\">'+desc+(desc.length>=140?'\u2026':'')+'</div>';}\n          html+='</div>';\n        });\n        html+='</div>';\n      } else {\n        dot.style.color='#374151';dot.title='Idle';\n        html+='<div style=\"color:#4b5563;font-size:12px;padding:8px;text-align:center;border:1px dashed #1f2937;border-radius:4px;margin-bottom:10px\">\ud83d\udca4 No active tasks \u2014 idle</div>';\n      }\n      if(data.recent_milestones&&data.recent_milestones.length){\n        html+='<div style=\"margin-bottom:8px\">';\n        html+='<div style=\"color:#6b7280;font-size:10px;font-weight:bold;margin-bottom:4px;letter-spacing:0.05em\">RECENT STEPS</div>';\n        var milColors={shell:['#1a3a2a','#4caf50'],code:['#1a2a3a','#42a5f5'],write:['#2a1a3a','#ce93d8'],email:['#3a2a1a','#ffa726'],task:['#1a2a1a','#86efac']};\n        data.recent_milestones.forEach(function(m){\n          var action=m.action||'';\n          var key=Object.keys(milColors).find(function(k){return action.startsWith(k);})||'';\n          var col=key?milColors[key]:['#222','#9ca3af'];\n          html+='<div style=\"display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #111\">';\n          html+='<span style=\"background:'+col[0]+';color:'+col[1]+';font-size:9px;padding:1px 5px;border-radius:2px;white-space:nowrap;min-width:60px;text-align:center\">'+action+'</span>';\n          html+='<span style=\"color:#d1d5db;font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+(m.summary||m.intent||'')+'</span>';\n          html+='<span style=\"color:#4b5563;font-size:9px;white-space:nowrap\">'+actAgo(m.triggered_at)+'</span>';\n          html+='</div>';\n        });\n        html+='</div>';\n      }\n      if(data.pending_next&&data.pending_next.length){\n        html+='<div>';\n        html+='<div style=\"color:#6b7280;font-size:10px;font-weight:bold;margin-bottom:4px;letter-spacing:0.05em\">NEXT IN QUEUE</div>';\n        data.pending_next.forEach(function(t){\n          html+='<div style=\"display:flex;align-items:center;gap:6px;padding:3px 0\">';\n          html+='<span style=\"color:#6b7280;font-size:10px\">#'+t.id+'</span>';\n          html+='<span style=\"color:#9ca3af;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+(t.title||'')+'</span>';\n          html+='<span style=\"color:#fb923c;font-size:9px\">P'+(t.priority_num||3)+'</span>';\n          html+='</div>';\n        });\n        html+='</div>';\n      }\n      body.innerHTML=html||'<div style=\"color:#4b5563;font-size:11px\">No data</div>';\n    })\n    .catch(function(e){document.getElementById('act-body').innerHTML='<div style=\"color:#f87171;font-size:11px\">Error: '+e.message+'</div>';});\n}\nloadActivity();\nsetInterval(loadActivity,5000);\n</script>",
+        "mode": "html"
+      },
+      "transparent": false
     },
     {
       "id": 9200,
@@ -832,7 +848,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 64
       },
       "options": {
         "mode": "html",
@@ -849,7 +865,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 60
+        "y": 74
       }
     },
     {
@@ -860,7 +876,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 61
+        "y": 75
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -913,7 +929,7 @@
         "h": 8,
         "w": 12,
         "x": 6,
-        "y": 61
+        "y": 75
       },
       "datasource": {
         "type": "prometheus",
@@ -970,7 +986,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 61
+        "y": 75
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -1006,7 +1022,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 69
+        "y": 83
       }
     },
     {
@@ -1017,7 +1033,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 70
+        "y": 84
       },
       "datasource": {
         "type": "prometheus",
@@ -1050,7 +1066,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 70
+        "y": 84
       },
       "datasource": {
         "type": "prometheus",
@@ -1082,7 +1098,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 78
+        "y": 92
       },
       "datasource": {
         "type": "prometheus",
@@ -1138,7 +1154,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 78
+        "y": 92
       },
       "datasource": {
         "type": "prometheus",
@@ -1194,7 +1210,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 78
+        "y": 92
       },
       "datasource": {
         "type": "prometheus",
@@ -1248,7 +1264,7 @@
       "title": "Redis Hit Rate",
       "gridPos": {
         "x": 18,
-        "y": 78,
+        "y": 92,
         "h": 4,
         "w": 6
       },
@@ -1312,7 +1328,7 @@
       "title": "Network I/O \u2014 Inbound (KB/s)",
       "gridPos": {
         "x": 0,
-        "y": 82,
+        "y": 96,
         "h": 6,
         "w": 12
       },
@@ -1359,7 +1375,7 @@
       "title": "Network I/O \u2014 Outbound (KB/s)",
       "gridPos": {
         "x": 12,
-        "y": 82,
+        "y": 96,
         "h": 6,
         "w": 12
       },
@@ -1409,7 +1425,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 88
+        "y": 102
       }
     },
     {
@@ -1420,7 +1436,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 103
       },
       "datasource": {
         "type": "loki",
@@ -1451,7 +1467,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 99
+        "y": 113
       },
       "datasource": {
         "type": "loki",
@@ -1480,7 +1496,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 99
+        "y": 113
       },
       "datasource": {
         "type": "loki",
@@ -1510,7 +1526,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 108
+        "y": 122
       }
     },
     {
@@ -1521,7 +1537,7 @@
         "h": 7,
         "w": 10,
         "x": 0,
-        "y": 109
+        "y": 123
       },
       "options": {
         "mode": "html",
@@ -1536,7 +1552,7 @@
         "h": 7,
         "w": 14,
         "x": 10,
-        "y": 109
+        "y": 123
       },
       "options": {
         "mode": "html",
@@ -1551,7 +1567,7 @@
         "h": 20,
         "w": 24,
         "x": 0,
-        "y": 116
+        "y": 130
       },
       "options": {
         "mode": "html",
