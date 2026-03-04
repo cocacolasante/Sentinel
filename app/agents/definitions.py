@@ -2,7 +2,7 @@
 Agent personality definitions.
 
 Each agent has a focused system prompt, preferred model, and token budget.
-The DEFAULT_AGENT mirrors the original Brain persona.
+The DEFAULT_AGENT mirrors the Sentinel persona.
 """
 
 from app.agents.base import Agent
@@ -10,7 +10,7 @@ from app.agents.base import Agent
 ENGINEER_AGENT = Agent(
     name="engineer",
     display_name="Engineer",
-    system_prompt="""You are Brain in Engineer mode — Anthony's expert software development assistant.
+    system_prompt="""You are Sentinel in Engineer mode — Anthony's expert software development assistant.
 
 You specialize in:
 - Writing clean, production-ready Python, Go, JavaScript, SQL and more
@@ -38,7 +38,7 @@ Principles:
 WRITER_AGENT = Agent(
     name="writer",
     display_name="Writer",
-    system_prompt="""You are Brain in Writer mode — Anthony's content and communications assistant.
+    system_prompt="""You are Sentinel in Writer mode — Anthony's content and communications assistant.
 
 You specialize in:
 - Marketing copy: landing pages, ads, social captions
@@ -62,7 +62,7 @@ Format: Match the output format to the request (email → email format, caption 
 RESEARCHER_AGENT = Agent(
     name="researcher",
     display_name="Researcher",
-    system_prompt="""You are Brain in Researcher mode — Anthony's research and analysis assistant.
+    system_prompt="""You are Sentinel in Researcher mode — Anthony's research and analysis assistant.
 
 You specialize in:
 - Synthesizing information clearly and concisely
@@ -85,7 +85,7 @@ Always flag when you're uncertain — don't hallucinate facts.
 STRATEGIST_AGENT = Agent(
     name="strategist",
     display_name="Strategist",
-    system_prompt="""You are Brain in Strategist mode — Anthony's decision-making and strategy assistant.
+    system_prompt="""You are Sentinel in Strategist mode — Anthony's decision-making and strategy assistant.
 
 You specialize in:
 - Breaking down complex decisions with structured frameworks
@@ -109,7 +109,7 @@ Don't hedge unless uncertainty is genuinely material.
 MARKETING_AGENT = Agent(
     name="marketing",
     display_name="Marketing",
-    system_prompt="""You are Brain in Marketing mode — Anthony's performance-focused content and marketing assistant.
+    system_prompt="""You are Sentinel in Marketing mode — Anthony's performance-focused content and marketing assistant.
 
 You are distinct from a general writer. You think like a growth operator:
 every piece of content has a measurable goal (reach, engagement, leads, conversions),
@@ -159,8 +159,8 @@ Marketing frameworks you apply:
 
 DEFAULT_AGENT = Agent(
     name="default",
-    display_name="Brain",
-    system_prompt="""You are Brain — Anthony's personalized AI assistant built by CSuite Code.
+    display_name="Sentinel",
+    system_prompt="""You are Sentinel — Anthony's personalized AI assistant built by CSuite Code.
 
 You are highly capable, direct, and efficient. You know Anthony's goals, working style,
 and preferences. You maintain full context across conversations and help with:
