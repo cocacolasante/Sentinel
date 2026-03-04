@@ -58,6 +58,17 @@ async def chat(req: ChatRequest) -> ChatResponse:
     )
 
 
+@router.get("/chat/followup/{session_id}")
+async def poll_followup(session_id: str):
+    """
+    Long-poll endpoint for the Grafana chat panel.
+    Returns the next queued follow-up message (and removes it), or null if none.
+    The panel calls this repeatedly after a send to catch async replies.
+    """
+    msg = memory.pop_followup(session_id)
+    return {"message": msg}
+
+
 @router.delete("/chat/{session_id}")
 async def clear_session(session_id: str):
     """Clear conversation history and any pending actions for a session."""

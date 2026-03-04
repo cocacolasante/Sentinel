@@ -169,3 +169,15 @@ class RedisMemory:
         """Return {channel, thread_ts} for the session, or None if not set."""
         raw = self.client.get(f"slack_ctx:{session_id}")
         return json.loads(raw) if raw else None
+
+    # ── Chat follow-up queue (async replies back to Grafana/REST chat) ─────────
+
+    def push_followup(self, session_id: str, message: str) -> None:
+        """Queue a follow-up message for a chat session (TTL 10 min)."""
+        key = f"chat_followup:{session_id}"
+        self.client.rpush(key, message)
+        self.client.expire(key, 600)
+
+    def pop_followup(self, session_id: str) -> str | None:
+        """Pop and return the oldest queued follow-up, or None if empty."""
+        return self.client.lpop(f"chat_followup:{session_id}")
