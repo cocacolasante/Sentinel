@@ -5,7 +5,7 @@
   "timezone": "browser",
   "refresh": "10s",
   "time": {
-    "from": "now-3h",
+    "from": "now-1h",
     "to": "now"
   },
   "schemaVersion": 39,
@@ -104,7 +104,9 @@
             ]
           }
         }
-      }
+      },
+      "interval": "5s",
+      "maxDataPoints": 1000
     },
     {
       "id": 2,
@@ -158,7 +160,9 @@
             ]
           }
         }
-      }
+      },
+      "interval": "5s",
+      "maxDataPoints": 1000
     },
     {
       "id": 3,
@@ -212,7 +216,9 @@
             ]
           }
         }
-      }
+      },
+      "interval": "5s",
+      "maxDataPoints": 1000
     },
     {
       "id": 4,
@@ -258,7 +264,9 @@
             ]
           }
         }
-      }
+      },
+      "interval": "5s",
+      "maxDataPoints": 1000
     },
     {
       "id": 5,
@@ -278,12 +286,14 @@
         {
           "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))",
           "legendFormat": "total req/s",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
           "expr": "sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m]))",
           "legendFormat": "errors/s",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -312,7 +322,9 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "interval": "5s",
+      "maxDataPoints": 1000
     },
     {
       "id": 6,
@@ -332,17 +344,20 @@
         {
           "expr": "histogram_quantile(0.50, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000",
           "legendFormat": "p50",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
           "expr": "histogram_quantile(0.95, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000",
           "legendFormat": "p95",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         },
         {
           "expr": "histogram_quantile(0.99, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000",
           "legendFormat": "p99",
-          "refId": "C"
+          "refId": "C",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -386,7 +401,8 @@
         {
           "expr": "brain_cost_usd_daily",
           "legendFormat": "spent today",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -445,7 +461,8 @@
           "expr": "sum by(model) (brain_llm_cost_usd_total)",
           "legendFormat": "{{model}}",
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "interval": "5s"
         }
       ],
       "options": {
@@ -477,7 +494,8 @@
         {
           "expr": "sum by(model, direction) (rate(brain_llm_tokens_total[1m]) * 60)",
           "legendFormat": "{{model}} {{direction}}",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -512,7 +530,8 @@
         {
           "expr": "sum by(agent) (rate(brain_llm_requests_total[5m]))",
           "legendFormat": "{{agent}}",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -547,12 +566,14 @@
         {
           "expr": "brain_cost_usd_daily",
           "legendFormat": "spent USD",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
           "expr": "brain_cost_ceiling_usd",
           "legendFormat": "ceiling USD",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -648,7 +669,8 @@
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='pending'",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "title": "Pending Tasks",
@@ -701,7 +723,8 @@
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='in_progress'",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "title": "In Progress",
@@ -754,7 +777,8 @@
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='done'",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "title": "Completed Tasks",
@@ -807,7 +831,8 @@
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status NOT IN ('done','cancelled') AND priority_num >= 4",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "title": "High Priority Open",
@@ -891,7 +916,8 @@
           "queryType": "issues",
           "projectIds": [],
           "query": "is:unresolved",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -943,12 +969,14 @@
         {
           "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) * 60",
           "legendFormat": "5xx errors/min",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
           "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) * 60",
           "legendFormat": "4xx errors/min",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1002,7 +1030,8 @@
           "projectIds": [],
           "query": "is:unresolved",
           "limit": 5,
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -1047,7 +1076,8 @@
         {
           "expr": "sum by(name) (rate(container_cpu_usage_seconds_total{name=~\"(ai|brain)-.+\",container!=\"\"}[1m])) * 100",
           "legendFormat": "{{name}}",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1080,7 +1110,8 @@
         {
           "expr": "sum by(name) (container_memory_usage_bytes{name=~\"(ai|brain)-.+\",container!=\"\"}) / 1024 / 1024",
           "legendFormat": "{{name}}",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -1112,7 +1143,8 @@
         {
           "expr": "node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"}",
           "legendFormat": "available",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -1168,7 +1200,8 @@
         {
           "expr": "redis_memory_used_bytes",
           "legendFormat": "used",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -1224,7 +1257,8 @@
         {
           "expr": "pg_stat_activity_count",
           "legendFormat": "connections",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -1322,7 +1356,8 @@
             "uid": "prometheus"
           },
           "expr": "100 * rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]) > 0 or vector(1))",
-          "legendFormat": "Hit Rate %"
+          "legendFormat": "Hit Rate %",
+          "interval": "5s"
         }
       ]
     },
@@ -1369,7 +1404,8 @@
             "uid": "prometheus"
           },
           "expr": "sum by(name) (rate(container_network_receive_bytes_total{name=~\"(ai|brain)-.+\"}[1m])) / 1024",
-          "legendFormat": "{{name}}"
+          "legendFormat": "{{name}}",
+          "interval": "5s"
         }
       ]
     },
@@ -1416,7 +1452,8 @@
             "uid": "prometheus"
           },
           "expr": "sum by(name) (rate(container_network_transmit_bytes_total{name=~\"(ai|brain)-.+\"}[1m])) / 1024",
-          "legendFormat": "{{name}}"
+          "legendFormat": "{{name}}",
+          "interval": "5s"
         }
       ]
     },
@@ -1459,12 +1496,14 @@
         {
           "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes",
           "legendFormat": "Used %",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
           "expr": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
           "legendFormat": "Available %",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         }
       ]
     },
@@ -1507,12 +1546,14 @@
         {
           "expr": "sum(rate(node_disk_read_bytes_total[1m])) / 1024",
           "legendFormat": "Read KB/s",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
           "expr": "sum(rate(node_disk_written_bytes_total[1m])) / 1024",
           "legendFormat": "Write KB/s",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         }
       ]
     },
@@ -1546,7 +1587,8 @@
         {
           "expr": "{job=\"docker\"} | json | line_format \"{{.container_name}} | {{.message}}\"",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -1577,7 +1619,8 @@
         {
           "expr": "{job=\"docker\"} |~ \"(?i)(error|exception|traceback|critical|warning)\"",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -1606,7 +1649,8 @@
         {
           "expr": "{job=\"docker\"} |= \"celery\" | json",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
