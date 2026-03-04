@@ -158,6 +158,9 @@ Routing guidance:
   - "install packages", "pip install", "npm install", "apt install" → server_shell
   - "show me the logs", "tail the logs", "check server logs" → server_shell
   - "what's running", "ps aux", "top", "htop", "check memory / disk" → server_shell
+  - "git status", "what's changed", "check git", "show git status", "any uncommitted changes", "check your workspace" → server_shell with command="cd /root/sentinel-workspace && git status"
+  - "git log", "show commits", "last N commits", "recent commits", "commit history" → server_shell with command="cd /root/sentinel-workspace && git log --oneline -10"
+  - "git diff", "show changes", "what did you change", "show me the diff" → server_shell with command="cd /root/sentinel-workspace && git diff"
   - "push to github", "git push", "push the code", "push changes", "push commits" → server_shell with command="cd /root/sentinel-workspace && git push origin HEAD"
   - "git commit", "commit the changes", "commit all changes" → server_shell with command="cd /root/sentinel-workspace && git add -A && git commit -m '<message>'"
   - "git pull", "pull latest", "pull from github" → server_shell with command="cd /root/sentinel-workspace && git pull"
