@@ -116,6 +116,28 @@ if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
 
 _SPINNER_ENABLED = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
 
+# ── Deferred-response detection ───────────────────────────────────────────────
+# Patterns that indicate the brain promised to do something but didn't actually
+# return results yet.  cmd_chat will auto-follow-up when these are detected.
+
+_DEFERRED_RE = re.compile(
+    r"running (this|both|all|these|it|now|the command)"
+    r"|one moment"
+    r"|stand by"
+    r"|will report back"
+    r"|give me a (moment|second|sec)"
+    r"|working on it"
+    r"|let me (run|do|execute|check|create|try)"
+    r"|i('ll| will) (run|do|execute|check|create|fix|apply|make)",
+    re.IGNORECASE,
+)
+
+# The brain showed shell commands as literal text instead of executing them
+_BASH_BLOCK_RE = re.compile(r"```\s*(bash|sh|shell|zsh)\s*\n", re.IGNORECASE)
+
+_MAX_FOLLOWUPS   = 3
+_FOLLOWUP_MSG    = "execute all the commands above and show me the exact output"
+
 class _Spinner:
     """Animated terminal spinner with phase labels, runs in a background thread."""
 
@@ -363,7 +385,7 @@ def _pick_session() -> str:
     print()
 
     try:
-        choice = input(f"{C.CYAN}Pick a session (1–{len(sessions)}, or n for new):{C.RESET} ").strip().lower()
+        choice = input(f"\001{C.CYAN}\002Pick a session (1–{len(sessions)}, or n for new):\001{C.RESET}\002 ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         print()
         sys.exit(0)
@@ -427,9 +449,25 @@ def _sep() -> None:
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 
-def cmd_chat(message: str, session_id: str) -> None:
+def _is_deferred(reply: str, intent: str) -> bool:
+    """
+    Return True if the brain promised to do something but didn't return actual
+    results — i.e., it needs a follow-up to actually execute.
+
+    Signals:
+      1. Reply contains a 'will do' / 'running now' phrase.
+      2. Reply contains a ```bash block (LLM showed commands instead of running them).
+    """
+    if _DEFERRED_RE.search(reply):
+        return True
+    if _BASH_BLOCK_RE.search(reply):
+        return True
+    return False
+
+
+def _fetch_reply(message: str, session_id: str) -> tuple[dict, float]:
+    """POST to /api/v1/chat with spinner, return (result_dict, elapsed_seconds)."""
     result: dict = {}
-    width = _term_width()
 
     def _fetch() -> None:
         data = _api("POST", "/api/v1/chat", {"message": message, "session_id": session_id})
@@ -446,7 +484,7 @@ def cmd_chat(message: str, session_id: str) -> None:
         except KeyboardInterrupt:
             spinner.stop()
             print(f"\n{C.YELLOW}Cancelled.{C.RESET}\n")
-            return
+            return {}, 0.0
         elapsed = spinner.stop()
     else:
         t0 = time.time()
@@ -454,6 +492,13 @@ def cmd_chat(message: str, session_id: str) -> None:
         thread.join()
         elapsed = time.time() - t0
 
+    return result, elapsed
+
+
+def cmd_chat(message: str, session_id: str) -> None:
+    width = _term_width()
+
+    result, elapsed = _fetch_reply(message, session_id)
     if not _ok(result):
         return
 
@@ -461,16 +506,43 @@ def cmd_chat(message: str, session_id: str) -> None:
     intent = result.get("intent", "chat")
     agent  = result.get("agent", "default")
 
+    # ── Auto-follow-up loop ───────────────────────────────────────────────────
+    # If the brain returned a "will do it" response instead of actual results,
+    # automatically send a follow-up to get the real output.
+    followups = 0
+    while followups < _MAX_FOLLOWUPS and _is_deferred(reply, intent):
+        followups += 1
+        sep_dim = f"{C.DIM}{'─' * min(width - 1, 72)}{C.RESET}"
+        print(
+            f"\n{C.YELLOW}{C.BOLD}◆{C.RESET} {C.DIM}Brain deferred — following up "
+            f"({followups}/{_MAX_FOLLOWUPS})...{C.RESET}"
+        )
+        print(sep_dim)
+        followup_result, followup_elapsed = _fetch_reply(_FOLLOWUP_MSG, session_id)
+        if not _ok(followup_result):
+            break
+        elapsed += followup_elapsed
+        reply   = followup_result.get("reply", reply)
+        intent  = followup_result.get("intent", intent)
+        agent   = followup_result.get("agent", agent)
+        result  = followup_result
+
     sep = f"{C.DIM}{'─' * min(width - 1, 72)}{C.RESET}"
     agent_tag = (
         f"  {C.DIM}via {agent}{C.RESET}"
         if agent and agent not in ("default", "")
         else ""
     )
+    followup_tag = (
+        f"  {C.DIM}+{followups} follow-up{'s' if followups > 1 else ''}{C.RESET}"
+        if followups
+        else ""
+    )
     print(
         f"\n{C.GREEN}{C.BOLD}◆{C.RESET} {C.BOLD}Brain{C.RESET}  "
         f"{C.DIM}[{intent}]{C.RESET}"
         f"{agent_tag}"
+        f"{followup_tag}"
         f"  {C.DIM}{elapsed:.1f}s{C.RESET}"
     )
     print(sep)
@@ -989,9 +1061,14 @@ def repl(session_id: str) -> None:
     print("  ".join(footer_parts))
     print(f"{C.DIM}{'─' * min(width - 1, 72)}{C.RESET}\n")
 
+    # Wrap ANSI codes in \001/\002 so readline knows they are zero-width.
+    # Without these markers readline miscounts the prompt length, causing
+    # typed text to wrap back to column 0 and overwrite itself.
+    _rl_prompt = "\001" + C.GREEN + "\002>\001" + C.RESET + "\002 "
+
     while True:
         try:
-            line = input(f"{C.GREEN}>{C.RESET} ").strip()
+            line = input(_rl_prompt).strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break

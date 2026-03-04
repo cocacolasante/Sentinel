@@ -52,6 +52,20 @@ celery_app.conf.update(
 
     # Queues
     task_default_queue      = "celery",
+
+    # Task routing — workspace tasks go to a dedicated single-concurrency queue
+    # to prevent simultaneous writes to /root/sentinel-workspace (merge conflicts).
+    # Non-workspace tasks go to tasks_general (concurrency=3).
+    task_routes = {
+        "app.worker.tasks.execute_board_task": {
+            # Routing happens dynamically at call-time via .apply_async(queue=...)
+            # This entry is a fallback; the skill chooses the queue based on commands.
+            "queue": "tasks_general",
+        },
+        "app.worker.tasks.run_shell_and_report_back": {
+            "queue": "tasks_general",
+        },
+    },
 )
 
 celery_app.conf.beat_schedule = {

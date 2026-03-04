@@ -62,6 +62,7 @@ class TaskCreateSkill(BaseSkill):
     approval_category = ApprovalCategory.NONE  # DB insert — no external side-effects
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
+        import json as _json
         from app.db import postgres
 
         title          = (params.get("title") or "").strip()
@@ -72,6 +73,24 @@ class TaskCreateSkill(BaseSkill):
         source         = params.get("source", "brain")
         tags           = params.get("tags") or None
         assigned_to    = params.get("assigned_to") or None
+        session_id     = (params.get("session_id") or "").strip()
+
+        # Background execution fields
+        raw_commands = params.get("commands") or []
+        if isinstance(raw_commands, str):
+            try:
+                raw_commands = _json.loads(raw_commands)
+            except Exception:
+                raw_commands = [raw_commands]
+        commands: list[str] = [c for c in raw_commands if c and c.strip()]
+
+        # Auto-detect queue: workspace tasks serialised, everything else parallel
+        from app.worker.tasks import _touches_workspace
+        uses_workspace  = _touches_workspace(commands)
+        execution_queue = "tasks_workspace" if uses_workspace else "tasks_general"
+        # Allow explicit override
+        if params.get("execution_queue"):
+            execution_queue = params["execution_queue"]
 
         if not title:
             return SkillResult(
@@ -83,30 +102,72 @@ class TaskCreateSkill(BaseSkill):
             )
 
         priority_text = _PRIORITY_TO_TEXT[priority_num]
+        commands_json = _json.dumps(commands)
+
+        # Look up stored Slack context so the task can report back
+        slack_channel = slack_thread_ts = None
+        if session_id:
+            try:
+                from app.memory.redis_client import RedisMemory
+                ctx = RedisMemory().get_slack_context(session_id)
+                if ctx:
+                    slack_channel   = ctx.get("channel")
+                    slack_thread_ts = ctx.get("thread_ts")
+            except Exception:
+                pass
 
         try:
             row = postgres.execute_one(
                 """
                 INSERT INTO tasks
                     (title, description, status, priority, priority_num, approval_level,
-                     due_date, source, tags, assigned_to)
-                VALUES (%s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s)
+                     due_date, source, tags, assigned_to,
+                     commands, execution_queue, slack_channel, slack_thread_ts, session_id)
+                VALUES (%s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s,
+                        %s::jsonb, %s, %s, %s, %s)
                 RETURNING id, title, status, priority, priority_num, approval_level,
                           due_date, source, tags, assigned_to, created_at
                 """,
                 (
                     title, description, priority_text, priority_num, approval_level,
                     due_date, source, tags, assigned_to,
+                    commands_json, execution_queue, slack_channel, slack_thread_ts, session_id or None,
                 ),
             )
-            context = (
-                "Task created successfully!\n\n"
-                + _fmt_task(row)
-                + f"\n\nTask ID: #{row['id']} | Created: {str(row['created_at'])[:19]}"
-            )
         except Exception as exc:
-            context = f"[task_create failed: {exc}]"
+            return SkillResult(context_data=f"[task_create failed: {exc}]", skill_name=self.name)
 
+        queue_note = ""
+        celery_id  = None
+
+        # Auto-queue if commands were provided
+        if commands:
+            try:
+                from app.worker.tasks import execute_board_task
+                result = execute_board_task.apply_async(
+                    args=[row["id"]],
+                    queue=execution_queue,
+                )
+                celery_id = result.id
+                postgres.execute(
+                    "UPDATE tasks SET celery_task_id=%s WHERE id=%s",
+                    (celery_id, row["id"]),
+                )
+                lock_note = " (serialised — workspace lock acquired when it starts)" if uses_workspace else ""
+                queue_note = (
+                    f"\n🔄 Queued on `{execution_queue}`{lock_note} — "
+                    f"Celery ID `{celery_id[:8]}…`  "
+                    "I'll post the result back to this thread when done."
+                )
+            except Exception as exc:
+                queue_note = f"\n⚠️ Task created but could not queue: {exc}"
+
+        context = (
+            "Task created successfully!\n\n"
+            + _fmt_task(row)
+            + f"\n\nTask ID: #{row['id']} | Created: {str(row['created_at'])[:19]}"
+            + queue_note
+        )
         return SkillResult(context_data=context, skill_name=self.name)
 
 

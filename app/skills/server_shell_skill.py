@@ -146,8 +146,10 @@ class ServerShellSkill(BaseSkill):
         return True   # always available — no external credentials required
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
-        action  = (params.get("action") or "").strip().lower()
-        cwd     = (params.get("cwd") or _DEFAULT_CWD).rstrip("/") or _DEFAULT_CWD
+        action     = (params.get("action") or "").strip().lower()
+        cwd        = (params.get("cwd") or _DEFAULT_CWD).rstrip("/") or _DEFAULT_CWD
+        background = str(params.get("background", "false")).lower() in ("true", "1", "yes")
+        session_id = (params.get("session_id") or "").strip()
 
         # ── Convenience actions (no raw command needed) ────────────────────────
         if action == "read_file":
@@ -258,6 +260,34 @@ class ServerShellSkill(BaseSkill):
                 pending_action=pending,
                 skill_name=self.name,
             )
+
+        # Background mode — queue via Celery and return immediately
+        if background and session_id:
+            slack_ctx = None
+            try:
+                from app.memory.redis_client import RedisMemory
+                slack_ctx = RedisMemory().get_slack_context(session_id)
+            except Exception:
+                pass
+
+            if slack_ctx:
+                from app.worker.tasks import run_shell_and_report_back
+                run_shell_and_report_back.delay(
+                    commands=[command],
+                    channel=slack_ctx["channel"],
+                    thread_ts=slack_ctx["thread_ts"],
+                    cwd=cwd,
+                    label=action or "shell command",
+                )
+                return SkillResult(
+                    context_data=(
+                        f"Background task queued.\n"
+                        f"Command: `{command}`\n"
+                        f"Working directory: `{cwd}`\n"
+                        "I'll post the result back to this Slack thread when it completes."
+                    ),
+                    skill_name=self.name,
+                )
 
         # Safe command — execute immediately
         output, code = await _run_command(command, cwd)

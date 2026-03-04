@@ -119,3 +119,53 @@ class RedisMemory:
     def set_approval_level(self, level: int) -> None:
         """Persist global approval level (1-3, no TTL — permanent until changed)."""
         self.client.set(self._APPROVAL_KEY, str(max(1, min(3, level))))
+
+    # ── Slack context (channel + thread for report-back) ──────────────────────
+
+    # ── Workspace lock (serialises sentinel-workspace access) ─────────────────
+
+    _WORKSPACE_LOCK_KEY = "lock:sentinel_workspace"
+    _WORKSPACE_LOCK_TTL = 600   # 10 min max hold time — hard ceiling per task
+
+    def acquire_workspace_lock(self, holder_id: str) -> bool:
+        """
+        Try to acquire the exclusive sentinel-workspace lock.
+        Returns True if the lock was acquired (SET NX succeeded).
+        `holder_id` is the Celery task ID — stored so we can identify who holds it.
+        """
+        return bool(
+            self.client.set(
+                self._WORKSPACE_LOCK_KEY,
+                holder_id,
+                nx=True,
+                ex=self._WORKSPACE_LOCK_TTL,
+            )
+        )
+
+    def release_workspace_lock(self, holder_id: str) -> bool:
+        """
+        Release the lock ONLY if still held by `holder_id`.
+        Uses a Lua script for an atomic check-and-delete.
+        """
+        script = (
+            "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            "  return redis.call('del', KEYS[1]) "
+            "else return 0 end"
+        )
+        return bool(self.client.eval(script, 1, self._WORKSPACE_LOCK_KEY, holder_id))
+
+    def get_workspace_lock_holder(self) -> str | None:
+        """Return the holder_id of whoever currently holds the workspace lock, or None."""
+        return self.client.get(self._WORKSPACE_LOCK_KEY)
+
+    # ── Slack context (channel + thread for report-back) ──────────────────────
+
+    def set_slack_context(self, session_id: str, channel: str, thread_ts: str) -> None:
+        """Store the Slack channel + thread_ts for the current turn (5-min TTL)."""
+        key = f"slack_ctx:{session_id}"
+        self.client.setex(key, 300, json.dumps({"channel": channel, "thread_ts": thread_ts}))
+
+    def get_slack_context(self, session_id: str) -> dict | None:
+        """Return {channel, thread_ts} for the session, or None if not set."""
+        raw = self.client.get(f"slack_ctx:{session_id}")
+        return json.loads(raw) if raw else None

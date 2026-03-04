@@ -274,6 +274,7 @@ class Dispatcher:
         skill   = self.skills.get(intent)
         sk_t0   = time.monotonic()
         try:
+            params["session_id"] = session_id   # lets background skills post back to Slack
             result = await skill.execute(params, message)
         except Exception as exc:
             _capture_error(exc, context={"intent": intent, "skill": skill.name, "session_id": session_id})
