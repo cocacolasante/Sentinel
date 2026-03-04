@@ -44,6 +44,11 @@ scrape_configs:
     static_configs:
       - targets: ["node-exporter:9100"]
 
+  # cAdvisor — per-container CPU, memory, network metrics
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
   # Prometheus self-metrics
   - job_name: prometheus
     static_configs:

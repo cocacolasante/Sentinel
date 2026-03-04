@@ -1041,7 +1041,7 @@
       },
       "targets": [
         {
-          "expr": "sum by(name) (rate(container_cpu_usage_seconds_total{name=~\"ai-.+\"}[1m])) * 100",
+          "expr": "sum by(name) (rate(container_cpu_usage_seconds_total{name=~\"(ai|brain)-.+\",container!=\"\"}[1m])) * 100",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
@@ -1074,7 +1074,7 @@
       },
       "targets": [
         {
-          "expr": "container_memory_usage_bytes{name=~\"ai-.+\"} / 1024 / 1024",
+          "expr": "sum by(name) (container_memory_usage_bytes{name=~\"(ai|brain)-.+\",container!=\"\"}) / 1024 / 1024",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
@@ -1364,7 +1364,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by(name) (rate(container_network_receive_bytes_total{name=~\"ai-.+\"}[1m])) / 1024",
+          "expr": "sum by(name) (rate(container_network_receive_bytes_total{name=~\"(ai|brain)-.+\"}[1m])) / 1024",
           "legendFormat": "{{name}}"
         }
       ]
@@ -1411,8 +1411,104 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by(name) (rate(container_network_transmit_bytes_total{name=~\"ai-.+\"}[1m])) / 1024",
+          "expr": "sum by(name) (rate(container_network_transmit_bytes_total{name=~\"(ai|brain)-.+\"}[1m])) / 1024",
           "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "id": 9110,
+      "title": "Host Memory Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 102
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes",
+          "legendFormat": "Used %",
+          "refId": "A"
+        },
+        {
+          "expr": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+          "legendFormat": "Available %",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 9111,
+      "title": "Disk I/O (KB/s)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 102
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "KBs",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(node_disk_read_bytes_total[1m])) / 1024",
+          "legendFormat": "Read KB/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(node_disk_written_bytes_total[1m])) / 1024",
+          "legendFormat": "Write KB/s",
+          "refId": "B"
         }
       ]
     },
@@ -1425,7 +1521,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 102
+        "y": 118
       }
     },
     {
@@ -1436,7 +1532,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 103
+        "y": 119
       },
       "datasource": {
         "type": "loki",
@@ -1467,7 +1563,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 113
+        "y": 129
       },
       "datasource": {
         "type": "loki",
@@ -1496,7 +1592,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 113
+        "y": 129
       },
       "datasource": {
         "type": "loki",
@@ -1526,7 +1622,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 122
+        "y": 138
       }
     },
     {
@@ -1537,7 +1633,7 @@
         "h": 7,
         "w": 10,
         "x": 0,
-        "y": 123
+        "y": 139
       },
       "options": {
         "mode": "html",
@@ -1552,7 +1648,7 @@
         "h": 7,
         "w": 14,
         "x": 10,
-        "y": 123
+        "y": 139
       },
       "options": {
         "mode": "html",
@@ -1567,7 +1663,7 @@
         "h": 20,
         "w": 24,
         "x": 0,
-        "y": 130
+        "y": 146
       },
       "options": {
         "mode": "html",

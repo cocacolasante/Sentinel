@@ -409,6 +409,24 @@ services:
     networks:
       - brain-net
 
+  # ── cAdvisor (per-container CPU, memory, network metrics) ──────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: ai-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    ports:
+      - "127.0.0.1:8081:8080"
+    networks:
+      - brain-net
+
 networks:
   brain-net:
     driver: bridge
