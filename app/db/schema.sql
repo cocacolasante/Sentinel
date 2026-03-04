@@ -196,6 +196,20 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS approval_level  SMALLINT    DEFAULT 2
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to     TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tags            TEXT;
 
+-- ── Task board: background execution columns ─────────────────────────────────
+-- commands:        ordered list of shell commands to execute (JSONB array of strings)
+-- execution_queue: 'tasks_workspace' (serialised, 1 at a time) or 'tasks_general' (parallel, 3 at a time)
+-- celery_task_id:  Celery task UUID for Flower tracking
+-- slack_channel:   Slack channel ID to post results back to
+-- slack_thread_ts: Slack thread timestamp (message to reply into)
+-- session_id:      originating session (fallback Slack context lookup)
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS commands         JSONB       DEFAULT '[]';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS execution_queue  TEXT        DEFAULT 'tasks_general';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS celery_task_id   TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS slack_channel    TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS slack_thread_ts  TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS session_id       TEXT;
+
 -- ── AI Milestone log ──────────────────────────────────────────────────────────
 -- Every confirmed write action the AI executes is recorded here and posted to
 -- #sentinel-milestones in Slack.

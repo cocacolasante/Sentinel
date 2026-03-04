@@ -101,6 +101,35 @@ def deploy_brain(self, reason: str = "") -> dict:
 
 @celery_app.task(
     bind=True,
+    name="app.worker.tasks.execute_board_task",
+    queue="tasks_general",      # overridden to tasks_workspace at call-time if needed
+    max_retries=0,
+    soft_time_limit=540,        # 9 min soft
+    time_limit=600,             # 10 min hard
+)
+def execute_board_task(self, task_id: int) -> dict:
+    """
+    Execute a task from the task board.
+
+    Workspace guardrail
+    ───────────────────
+    If any command in the task touches /root/sentinel-workspace, this task MUST
+    run on the tasks_workspace queue (concurrency=1) AND hold the Redis workspace
+    lock for the duration. This prevents concurrent writes that would cause merge
+    conflicts.
+
+    Non-workspace tasks run on tasks_general (concurrency=3) with no lock.
+    """
+    try:
+        return asyncio.run(_execute_board_task(self.request.id or str(task_id), task_id))
+    except Exception as exc:
+        logger.error("execute_board_task(%s) crashed: %s", task_id, exc, exc_info=True)
+        _mark_task(task_id, "failed", str(exc))
+        return {"error": str(exc)}
+
+
+@celery_app.task(
+    bind=True,
     name="app.worker.tasks.run_shell_and_report_back",
     queue="celery",
     max_retries=0,
@@ -267,6 +296,156 @@ async def _shell_and_report(
     post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
 
     return {"passed": all_passed, "steps": len(results)}
+
+
+def _touches_workspace(commands: list[str]) -> bool:
+    """Return True if any command references /root/sentinel-workspace."""
+    return any("/root/sentinel-workspace" in (c or "") for c in commands)
+
+
+def _mark_task(task_id: int, status: str, error: str | None = None) -> None:
+    """Update a task board row status synchronously (safe from Celery)."""
+    try:
+        from app.db import postgres
+        postgres.execute(
+            "UPDATE tasks SET status=%s, updated_at=NOW() WHERE id=%s",
+            (status, task_id),
+        )
+        if error:
+            logger.warning("Task #%s marked %s — %s", task_id, status, error[:200])
+    except Exception as exc:
+        logger.warning("Could not update task #%s status: %s", task_id, exc)
+
+
+async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
+    """
+    Core logic for execute_board_task.
+
+    1. Load the task row from the DB (needs commands + slack context).
+    2. If commands touch the workspace, acquire the Redis workspace lock.
+       Retry up to 10 times (every 30s) before giving up.
+    3. Run commands sequentially via _run_command.
+    4. Post results back to the originating Slack thread (if context stored).
+    5. Release the lock and update task status.
+    """
+    import json as _json
+    from app.db import postgres
+    from app.memory.redis_client import RedisMemory
+    from app.integrations.slack_notifier import post_thread_reply_sync
+
+    redis = RedisMemory()
+
+    # ── 1. Load task ──────────────────────────────────────────────────────────
+    row = postgres.execute_one(
+        "SELECT id, title, commands, slack_channel, slack_thread_ts, session_id "
+        "FROM tasks WHERE id = %s",
+        (task_id,),
+    )
+    if not row:
+        return {"error": f"Task #{task_id} not found"}
+
+    title      = row.get("title", f"Task #{task_id}")
+    raw_cmds   = row.get("commands") or []
+    commands: list[str] = (
+        raw_cmds if isinstance(raw_cmds, list)
+        else _json.loads(raw_cmds) if isinstance(raw_cmds, str) else []
+    )
+    channel    = row.get("slack_channel") or ""
+    thread_ts  = row.get("slack_thread_ts") or ""
+    session_id = row.get("session_id") or ""
+
+    # Fall back to session-keyed Slack context if not stored on the task itself
+    if (not channel or not thread_ts) and session_id:
+        ctx = redis.get_slack_context(session_id)
+        if ctx:
+            channel   = ctx.get("channel", "")
+            thread_ts = ctx.get("thread_ts", "")
+
+    if not commands:
+        _mark_task(task_id, "failed", "no commands to execute")
+        return {"error": "no commands"}
+
+    needs_lock = _touches_workspace(commands)
+
+    # ── 2. Acquire workspace lock (workspace tasks only) ──────────────────────
+    if needs_lock:
+        acquired = False
+        for attempt in range(10):
+            if redis.acquire_workspace_lock(celery_task_id):
+                acquired = True
+                break
+            holder = redis.get_workspace_lock_holder()
+            logger.info(
+                "Task #%s waiting for workspace lock (held by %s) — attempt %d/10",
+                task_id, holder, attempt + 1,
+            )
+            await asyncio.sleep(30)
+
+        if not acquired:
+            _mark_task(task_id, "failed", "could not acquire workspace lock after 5 min")
+            if channel and thread_ts:
+                post_thread_reply_sync(
+                    f"⏳ *Task #{task_id} — {title}*\n"
+                    "Could not start — workspace was busy for 5 minutes. "
+                    "The task has been marked failed; create it again to retry.",
+                    channel, thread_ts,
+                )
+            return {"error": "workspace_lock_timeout"}
+
+    # ── 3. Mark in_progress ───────────────────────────────────────────────────
+    _mark_task(task_id, "in_progress")
+
+    # ── 4. Run commands ───────────────────────────────────────────────────────
+    cwd = "/root/sentinel-workspace" if needs_lock else "/root"
+    results: list[str] = []
+    all_passed = True
+
+    for i, cmd in enumerate(commands):
+        cmd = cmd.strip()
+        if not cmd:
+            continue
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=cwd,
+                executable="/bin/bash",
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+            output = (stdout or b"").decode("utf-8", errors="replace")[:1_200].strip()
+            code   = proc.returncode or 0
+        except asyncio.TimeoutError:
+            output, code = "[timed out after 120s]", -1
+        except Exception as exc:
+            output, code = f"[error: {exc}]", -1
+
+        status = "✅" if code == 0 else "❌"
+        snippet = f"```\n{output}\n```" if output else ""
+        results.append(f"{status} *Step {i + 1}:* `{cmd}`\n{snippet}".strip())
+        if code != 0:
+            all_passed = False
+            break
+
+    # ── 5. Release lock ───────────────────────────────────────────────────────
+    if needs_lock:
+        redis.release_workspace_lock(celery_task_id)
+
+    # ── 6. Update task status ─────────────────────────────────────────────────
+    _mark_task(task_id, "done" if all_passed else "failed")
+
+    # ── 7. Report back to Slack ───────────────────────────────────────────────
+    if channel and thread_ts:
+        header = (
+            f"✅ *Task #{task_id} — {title}* — complete"
+            if all_passed
+            else f"❌ *Task #{task_id} — {title}* — failed at step {len(results)}"
+        )
+        divider = "─" * 36
+        body    = f"\n{divider}\n".join(results)
+        post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
+
+    return {"task_id": task_id, "passed": all_passed, "steps": len(results)}
 
 
 def post_alert_sync(text: str) -> None:

@@ -160,9 +160,10 @@ services:
     command: >
       celery -A app.worker.celery_app worker
       --loglevel=info
-      --concurrency=2
+      --concurrency=3
+      --hostname=worker-general@%h
       -E
-      -Q evals,celery
+      -Q evals,celery,tasks_general
     env_file:
       - .env
     environment:
@@ -174,11 +175,40 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      # Docker socket — lets the worker run "docker compose build/up" for self-deploy
       - /var/run/docker.sock:/var/run/docker.sock
-      # Shared workspace volume — same git clone as brain container
       - sentinel-workspace:/root/sentinel-workspace
-      # SSH key — needed for git push/pull
+      - ${HOME}/.ssh:/root/.ssh:ro
+    networks:
+      - brain-net
+    restart: unless-stopped
+
+  # ── Celery Worker — Workspace (concurrency=1, serialises all sentinel-workspace ops) ──
+  # Only ONE task can touch /root/sentinel-workspace at a time.
+  # This prevents concurrent git commits that would cause merge conflicts.
+  celery-worker-workspace:
+    image: ghcr.io/cocacolasante/sentinel:${IMAGE_TAG:-latest}
+    build: .
+    container_name: ai-celery-worker-workspace
+    command: >
+      celery -A app.worker.celery_app worker
+      --loglevel=info
+      --concurrency=1
+      --hostname=worker-workspace@%h
+      -E
+      -Q tasks_workspace
+    env_file:
+      - .env
+    environment:
+      REPO_LOCAL_PATH: /root/sentinel-workspace
+      REPO_WORKSPACE: /root/sentinel-workspace
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sentinel-workspace:/root/sentinel-workspace
       - ${HOME}/.ssh:/root/.ssh:ro
     networks:
       - brain-net
