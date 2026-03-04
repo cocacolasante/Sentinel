@@ -156,9 +156,9 @@ class Settings(BaseSettings):
     repo_workspace:        str = "/workspace/repo"
     repo_ssh_key_path:     str = "/root/.ssh/id_ed25519"
     # Local path of the Brain's own code inside the container.
-    # With Docker bind-mounts (/root/sentinel:/sentinel-project) this is the
-    # live code directory on the host — writes here persist across rebuilds.
-    repo_local_path:       str = "/sentinel-project"
+    # With Docker bind-mounts (/root/sentinel:/root/sentinel-workspace) this is
+    # the live code directory on the host — writes here persist across rebuilds.
+    repo_local_path:       str = "/root/sentinel-workspace"
 
     # ── Autonomy mode ───────────────────────────────────────────
     # When True: ALL pending actions (deploys, git push, file writes, shell

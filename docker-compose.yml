@@ -11,8 +11,10 @@ services:
     env_file:
       - .env
     environment:
-      # Point RepoClient at the bind-mounted live host code
-      REPO_LOCAL_PATH: /sentinel-project
+      # Isolated git workspace — AI clones repo here, commits, and pushes to GitHub.
+      # Changes go live only after CI/CD builds and deploys the new image.
+      REPO_LOCAL_PATH: /root/sentinel-workspace
+      REPO_WORKSPACE: /root/sentinel-workspace
       GH_TOKEN: ${GITHUB_TOKEN}    # enables gh pr create inside container
     volumes:
       # SSH key for git push to GitHub (read-only)
@@ -21,8 +23,8 @@ services:
       - brain-workspace:/workspace
       # Docker socket — lets the brain run docker restart / docker compose
       - /var/run/docker.sock:/var/run/docker.sock
-      # Live host code — AI can read/write/commit/push from inside the container
-      - /root/sentinel:/sentinel-project
+      # Isolated git workspace volume (NOT a bind-mount to /root/sentinel)
+      - sentinel-workspace:/root/sentinel-workspace
     depends_on:
       postgres:
         condition: service_healthy
@@ -164,7 +166,8 @@ services:
     env_file:
       - .env
     environment:
-      REPO_LOCAL_PATH: /sentinel-project
+      REPO_LOCAL_PATH: /root/sentinel-workspace
+      REPO_WORKSPACE: /root/sentinel-workspace
     depends_on:
       redis:
         condition: service_healthy
@@ -173,9 +176,9 @@ services:
     volumes:
       # Docker socket — lets the worker run "docker compose build/up" for self-deploy
       - /var/run/docker.sock:/var/run/docker.sock
-      # Host project dir — gives docker compose access to Dockerfile + source
-      - /root/sentinel:/sentinel-project
-      # SSH key — needed for git pull during deploy
+      # Shared workspace volume — same git clone as brain container
+      - sentinel-workspace:/root/sentinel-workspace
+      # SSH key — needed for git push/pull
       - ${HOME}/.ssh:/root/.ssh:ro
     networks:
       - brain-net
@@ -365,7 +368,7 @@ services:
       GITHUB_USERNAME:       ${GITHUB_USERNAME:-cocacolasante}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /root/sentinel:/sentinel-project
+      - /root/sentinel:/root/sentinel
       - ./deploy:/deploy:ro
       # Bind-mount host docker + docker-compose binaries (read-only)
       - /usr/bin/docker:/usr/bin/docker:ro
@@ -391,3 +394,4 @@ volumes:
   loki_data:
   ha-config:
   brain-workspace:
+  sentinel-workspace:

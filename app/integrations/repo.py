@@ -43,7 +43,7 @@ def _assert_not_protected(path: Path) -> None:
     if resolved == _PROTECTED_DIR or str(resolved).startswith(str(_PROTECTED_DIR) + "/"):
         raise PermissionError(
             f"Access denied: /root/sentinel is a protected path. "
-            f"All file operations must target /sentinel-project."
+            f"All file operations must target /root/sentinel-workspace."
         )
 
 
@@ -98,7 +98,7 @@ class RepoClient:
       Remote mode  — GITHUB_BRAIN_REPO_URL is set.
                      Clone/pull into REPO_WORKSPACE, commit, push to GitHub.
       Local mode   — No remote URL, but REPO_LOCAL_PATH/.git exists.
-                     Read/write/commit directly in the bind-mounted live dir.
+                     Read/write/commit directly in the named-volume workspace.
                      Push still works if the remote is configured in that git repo.
     """
 
