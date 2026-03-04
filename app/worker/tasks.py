@@ -893,6 +893,27 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     if workspace_lock_held:
         redis.release_workspace_lock(celery_task_id)
 
+    # ── Safety push: ensure any file changes reach GitHub to trigger CI/CD ───
+    # Runs after the agent loop regardless of whether the LLM remembered to push.
+    if write_commands_run > 0 and os.path.isdir(os.path.join(code_root, ".git")):
+        try:
+            push_proc = await asyncio.create_subprocess_shell(
+                # Commit any stragglers, then push (no-op if already up to date)
+                f"cd {code_root} && "
+                f"git add -A && "
+                f"(git diff --cached --quiet || git commit -m 'chore: task #{task_id} — final auto-commit') && "
+                f"git push origin HEAD",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                executable="/bin/bash",
+            )
+            push_out, _ = await asyncio.wait_for(push_proc.communicate(), timeout=60)
+            push_log = (push_out or b"").decode("utf-8", errors="replace").strip()
+            logger.info("Task #%s safety push: %s", task_id, push_log[:200])
+            results.append(f"🚀 *GitHub push:* `{push_log[:120]}`")
+        except Exception as push_exc:
+            logger.warning("Task #%s safety push failed: %s", task_id, push_exc)
+
     # Only mark done if LLM explicitly said done AND all commands passed.
     # If we exhausted max_rounds without the LLM saying done, mark failed.
     if not lm_said_done and all_passed:

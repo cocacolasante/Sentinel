@@ -98,7 +98,8 @@ Intent-specific param examples:
   sentry_read:    {{"action": "list" | "get" | "db", "project": "", "query": "is:unresolved", "issue_id": "", "limit": 20}}
   sentry_manage:  {{"action": "resolve" | "ignore" | "assign" | "comment", "issue_id": "123456", "assignee": "user@co.com", "text": "looking into this"}}
   server_shell:   {{"command": "ls -la /root/sentinel-workspace", "cwd": "/root/sentinel-workspace", "action": "read_file" | "search_code" | "list_files" | "inspect_env" | "docker_restart" | "docker_compose", "path": "/root/sentinel-workspace/app/brain/dispatcher.py", "pattern": "def classify", "service": "ai-brain", "sub_command": "ps"}}
-  task_create:    {{"title": "Fix the login bug", "description": "Users can't log in on mobile", "priority": 3, "approval_level": 2, "due_date": "2026-03-10", "tags": "bug,mobile", "assigned_to": ""}}
+  task_create:    Single task: {{"title": "Fix the login bug", "description": "Users can't log in on mobile", "priority": 3, "approval_level": 1, "due_date": "2026-03-10", "tags": "bug,mobile", "assigned_to": ""}}
+                  Multiple tasks (ALWAYS use this when user asks to create 2+ tasks): {{"tasks": [{{"title": "Task one", "description": "...", "priority": 3, "approval_level": 1}}, {{"title": "Task two", "description": "...", "priority": 3, "approval_level": 1}}]}}
   task_read:      {{"action": "list" | "get", "status": "pending" | "in_progress" | "done" | "cancelled" | "", "priority": 4, "id": "", "limit": 20}}
   task_update:    {{"id": 42, "status": "in_progress" | "done" | "cancelled" | "pending", "priority": 4, "approval_level": 1, "title": "", "description": "", "tags": "", "assigned_to": ""}}
   code:           {{}}

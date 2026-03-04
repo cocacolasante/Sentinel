@@ -65,6 +65,20 @@ class TaskCreateSkill(BaseSkill):
         import json as _json
         from app.db import postgres
 
+        # ── Multi-task batch: {"tasks": [...]} ────────────────────────────────
+        task_list = params.get("tasks")
+        if isinstance(task_list, list) and task_list:
+            results = []
+            for task_params in task_list:
+                if not isinstance(task_params, dict):
+                    continue
+                merged = {**params, **task_params}
+                merged.pop("tasks", None)
+                result = await self.execute(merged, original_message)
+                results.append(result.context_data or "")
+            combined = "\n\n---\n\n".join(results)
+            return SkillResult(context_data=combined, skill_name=self.name)
+
         title          = (params.get("title") or "").strip()
         description    = params.get("description", "")
         priority_num   = max(1, min(5, int(params.get("priority", 3))))
