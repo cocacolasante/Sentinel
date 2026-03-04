@@ -99,15 +99,16 @@ STEP 4 — Stage and commit:
 STEP 5 — Push the branch:
   server_shell: command="cd /root/sentinel-workspace && git push origin HEAD"
 
-STEP 6 — Open a PR with auto-merge enabled (single command):
-  server_shell: command="cd /root/sentinel-workspace && gh pr create --title '<title>' --body '<what/why>' --base main && gh pr merge --auto --squash"
+STEP 6 — Open a PR (NO auto-merge — owner must review and approve before it merges):
+  server_shell: command="cd /root/sentinel-workspace && gh pr create --title '<title>' --body '<what/why>' --base main"
 
 STEP 7 — Report back:
-  Tell the user the PR number and that it will auto-deploy once CI passes (~3 min).
-  Share the expected URL change or behaviour to verify after deploy.
+  Tell the user the PR number and URL and that it is waiting for their approval.
+  Do NOT say changes are live — they are not until the owner approves and merges.
 
 Hard rules:
 - NEVER run: git push origin main (branch protection blocks it anyway)
+- NEVER enable auto-merge — the owner must always approve and merge PRs
 - NEVER skip the PR — always create one even for tiny changes
 - NEVER commit without first reading the target file (prevents blind overwrites)
 - ALWAYS use patch_file for surgical edits, not write_file (safer, shows intent)
