@@ -585,8 +585,12 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
     except Exception as exc:
         logger.warning("Could not mark task executing: %s", exc)
 
-    # ── 2. Fetch Sentry stack trace ────────────────────────────────────────────
+    # ── 2. Fetch rich Sentry event via API ────────────────────────────────────
     issue_context = ""
+    # Track which files+lines the Sentry API tells us are relevant so we can
+    # extract the exact function from the repo, not just dump the whole file.
+    _sentry_frames: list[dict] = []   # [{filename, lineno, function}]
+
     if settings.sentry_auth_token and issue_id:
         try:
             import httpx
@@ -599,6 +603,8 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
                 )
             if resp.status_code == 200:
                 event = resp.json()
+
+                # Exception chain
                 for entry in event.get("entries", []):
                     if entry.get("type") != "exception":
                         continue
@@ -606,32 +612,109 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
                         exc_type  = exc_val.get("type", "")
                         exc_value = exc_val.get("value", "")
                         issue_context += f"Exception: {exc_type}: {exc_value}\n"
+
                         frames = (exc_val.get("stacktrace") or {}).get("frames", [])
-                        for frame in frames[-6:]:
+                        # Last 8 frames — deepest call is most relevant
+                        for frame in frames[-8:]:
                             fname  = frame.get("filename", "")
-                            lineno = frame.get("lineno", "")
+                            lineno = frame.get("lineno", 0)
                             func   = frame.get("function", "")
                             ctx    = (frame.get("context_line") or "").strip()
-                            issue_context += f"  File {fname}:{lineno} in {func}\n"
+                            pre    = frame.get("pre_context") or []
+                            post   = frame.get("post_context") or []
+                            lvars  = frame.get("vars") or {}
+
+                            issue_context += f"\n  File {fname}:{lineno} in {func}()\n"
+                            # Sentry gives ±5 surrounding lines — include them all
+                            for l in pre:
+                                issue_context += f"    {l}\n"
                             if ctx:
-                                issue_context += f"    {ctx}\n"
+                                issue_context += f" →  {ctx}\n"
+                            for l in post:
+                                issue_context += f"    {l}\n"
+                            # Local variables at time of crash
+                            if lvars:
+                                trimmed = {k: str(v)[:120] for k, v in list(lvars.items())[:8]}
+                                issue_context += f"    locals: {json.dumps(trimmed)}\n"
+
+                            if fname.startswith("app/"):
+                                _sentry_frames.append({"filename": fname, "lineno": lineno})
+
+                # Breadcrumbs — last 10 give execution path leading to the crash
+                for entry in event.get("entries", []):
+                    if entry.get("type") != "breadcrumbs":
+                        continue
+                    crumbs = (entry.get("data") or {}).get("values", [])[-10:]
+                    if crumbs:
+                        issue_context += "\nBreadcrumbs (last 10 before crash):\n"
+                        for c in crumbs:
+                            ts  = (c.get("timestamp") or "")[:19]
+                            cat = c.get("category", "")
+                            msg = (c.get("message") or c.get("data", {}).get("url", ""))[:120]
+                            issue_context += f"  [{ts}] {cat}: {msg}\n"
+
+            elif resp.status_code == 404:
+                logger.info("Sentry event not found (404) for issue %s — using webhook context only", issue_id)
         except Exception as exc:
             logger.warning("Could not fetch Sentry event details: %s", exc)
 
-    # ── 2b. Read affected source files from repo ──────────────────────────────
+    # ── 2b. Read relevant source functions from repo ──────────────────────────
+    # Merge frames from the API response with files listed in the webhook payload.
     import os as _os
     _CODE_ROOT = "/root/sentinel-workspace" if _os.path.isdir("/root/sentinel-workspace") else "/app"
-    file_context = ""
+
+    # Build a map of {filename: [lineno, ...]} from all known frames
+    _frame_map: dict[str, list[int]] = {}
+    for f in _sentry_frames:
+        _frame_map.setdefault(f["filename"], []).append(f["lineno"])
+    # Webhook-only files that had no API frame data — read without a target line
     for fname in issue_params.get("affected_files", []):
+        if fname not in _frame_map:
+            _frame_map[fname] = []
+
+    file_context = ""
+    for fname, linenos in _frame_map.items():
+        fpath = f"{_CODE_ROOT}/{fname}"
         try:
-            content = open(f"{_CODE_ROOT}/{fname}").read()
-            # Truncate large files — keep first 3000 chars to stay within token budget
-            if len(content) > 3000:
-                content = content[:3000] + "\n... [truncated]"
-            file_context += f"\n\n=== {fname} ===\n{content}"
-            logger.info("Read source file for LLM context | file={}", fname)
+            with open(fpath) as fh:
+                all_lines = fh.readlines()
         except Exception as exc:
-            logger.warning("Could not read source file {}: {}", fname, exc)
+            logger.warning("Could not read source file %s: %s", fname, exc)
+            continue
+
+        if linenos:
+            # Extract the function/class block containing each error line.
+            # Walk upward from the error line to find the enclosing def/class,
+            # then include from there to 60 lines past the error line.
+            seen_ranges: list[tuple[int, int]] = []
+            snippets: list[str] = []
+            for lineno in sorted(set(linenos)):
+                idx = lineno - 1   # 0-based
+                # Walk up to find the enclosing def / class / async def
+                fn_start = max(0, idx - 60)
+                for i in range(idx, max(-1, idx - 120), -1):
+                    stripped = all_lines[i].lstrip() if i < len(all_lines) else ""
+                    if stripped.startswith(("def ", "async def ", "class ")):
+                        fn_start = i
+                        break
+                fn_end = min(len(all_lines), lineno + 40)
+                # Skip if this range already covered by a previous lineno
+                if any(s <= fn_start and fn_end <= e for s, e in seen_ranges):
+                    continue
+                seen_ranges.append((fn_start, fn_end))
+                block = []
+                for i, line in enumerate(all_lines[fn_start:fn_end], fn_start + 1):
+                    marker = "→ " if i in linenos else "  "
+                    block.append(f"{i:4d} {marker}{line.rstrip()}")
+                snippets.append("\n".join(block))
+            excerpt = "\n\n".join(snippets)
+        else:
+            # No specific line — include first 3000 chars
+            raw = "".join(all_lines)
+            excerpt = raw[:3000] + ("\n... [truncated]" if len(raw) > 3000 else "")
+
+        file_context += f"\n\n=== {fname} ===\n{excerpt}"
+        logger.info("Read source file for LLM context | file=%s | lines=%s", fname, linenos)
 
     # ── 3. LLM fix plan ───────────────────────────────────────────────────────
     fix_plan: dict = {
