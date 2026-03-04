@@ -141,6 +141,7 @@ from app.router.approval       import router as approval_router           # noqa
 from app.router.whatsapp        import router as whatsapp_router          # noqa: E402
 from app.router.sentry_webhook  import router as sentry_webhook_router    # noqa: E402
 from app.router.task_board      import router as task_board_router         # noqa: E402
+from app.router.milestones      import router as milestones_router          # noqa: E402
 from app.router.slack          import start_socket_mode                  # noqa: E402
 from app.observability.event_bus import event_bus                    # noqa: E402
 from prometheus_fastapi_instrumentator import Instrumentator          # noqa: E402
@@ -225,6 +226,7 @@ app.include_router(approval_router,      prefix="/api/v1", tags=["approval"])
 app.include_router(whatsapp_router,        prefix="/api/v1", tags=["whatsapp"])
 app.include_router(sentry_webhook_router,  prefix="/api/v1", tags=["sentry"])
 app.include_router(task_board_router,      prefix="/api/v1", tags=["tasks-board"])
+app.include_router(milestones_router,      prefix="/api/v1", tags=["milestones"])
 
 
 @app.get("/", tags=["root"])

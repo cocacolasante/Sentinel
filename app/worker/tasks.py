@@ -742,7 +742,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             resp = await asyncio.to_thread(
                 client.messages.create,
                 model="claude-haiku-4-5-20251001",
-                max_tokens=512,
+                max_tokens=2048,
                 system=system_prompt,
                 messages=messages,
             )

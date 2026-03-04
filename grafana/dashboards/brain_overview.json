@@ -825,6 +825,22 @@
       "type": "text"
     },
     {
+      "id": 9200,
+      "title": "Recent Milestones & Updates",
+      "type": "text",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "options": {
+        "mode": "html",
+        "content": "<style>\n#ms-wrap { font-family: monospace; padding: 8px; }\n#ms-table { width:100%; border-collapse:collapse; font-size:13px; }\n#ms-table th { background:#1e2433; color:#aaa; text-align:left; padding:6px 10px; border-bottom:1px solid #333; }\n#ms-table td { padding:5px 10px; border-bottom:1px solid #1e2433; vertical-align:top; }\n#ms-table tr:hover td { background:#1e2433; }\n.ms-badge { display:inline-block; padding:2px 7px; border-radius:3px; font-size:11px; font-weight:600; }\n.ms-shell { background:#1a3a2a; color:#4caf50; }\n.ms-code  { background:#1a2a3a; color:#42a5f5; }\n.ms-write { background:#2a1a3a; color:#ce93d8; }\n.ms-email { background:#3a2a1a; color:#ffa726; }\n.ms-other { background:#2a2a2a; color:#aaa; }\n#ms-footer { color:#555; font-size:11px; margin-top:6px; }\n</style>\n<div id=\"ms-wrap\">\n  <table id=\"ms-table\">\n    <thead><tr><th>Time</th><th>Action</th><th>Intent</th><th>Summary</th><th>Agent</th></tr></thead>\n    <tbody id=\"ms-body\"><tr><td colspan=\"5\" style=\"color:#555\">Loading\u2026</td></tr></tbody>\n  </table>\n  <div id=\"ms-footer\"></div>\n</div>\n<script>\n(function(){\n  var API = (window.__grafanaBootData && window.__grafanaBootData.settings && window.__grafanaBootData.settings.datasources) ? '' : '';\n  var BRAIN = 'https://sentinelai.cloud';\n\n  function badge(action){\n    var cls = action.startsWith('shell') ? 'ms-shell'\n            : action.startsWith('code')  ? 'ms-code'\n            : action.startsWith('write') ? 'ms-write'\n            : action.startsWith('email') ? 'ms-email'\n            : 'ms-other';\n    return '<span class=\"ms-badge ' + cls + '\">' + action + '</span>';\n  }\n\n  function ago(iso){\n    var d = new Date(iso), now = new Date();\n    var s = Math.floor((now - d) / 1000);\n    if (s < 60)  return s + 's ago';\n    if (s < 3600) return Math.floor(s/60) + 'm ago';\n    if (s < 86400) return Math.floor(s/3600) + 'h ago';\n    return Math.floor(s/86400) + 'd ago';\n  }\n\n  function load(){\n    fetch(BRAIN + '/api/v1/milestones?limit=20', {cache:'no-store'})\n      .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })\n      .then(function(data){\n        var rows = data.milestones || data.items || data || [];\n        var tbody = document.getElementById('ms-body');\n        if (!tbody) return;\n        if (!rows.length){\n          tbody.innerHTML = '<tr><td colspan=\"5\" style=\"color:#555\">No milestones yet.</td></tr>';\n          return;\n        }\n        tbody.innerHTML = rows.map(function(m){\n          var summary = (m.summary || '').replace(/`([^`]+)`/g, '<code style=\"background:#111;padding:1px 4px;border-radius:2px\">$1</code>');\n          return '<tr><td style=\"white-space:nowrap;color:#888\">' + ago(m.triggered_at) + '</td>'\n               + '<td>' + badge(m.action || '') + '</td>'\n               + '<td style=\"color:#aaa\">' + (m.intent || '') + '</td>'\n               + '<td>' + summary + '</td>'\n               + '<td style=\"color:#888\">' + (m.agent || '') + '</td></tr>';\n        }).join('');\n        document.getElementById('ms-footer').textContent = 'Last updated: ' + new Date().toLocaleTimeString();\n      })\n      .catch(function(e){\n        var tbody = document.getElementById('ms-body');\n        if (tbody) tbody.innerHTML = '<tr><td colspan=\"5\" style=\"color:#e57373\">Error loading milestones: ' + e + '</td></tr>';\n      });\n  }\n\n  load();\n  setInterval(load, 30000);\n})();\n</script>"
+      },
+      "transparent": false
+    },
+    {
       "id": 400,
       "type": "row",
       "title": "Errors (Sentry)",
@@ -833,7 +849,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 60
       }
     },
     {
@@ -844,7 +860,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 51
+        "y": 61
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -897,7 +913,7 @@
         "h": 8,
         "w": 12,
         "x": 6,
-        "y": 51
+        "y": 61
       },
       "datasource": {
         "type": "prometheus",
@@ -954,7 +970,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 51
+        "y": 61
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -990,7 +1006,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 69
       }
     },
     {
@@ -1001,7 +1017,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 60
+        "y": 70
       },
       "datasource": {
         "type": "prometheus",
@@ -1034,7 +1050,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 60
+        "y": 70
       },
       "datasource": {
         "type": "prometheus",
@@ -1066,7 +1082,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 68
+        "y": 78
       },
       "datasource": {
         "type": "prometheus",
@@ -1122,7 +1138,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 68
+        "y": 78
       },
       "datasource": {
         "type": "prometheus",
@@ -1178,7 +1194,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 68
+        "y": 78
       },
       "datasource": {
         "type": "prometheus",
@@ -1232,7 +1248,7 @@
       "title": "Redis Hit Rate",
       "gridPos": {
         "x": 18,
-        "y": 68,
+        "y": 78,
         "h": 4,
         "w": 6
       },
@@ -1296,7 +1312,7 @@
       "title": "Network I/O \u2014 Inbound (KB/s)",
       "gridPos": {
         "x": 0,
-        "y": 72,
+        "y": 82,
         "h": 6,
         "w": 12
       },
@@ -1343,7 +1359,7 @@
       "title": "Network I/O \u2014 Outbound (KB/s)",
       "gridPos": {
         "x": 12,
-        "y": 72,
+        "y": 82,
         "h": 6,
         "w": 12
       },
@@ -1393,7 +1409,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 88
       }
     },
     {
@@ -1404,7 +1420,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 89
       },
       "datasource": {
         "type": "loki",
@@ -1435,7 +1451,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 89
+        "y": 99
       },
       "datasource": {
         "type": "loki",
@@ -1464,7 +1480,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 89
+        "y": 99
       },
       "datasource": {
         "type": "loki",
@@ -1494,7 +1510,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 98
+        "y": 108
       }
     },
     {
@@ -1505,7 +1521,7 @@
         "h": 7,
         "w": 10,
         "x": 0,
-        "y": 99
+        "y": 109
       },
       "options": {
         "mode": "html",
@@ -1520,7 +1536,7 @@
         "h": 7,
         "w": 14,
         "x": 10,
-        "y": 99
+        "y": 109
       },
       "options": {
         "mode": "html",
@@ -1535,7 +1551,7 @@
         "h": 20,
         "w": 24,
         "x": 0,
-        "y": 106
+        "y": 116
       },
       "options": {
         "mode": "html",
