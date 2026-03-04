@@ -190,14 +190,14 @@ whatsapp_read   — read or check recent WhatsApp messages
 whatsapp_send   — send a WhatsApp message to a contact or number
 ionos_cloud     — full IONOS DCD management: datacenters, servers (provision/start/stop/reboot/SSH), volumes (CRUD/attach/snapshot), NICs, LANs, firewall rules, IP blocks, load balancers, NAT gateways, Kubernetes clusters/nodepools, Docker deploy
 ionos_dns       — manage IONOS DNS zones and records (A, CNAME, MX, TXT, etc.)
-repo_read       — read, list, diff, or check status of the Brain's own codebase/files
-repo_write      — create or edit a file in the Brain's codebase; improve, refactor, or patch files
-repo_commit     — commit and/or push changes in the Brain's repository to GitHub
+repo_read       — read, list, diff, or check status of Sentinel's own codebase/files
+repo_write      — create or edit a file in Sentinel's codebase; improve, refactor, or patch files
+repo_commit     — commit and/or push changes in Sentinel's repository to GitHub
 code_change     — full autonomous code-change workflow: branch → patch file → commit → push → open PR + auto-merge in one shot
 sentry_read     — list, search, or inspect Sentry error issues; show recent errors
 sentry_manage   — resolve, ignore, assign, or comment on a Sentry issue
 server_shell    — run shell commands on the server: read/write files, search code, list dirs, run builds, inspect processes/logs, git push/commit/pull, docker restart (action=docker_restart), docker compose (action=docker_compose), inspect env vars (action=inspect_env)
-deploy          — rebuild the Brain Docker image with latest committed code and restart the brain container
+deploy          — rebuild the Sentinel Docker image with latest committed code and restart the container
 task_create     — create a new tracked task with title, priority (1–5), and approval level (1–3)
 task_read       — list, filter, or view existing tasks; check task status or priority
 task_update     — update a task's status, priority, approval level, or description

@@ -107,7 +107,7 @@ def _build_skills_help() -> str:
         else:
             unavailable_lines.append(f"{line} _(not configured)_")
 
-    parts = ["*🧠 Brain Skills — All Capabilities*\n"]
+    parts = ["*🧠 Sentinel Skills — All Capabilities*\n"]
     if available_lines:
         parts.append("*Ready to use:*")
         parts.extend(available_lines)

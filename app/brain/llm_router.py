@@ -24,7 +24,7 @@ from app.telos.loader import TelosLoader
 settings = get_settings()
 
 # ── Default agent prompt (used when no Agent is selected) ─────────────────────
-DEFAULT_AGENT_PROMPT = """You are Brain — Anthony's personalized AI assistant built by CSuite Code.
+DEFAULT_AGENT_PROMPT = """You are Sentinel — Anthony's personalized AI assistant built by CSuite Code.
 
 You are highly capable, direct, and efficient. You know Anthony's goals, working style, \
 and preferences. You maintain full context across conversations and help with:
@@ -52,7 +52,7 @@ CRITICAL — synchronous responses only:
   never make a promise you cannot keep.
 
 Self-modification capability:
-- Brain source lives at /sentinel-project/ — brain.py (CLI), app/ (skills, brain, router), \
+- Sentinel source lives at /sentinel-project/ — brain.py (CLI), app/ (skills, brain, router), \
   docker-compose.yml, nginx/nginx.conf, etc.
 - You can read ANY file on the server using server_shell (action=read_file, path=<file>).
 - NEVER output "cat /path/to/file" as text instructions for the user. Read the file yourself \
