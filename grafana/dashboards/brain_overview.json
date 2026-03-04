@@ -586,293 +586,243 @@
       }
     },
     {
-      "id": 300,
-      "type": "row",
-      "title": "Task Queue",
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 26
-      }
+      },
+      "id": 9000,
+      "title": "Task Board",
+      "type": "row"
     },
     {
-      "id": 12,
-      "type": "stat",
-      "title": "Active Workers",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "#93c5fd",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "#93c5fd",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "unit": "short"
+        }
+      },
       "gridPos": {
-        "h": 4,
-        "w": 4,
+        "h": 3,
+        "w": 6,
         "x": 0,
         "y": 27
       },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "celery_workers_online",
-          "legendFormat": "workers",
-          "refId": "A"
-        }
-      ],
+      "id": 9001,
       "options": {
+        "colorMode": "background",
+        "graphMode": "none",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
-        },
-        "colorMode": "background"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
         }
-      }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='pending'",
+          "refId": "A"
+        }
+      ],
+      "title": "Pending Tasks",
+      "type": "stat"
     },
     {
-      "id": 13,
-      "type": "stat",
-      "title": "Active Tasks",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 27
-      },
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(celery_tasks_active)",
-          "legendFormat": "active",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "area"
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
       },
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "fixedColor": "#fde68a",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "#fde68a",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
           "unit": "short"
         }
-      }
-    },
-    {
-      "id": 14,
-      "type": "stat",
-      "title": "Queue Depth",
+      },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
+        "h": 3,
+        "w": 6,
+        "x": 6,
         "y": 27
       },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(celery_queue_length)",
-          "legendFormat": "queued",
-          "refId": "A"
-        }
-      ],
+      "id": 9002,
       "options": {
+        "colorMode": "background",
+        "graphMode": "none",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
-        },
-        "colorMode": "background"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='in_progress'",
+          "refId": "A"
+        }
+      ],
+      "title": "In Progress",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "color": {
+            "fixedColor": "#86efac",
+            "mode": "fixed"
+          },
           "thresholds": {
-            "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#86efac",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 10
-              },
-              {
-                "color": "red",
-                "value": 50
               }
             ]
-          }
+          },
+          "mappings": [],
+          "unit": "short"
         }
-      }
-    },
-    {
-      "id": 15,
-      "type": "stat",
-      "title": "Failed Tasks (1h)",
+      },
       "gridPos": {
-        "h": 4,
-        "w": 4,
+        "h": 3,
+        "w": 6,
         "x": 12,
         "y": 27
       },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "increase(celery_tasks_failed_total[1h])",
-          "legendFormat": "failed",
-          "refId": "A"
-        }
-      ],
+      "id": 9003,
       "options": {
+        "colorMode": "background",
+        "graphMode": "none",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
-        },
-        "colorMode": "background"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='done'",
+          "refId": "A"
+        }
+      ],
+      "title": "Completed Tasks",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "color": {
+            "fixedColor": "#fb923c",
+            "mode": "fixed"
+          },
           "thresholds": {
-            "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#fb923c",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 5
               }
             ]
-          }
+          },
+          "mappings": [],
+          "unit": "short"
         }
-      }
-    },
-    {
-      "id": 16,
-      "type": "stat",
-      "title": "Task Success Rate",
+      },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
+        "h": 3,
+        "w": 6,
+        "x": 18,
         "y": 27
       },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "100 * rate(celery_tasks_succeeded_total[5m]) / (rate(celery_tasks_total[5m]) > 0 or vector(1))",
-          "legendFormat": "success %",
-          "refId": "A"
-        }
-      ],
+      "id": 9004,
       "options": {
+        "colorMode": "background",
+        "graphMode": "none",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
-        },
-        "colorMode": "value"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 80
-              },
-              {
-                "color": "green",
-                "value": 95
-              }
-            ]
-          }
         }
-      }
-    },
-    {
-      "id": 17,
-      "type": "timeseries",
-      "title": "Task Throughput by State",
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 31
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
       },
       "targets": [
         {
-          "expr": "sum by(state) (rate(celery_tasks_total[5m]))",
-          "legendFormat": "{{state}}",
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status NOT IN ('done','cancelled') AND priority_num >= 4",
           "refId": "A"
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "fillOpacity": 8
-          }
-        }
+      "title": "High Priority Open",
+      "type": "stat"
+    },
+    {
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 30
       },
+      "id": 9010,
       "options": {
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
+        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">Task Board</span>\n  <div style=\"display:flex;gap:6px;align-items:center;flex-wrap:wrap\">\n    <span id=\"tb-updated\" style=\"color:#4b5563;font-size:10px\"></span>\n    <select id=\"tb-filter\" onchange=\"loadBoard()\" style=\"background:#1f2937;color:#9ca3af;border:1px solid #374151;padding:3px 6px;border-radius:4px;font-size:11px\">\n      <option value=\"\">All</option>\n      <option value=\"pending\">Pending</option>\n      <option value=\"in_progress\">In Progress</option>\n      <option value=\"done\">Done</option>\n      <option value=\"cancelled\">Cancelled</option>\n    </select>\n    <button onclick=\"loadBoard()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n  </div>\n</div>\n<div id=\"tb-status\" style=\"font-size:11px;color:#6b7280\"></div>\n<div id=\"tb-table\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar TB_BASE='[[brain_url]]';\nvar TB_PRI_COL={1:'#86efac',2:'#6ee7b7',3:'#fde68a',4:'#fb923c',5:'#f87171'};\nvar TB_ST_COL={pending:'#93c5fd',in_progress:'#fde68a',done:'#86efac',failed:'#f87171',cancelled:'#6b7280'};\nvar TB_ST_ICO={pending:'\u23f3',in_progress:'\ud83d\udd04',done:'\u2705',failed:'\u274c',cancelled:'\u2014'};\nvar TB_APR={1:'<span title=\"auto-approve\" style=\"color:#86efac;font-size:10px\">\u25cf</span>',\n            2:'<span title=\"needs review\" style=\"color:#fbbf24;font-size:10px\">\ud83d\udd12</span>',\n            3:'<span title=\"requires sign-off\" style=\"color:#f87171;font-size:10px\">\ud83d\udd10</span>'};\nfunction loadBoard(){\n  var st=document.getElementById('tb-status');\n  var filter=document.getElementById('tb-filter').value;\n  var url=TB_BASE+'/api/v1/board/tasks?limit=50'+(filter?'&status='+filter:'');\n  fetch(url).then(function(r){return r.json();}).then(function(data){\n    var tasks=data.tasks||[];\n    st.textContent=tasks.length+' task'+(tasks.length!==1?'s':'');\n    document.getElementById('tb-updated').textContent='updated '+new Date().toLocaleTimeString();\n    var el=document.getElementById('tb-table');\n    if(!tasks.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No tasks found</div>';return;}\n    var rows=tasks.map(function(t){\n      var pri=t.priority_num||3;\n      var pcol=TB_PRI_COL[pri]||'#9ca3af';\n      var scol=TB_ST_COL[t.status]||'#9ca3af';\n      var sico=TB_ST_ICO[t.status]||'?';\n      var apr=TB_APR[t.approval_level||2]||'';\n      var tags=t.tags?'<span style=\"color:#8b5cf6;font-size:10px\"> ['+t.tags+']</span>':'';\n      var upd=t.updated_at?(t.updated_at+'').slice(5,16).replace('T',' '):'';\n      var approveBtn=(t.approval_level||2)>=2 && (t.status==='pending')?\n        '<button onclick=\"tbApprove('+t.id+')\" title=\"Approve (set auto-run)\" style=\"background:#1c3a1c;color:#86efac;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2713 Approve</button> ':'';\n      return '<tr style=\"border-bottom:1px solid #1f2937\">'\n        +'<td style=\"padding:5px 6px;color:#6b7280;font-size:10px\">#'+t.id+'</td>'\n        +'<td style=\"padding:5px 6px;color:#d1d5db;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\" title=\"'+t.title+'\">'+t.title+tags+'</td>'\n        +'<td style=\"padding:5px 4px;text-align:center\">'+apr+'</td>'\n        +'<td style=\"padding:5px 4px\"><span style=\"color:'+pcol+';font-size:10px\">P'+pri+'</span></td>'\n        +'<td style=\"padding:5px 4px\"><span style=\"color:'+scol+';font-size:10px\">'+sico+' '+t.status+'</span></td>'\n        +'<td style=\"padding:5px 4px;color:#4b5563;font-size:9px;white-space:nowrap\">'+upd+'</td>'\n        +'<td style=\"padding:5px 4px;white-space:nowrap\">'\n          +approveBtn\n          +'<button onclick=\"tbSet('+t.id+',\\'in_progress\\')\" title=\"Mark in progress\" style=\"background:#1e3a5f;color:#93c5fd;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u25b6</button> '\n          +'<button onclick=\"tbSet('+t.id+',\\'done\\')\" title=\"Mark done\" style=\"background:#14532d;color:#86efac;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2713</button> '\n          +'<button onclick=\"tbSet('+t.id+',\\'cancelled\\')\" title=\"Cancel\" style=\"background:#3b1515;color:#f87171;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2715</button>'\n        +'</td>'\n        +'</tr>';\n    });\n    el.innerHTML='<table style=\"width:100%;border-collapse:collapse\">'\n      +'<thead><tr style=\"border-bottom:1px solid #374151\">'\n      +'<th style=\"text-align:left;padding:4px 6px;color:#6b7280;font-size:10px\">#</th>'\n      +'<th style=\"text-align:left;padding:4px 6px;color:#6b7280;font-size:10px\">Title</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\" title=\"Approval\">Appr</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Pri</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Status</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Updated</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Actions</th>'\n      +'</tr></thead>'\n      +'<tbody>'+rows.join('')+'</tbody></table>';\n  }).catch(function(e){st.textContent='Error: '+e.message;});\n}\nfunction tbSet(id,status){\n  fetch(TB_BASE+'/api/v1/board/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:status})})\n    .then(function(){loadBoard();})\n    .catch(function(e){document.getElementById('tb-status').textContent='Update failed: '+e.message;});\n}\nfunction tbApprove(id){\n  fetch(TB_BASE+'/api/v1/board/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({approval_level:1})})\n    .then(function(){loadBoard();})\n    .catch(function(e){document.getElementById('tb-status').textContent='Approve failed: '+e.message;});\n}\nsetTimeout(loadBoard,300);\nsetInterval(loadBoard,15000);\n</script>",
+        "mode": "html"
+      },
+      "title": "Task Board",
+      "type": "text"
     },
     {
       "id": 400,
@@ -883,7 +833,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 50
       }
     },
     {
@@ -894,7 +844,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 39
+        "y": 51
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -947,7 +897,7 @@
         "h": 8,
         "w": 12,
         "x": 6,
-        "y": 39
+        "y": 51
       },
       "datasource": {
         "type": "prometheus",
@@ -1004,7 +954,7 @@
         "h": 8,
         "w": 6,
         "x": 18,
-        "y": 39
+        "y": 51
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -1040,7 +990,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 59
       }
     },
     {
@@ -1051,7 +1001,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 48
+        "y": 60
       },
       "datasource": {
         "type": "prometheus",
@@ -1084,7 +1034,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 48
+        "y": 60
       },
       "datasource": {
         "type": "prometheus",
@@ -1111,12 +1061,12 @@
     {
       "id": 23,
       "type": "stat",
-      "title": "Disk Available",
+      "title": "Disk Free",
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 56
+        "y": 68
       },
       "datasource": {
         "type": "prometheus",
@@ -1148,12 +1098,16 @@
                 "value": null
               },
               {
-                "color": "yellow",
+                "color": "orange",
                 "value": 5368709120
               },
               {
-                "color": "green",
+                "color": "yellow",
                 "value": 10737418240
+              },
+              {
+                "color": "green",
+                "value": 21474836480
               }
             ]
           }
@@ -1168,7 +1122,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 56
+        "y": 68
       },
       "datasource": {
         "type": "prometheus",
@@ -1201,7 +1155,11 @@
               },
               {
                 "color": "yellow",
-                "value": 524288000
+                "value": 268435456
+              },
+              {
+                "color": "orange",
+                "value": 536870912
               },
               {
                 "color": "red",
@@ -1220,7 +1178,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 56
+        "y": 68
       },
       "datasource": {
         "type": "prometheus",
@@ -1253,11 +1211,15 @@
               },
               {
                 "color": "yellow",
-                "value": 50
+                "value": 30
+              },
+              {
+                "color": "orange",
+                "value": 60
               },
               {
                 "color": "red",
-                "value": 80
+                "value": 90
               }
             ]
           }
@@ -1266,32 +1228,161 @@
     },
     {
       "id": 26,
-      "type": "timeseries",
+      "type": "stat",
       "title": "Redis Hit Rate",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 18,
-        "y": 56
+        "y": 68,
+        "h": 4,
+        "w": 6
       },
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "targets": [
-        {
-          "expr": "100 * rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]) > 0 or vector(1))",
-          "legendFormat": "hit rate %",
-          "refId": "A"
-        }
-      ],
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "min": 0,
-          "max": 100
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "yellow",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 95
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]) > 0 or vector(1))",
+          "legendFormat": "Hit Rate %"
         }
-      }
+      ]
+    },
+    {
+      "id": 9100,
+      "type": "timeseries",
+      "title": "Network I/O \u2014 Inbound (KB/s)",
+      "gridPos": {
+        "x": 0,
+        "y": 72,
+        "h": 6,
+        "w": 12
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "KBs",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 8
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by(name) (rate(container_network_receive_bytes_total{name=~\"ai-.+\"}[1m])) / 1024",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "id": 9101,
+      "type": "timeseries",
+      "title": "Network I/O \u2014 Outbound (KB/s)",
+      "gridPos": {
+        "x": 12,
+        "y": 72,
+        "h": 6,
+        "w": 12
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "KBs",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 8
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by(name) (rate(container_network_transmit_bytes_total{name=~\"ai-.+\"}[1m])) / 1024",
+          "legendFormat": "{{name}}"
+        }
+      ]
     },
     {
       "id": 600,
@@ -1302,18 +1393,18 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 60
+        "y": 78
       }
     },
     {
       "id": 27,
       "type": "logs",
-      "title": "Brain \u2014 Live Log Stream",
+      "title": "All Sentinel Services \u2014 Live",
       "gridPos": {
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 79
       },
       "datasource": {
         "type": "loki",
@@ -1321,7 +1412,7 @@
       },
       "targets": [
         {
-          "expr": "{job=\"docker\", level=~\".+\"}",
+          "expr": "{job=\"docker\"} | json | line_format \"{{.container_name}} | {{.message}}\"",
           "legendFormat": "",
           "refId": "A"
         }
@@ -1330,21 +1421,21 @@
         "dedupStrategy": "none",
         "enableLogDetails": true,
         "prettifyLogMessage": false,
-        "showLabels": true,
+        "showLabels": false,
         "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": false
+        "wrapLogMessage": true
       }
     },
     {
       "id": 28,
       "type": "logs",
-      "title": "Brain \u2014 Errors Only",
+      "title": "Errors & Warnings",
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 71
+        "y": 89
       },
       "datasource": {
         "type": "loki",
@@ -1352,7 +1443,7 @@
       },
       "targets": [
         {
-          "expr": "{job=\"docker\", level=\"ERROR\"}",
+          "expr": "{job=\"docker\"} |~ \"(?i)(error|exception|traceback|critical|warning)\"",
           "legendFormat": "",
           "refId": "A"
         }
@@ -1362,18 +1453,18 @@
         "enableLogDetails": true,
         "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": false
+        "wrapLogMessage": true
       }
     },
     {
       "id": 29,
       "type": "logs",
-      "title": "n8n + Other Container Logs",
+      "title": "Celery Worker Logs",
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 71
+        "y": 89
       },
       "datasource": {
         "type": "loki",
@@ -1381,7 +1472,7 @@
       },
       "targets": [
         {
-          "expr": "{job=\"docker\", level=\"\"} |= \"n8n\"",
+          "expr": "{job=\"docker\"} |= \"celery\" | json",
           "legendFormat": "",
           "refId": "A"
         }
@@ -1391,19 +1482,7 @@
         "enableLogDetails": true,
         "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": false
-      }
-    },
-    {
-      "id": 700,
-      "type": "row",
-      "title": "Brain Controls",
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 79
+        "wrapLogMessage": true
       }
     },
     {
@@ -1415,7 +1494,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 98
       }
     },
     {
@@ -1426,7 +1505,7 @@
         "h": 7,
         "w": 10,
         "x": 0,
-        "y": 80
+        "y": 99
       },
       "options": {
         "mode": "html",
@@ -1441,7 +1520,7 @@
         "h": 7,
         "w": 14,
         "x": 10,
-        "y": 80
+        "y": 99
       },
       "options": {
         "mode": "html",
@@ -1454,268 +1533,14 @@
       "title": "Chat with Brain",
       "gridPos": {
         "h": 20,
-        "w": 14,
+        "w": 24,
         "x": 0,
-        "y": 80
+        "y": 106
       },
       "options": {
         "mode": "html",
         "content": "<div id=\"brain-chat\" style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Brain Chat</span><button onclick=\"clearSession()\" style=\"background:#374151;color:#9ca3af;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Clear</button></div><div id=\"msgs\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0\"></div><div style=\"display:flex;gap:6px\"><textarea id=\"inp\" rows=\"2\" placeholder=\"Message Brain... (Enter to send)\" style=\"flex:1;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:8px;font-size:13px;font-family:monospace;resize:none\"></textarea><button onclick=\"sendMsg()\" id=\"sendBtn\" style=\"background:#3b82f6;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;align-self:flex-end\">Send</button></div><div id=\"chat-status\" style=\"font-size:11px;color:#6b7280\"></div></div><script>var _sid='dashboard-'+Math.random().toString(36).slice(2,8);function addMsg(role,text){var msgs=document.getElementById('msgs');var d=document.createElement('div');d.style.cssText='padding:8px 10px;border-radius:6px;max-width:92%;word-break:break-word;font-size:13px;line-height:1.5;white-space:pre-wrap;'+(role==='user'?'background:#1e3a5f;color:#93c5fd;align-self:flex-end':'background:#1f2937;color:#d1d5db;align-self:flex-start');d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;}async function sendMsg(){var inp=document.getElementById('inp');var btn=document.getElementById('sendBtn');var msg=inp.value.trim();if(!msg)return;addMsg('user',msg);inp.value='';btn.disabled=true;document.getElementById('chat-status').textContent='Thinking...';try{var r=await fetch('/api/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,session_id:_sid})});var data=await r.json();addMsg('brain',data.reply||data.detail||'No response');document.getElementById('chat-status').textContent='intent: '+data.intent+' | agent: '+data.agent;}catch(e){addMsg('brain','Error: '+e.message);document.getElementById('chat-status').textContent='';}btn.disabled=false;}function clearSession(){fetch('/api/v1/chat/'+_sid,{method:'DELETE'});document.getElementById('msgs').innerHTML='';document.getElementById('chat-status').textContent='Session cleared';}document.getElementById('inp').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}});</script>"
       }
-    },
-    {
-      "id": 31,
-      "type": "text",
-      "title": "Task Queue Control",
-      "gridPos": {
-        "h": 20,
-        "w": 10,
-        "x": 14,
-        "y": 80
-      },
-      "options": {
-        "mode": "html",
-        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\"><div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\"><span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Task Queue</span><div style=\"display:flex;gap:4px;flex-wrap:wrap\"><button onclick=\"pauseWorkers()\" style=\"background:#7f1d1d;color:#fca5a5;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Pause Workers</button><button onclick=\"resumeWorkers()\" style=\"background:#14532d;color:#86efac;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold\">Resume Workers</button><button onclick=\"loadTasks()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Refresh</button></div></div><div id=\"task-status\" style=\"font-size:11px;color:#6b7280\"></div><div id=\"task-table\" style=\"flex:1;overflow-y:auto\"></div></div><script>function renderTasks(data){var all=[];['active','reserved','scheduled'].forEach(function(type){Object.entries(data[type]||{}).forEach(function(kv){(kv[1]||[]).forEach(function(t){all.push(Object.assign({_type:type,_worker:kv[0]},t));});});});var el=document.getElementById('task-table');if(!all.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No tasks \u2014 queue is idle</div>';return;}var clr={active:'#86efac',reserved:'#93c5fd',scheduled:'#fde68a'};var rows=all.map(function(t){return'<tr><td style=\"padding:4px 6px\"><span style=\"color:'+(clr[t._type]||'#9ca3af')+';font-size:11px\">'+t._type+'</span></td><td style=\"padding:4px 6px;color:#d1d5db;font-size:11px\">'+((t.name||'').split('.').pop())+'</td><td style=\"padding:4px 6px;color:#6b7280;font-size:10px\">'+((t.id||'').slice(0,8))+'\u2026</td><td style=\"padding:4px 6px\"><button onclick=\"revoke(\\\"'+t.id+'\\\")\" style=\"background:#374151;color:#f87171;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px\">Revoke</button></td></tr>';}).join('');el.innerHTML='<table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">State</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">Task</th><th style=\"padding:4px 6px;text-align:left;color:#6b7280;font-size:10px\">ID</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';}async function loadTasks(){document.getElementById('task-status').textContent='Loading...';try{var r=await fetch('/api/v1/tasks');if(!r.ok)throw new Error(r.statusText);renderTasks(await r.json());document.getElementById('task-status').textContent='Updated '+new Date().toLocaleTimeString();}catch(e){document.getElementById('task-status').textContent='Error: '+e.message;}}async function revoke(id){document.getElementById('task-status').textContent='Revoking '+id.slice(0,8)+'...';await fetch('/api/v1/tasks/'+id+'?terminate=true',{method:'DELETE'});loadTasks();}async function pauseWorkers(){await fetch('/api/v1/workers/pause',{method:'POST'});document.getElementById('task-status').textContent='Workers paused \u2014 finishing current tasks then stopping';}async function resumeWorkers(){await fetch('/api/v1/workers/resume',{method:'POST'});document.getElementById('task-status').textContent='Workers resumed \u2014 pulling from queue';}loadTasks();setInterval(loadTasks,15000);</script>"
-      }
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 100
-      },
-      "id": 9000,
-      "title": "Task Board",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "#93c5fd",
-            "mode": "fixed"
-          },
-          "thresholds": {
-            "steps": [
-              {
-                "color": "#93c5fd",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [],
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 0,
-        "y": 101
-      },
-      "id": 9001,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
-          },
-          "format": "table",
-          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='pending'",
-          "refId": "A"
-        }
-      ],
-      "title": "Pending Tasks",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "#fde68a",
-            "mode": "fixed"
-          },
-          "thresholds": {
-            "steps": [
-              {
-                "color": "#fde68a",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [],
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 4,
-        "y": 101
-      },
-      "id": 9002,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
-          },
-          "format": "table",
-          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='in_progress'",
-          "refId": "A"
-        }
-      ],
-      "title": "In Progress",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "#86efac",
-            "mode": "fixed"
-          },
-          "thresholds": {
-            "steps": [
-              {
-                "color": "#86efac",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [],
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 8,
-        "y": 101
-      },
-      "id": 9003,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
-          },
-          "format": "table",
-          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='done'",
-          "refId": "A"
-        }
-      ],
-      "title": "Completed Tasks",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "#fb923c",
-            "mode": "fixed"
-          },
-          "thresholds": {
-            "steps": [
-              {
-                "color": "#fb923c",
-                "value": null
-              }
-            ]
-          },
-          "mappings": [],
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 12,
-        "y": 101
-      },
-      "id": 9004,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
-          },
-          "format": "table",
-          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status NOT IN ('done','cancelled') AND priority_num >= 4",
-          "refId": "A"
-        }
-      ],
-      "title": "High Priority Open",
-      "type": "stat"
-    },
-    {
-      "gridPos": {
-        "h": 20,
-        "w": 24,
-        "x": 0,
-        "y": 104
-      },
-      "id": 9010,
-      "options": {
-        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">Task Board</span>\n  <div style=\"display:flex;gap:6px;align-items:center;flex-wrap:wrap\">\n    <span id=\"tb-updated\" style=\"color:#4b5563;font-size:10px\"></span>\n    <select id=\"tb-filter\" onchange=\"loadBoard()\" style=\"background:#1f2937;color:#9ca3af;border:1px solid #374151;padding:3px 6px;border-radius:4px;font-size:11px\">\n      <option value=\"\">All</option>\n      <option value=\"pending\">Pending</option>\n      <option value=\"in_progress\">In Progress</option>\n      <option value=\"done\">Done</option>\n      <option value=\"cancelled\">Cancelled</option>\n    </select>\n    <button onclick=\"loadBoard()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n  </div>\n</div>\n<div id=\"tb-status\" style=\"font-size:11px;color:#6b7280\"></div>\n<div id=\"tb-table\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar TB_BASE='[[brain_url]]';\nvar TB_PRI_COL={1:'#86efac',2:'#6ee7b7',3:'#fde68a',4:'#fb923c',5:'#f87171'};\nvar TB_ST_COL={pending:'#93c5fd',in_progress:'#fde68a',done:'#86efac',failed:'#f87171',cancelled:'#6b7280'};\nvar TB_ST_ICO={pending:'\u23f3',in_progress:'\ud83d\udd04',done:'\u2705',failed:'\u274c',cancelled:'\u2014'};\nvar TB_APR={1:'<span title=\"auto-approve\" style=\"color:#86efac;font-size:10px\">\u25cf</span>',\n            2:'<span title=\"needs review\" style=\"color:#fbbf24;font-size:10px\">\ud83d\udd12</span>',\n            3:'<span title=\"requires sign-off\" style=\"color:#f87171;font-size:10px\">\ud83d\udd10</span>'};\nfunction loadBoard(){\n  var st=document.getElementById('tb-status');\n  var filter=document.getElementById('tb-filter').value;\n  var url=TB_BASE+'/api/v1/board/tasks?limit=50'+(filter?'&status='+filter:'');\n  fetch(url).then(function(r){return r.json();}).then(function(data){\n    var tasks=data.tasks||[];\n    st.textContent=tasks.length+' task'+(tasks.length!==1?'s':'');\n    document.getElementById('tb-updated').textContent='updated '+new Date().toLocaleTimeString();\n    var el=document.getElementById('tb-table');\n    if(!tasks.length){el.innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:8px\">No tasks found</div>';return;}\n    var rows=tasks.map(function(t){\n      var pri=t.priority_num||3;\n      var pcol=TB_PRI_COL[pri]||'#9ca3af';\n      var scol=TB_ST_COL[t.status]||'#9ca3af';\n      var sico=TB_ST_ICO[t.status]||'?';\n      var apr=TB_APR[t.approval_level||2]||'';\n      var tags=t.tags?'<span style=\"color:#8b5cf6;font-size:10px\"> ['+t.tags+']</span>':'';\n      var upd=t.updated_at?(t.updated_at+'').slice(5,16).replace('T',' '):'';\n      var approveBtn=(t.approval_level||2)>=2 && (t.status==='pending')?\n        '<button onclick=\"tbApprove('+t.id+')\" title=\"Approve (set auto-run)\" style=\"background:#1c3a1c;color:#86efac;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2713 Approve</button> ':'';\n      return '<tr style=\"border-bottom:1px solid #1f2937\">'\n        +'<td style=\"padding:5px 6px;color:#6b7280;font-size:10px\">#'+t.id+'</td>'\n        +'<td style=\"padding:5px 6px;color:#d1d5db;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\" title=\"'+t.title+'\">'+t.title+tags+'</td>'\n        +'<td style=\"padding:5px 4px;text-align:center\">'+apr+'</td>'\n        +'<td style=\"padding:5px 4px\"><span style=\"color:'+pcol+';font-size:10px\">P'+pri+'</span></td>'\n        +'<td style=\"padding:5px 4px\"><span style=\"color:'+scol+';font-size:10px\">'+sico+' '+t.status+'</span></td>'\n        +'<td style=\"padding:5px 4px;color:#4b5563;font-size:9px;white-space:nowrap\">'+upd+'</td>'\n        +'<td style=\"padding:5px 4px;white-space:nowrap\">'\n          +approveBtn\n          +'<button onclick=\"tbSet('+t.id+',\\'in_progress\\')\" title=\"Mark in progress\" style=\"background:#1e3a5f;color:#93c5fd;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u25b6</button> '\n          +'<button onclick=\"tbSet('+t.id+',\\'done\\')\" title=\"Mark done\" style=\"background:#14532d;color:#86efac;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2713</button> '\n          +'<button onclick=\"tbSet('+t.id+',\\'cancelled\\')\" title=\"Cancel\" style=\"background:#3b1515;color:#f87171;border:none;padding:2px 5px;border-radius:3px;cursor:pointer;font-size:10px\">\u2715</button>'\n        +'</td>'\n        +'</tr>';\n    });\n    el.innerHTML='<table style=\"width:100%;border-collapse:collapse\">'\n      +'<thead><tr style=\"border-bottom:1px solid #374151\">'\n      +'<th style=\"text-align:left;padding:4px 6px;color:#6b7280;font-size:10px\">#</th>'\n      +'<th style=\"text-align:left;padding:4px 6px;color:#6b7280;font-size:10px\">Title</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\" title=\"Approval\">Appr</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Pri</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Status</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Updated</th>'\n      +'<th style=\"padding:4px 4px;color:#6b7280;font-size:10px\">Actions</th>'\n      +'</tr></thead>'\n      +'<tbody>'+rows.join('')+'</tbody></table>';\n  }).catch(function(e){st.textContent='Error: '+e.message;});\n}\nfunction tbSet(id,status){\n  fetch(TB_BASE+'/api/v1/board/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:status})})\n    .then(function(){loadBoard();})\n    .catch(function(e){document.getElementById('tb-status').textContent='Update failed: '+e.message;});\n}\nfunction tbApprove(id){\n  fetch(TB_BASE+'/api/v1/board/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({approval_level:1})})\n    .then(function(){loadBoard();})\n    .catch(function(e){document.getElementById('tb-status').textContent='Approve failed: '+e.message;});\n}\nsetTimeout(loadBoard,300);\nsetInterval(loadBoard,15000);\n</script>",
-        "mode": "html"
-      },
-      "title": "Task Board",
-      "type": "text"
     }
   ]
 }
