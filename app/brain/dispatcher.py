@@ -1134,8 +1134,14 @@ class Dispatcher:
             if task_id:
                 self._update_write_task_status(task_id, "failed", str(exc))
             # Return a clear failure — never silently claim success
+            _CREDENTIAL_ERRORS = ("RefreshError", "InvalidCredentials", "HttpAccessTokenRefreshError")
+            hint = (
+                "Check your Google credentials in `.env`."
+                if type(exc).__name__ in _CREDENTIAL_ERRORS
+                else "Check `.env` credentials and try again, or report this error."
+            )
             return (
-                f"Something went wrong executing **{action}** — nothing was sent or saved.\n"
+                f"Something went wrong executing **{action}**.\n"
                 f"Error: `{type(exc).__name__}: {exc}`\n\n"
-                "Please try again, or check your Google credentials in `.env`."
+                f"{hint}"
             )
