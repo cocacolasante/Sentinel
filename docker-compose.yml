@@ -359,6 +359,7 @@ services:
     environment:
       DEPLOY_WEBHOOK_SECRET: ${DEPLOY_WEBHOOK_SECRET}
       GHCR_PAT:              ${GHCR_PAT:-}
+      GITHUB_TOKEN:          ${GITHUB_TOKEN:-}
       GITHUB_USERNAME:       ${GITHUB_USERNAME:-cocacolasante}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
