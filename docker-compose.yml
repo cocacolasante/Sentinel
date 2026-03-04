@@ -163,6 +163,8 @@ services:
       -Q evals,celery
     env_file:
       - .env
+    environment:
+      REPO_LOCAL_PATH: /sentinel-project
     depends_on:
       redis:
         condition: service_healthy

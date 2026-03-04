@@ -36,17 +36,17 @@ def _resolve_workspace() -> Path:
     Pick the working directory for all repo operations.
 
     Priority:
-      1. If GITHUB_BRAIN_REPO_URL is set, use REPO_WORKSPACE
-         (a dedicated clone that gets pulled/committed independently).
-      2. If REPO_LOCAL_PATH exists and has a .git dir, use it directly —
+      1. If REPO_LOCAL_PATH exists and has a .git dir, use it directly —
          this is the bind-mounted live code directory inside the container.
+      2. If GITHUB_BRAIN_REPO_URL is set, use REPO_WORKSPACE
+         (a dedicated clone that gets pulled/committed independently).
       3. Fall back to REPO_WORKSPACE anyway (will be created on first use).
     """
-    if settings.github_brain_repo_url:
-        return Path(settings.repo_workspace)
     local = Path(settings.repo_local_path)
     if (local / ".git").exists():
         return local
+    if settings.github_brain_repo_url:
+        return Path(settings.repo_workspace)
     return Path(settings.repo_workspace)
 
 
@@ -64,7 +64,7 @@ def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> str:
     """Run a shell command synchronously and return stdout."""
     result = subprocess.run(
         cmd,
-        cwd=str(cwd or WORKSPACE),
+        cwd=str(cwd or _resolve_workspace()),
         capture_output=True,
         text=True,
         env=_git_env(),

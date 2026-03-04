@@ -354,6 +354,18 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
         except Exception as exc:
             logger.warning("Could not fetch Sentry event details: %s", exc)
 
+    # ── 2b. Read affected source files from repo ──────────────────────────────
+    import os as _os
+    _CODE_ROOT = "/sentinel-project" if _os.path.isdir("/sentinel-project") else "/app"
+    file_context = ""
+    for fname in issue_params.get("affected_files", []):
+        try:
+            content = open(f"{_CODE_ROOT}/{fname}").read()
+            file_context += f"\n\n=== {fname} ===\n{content}"
+            logger.info("Read source file for LLM context | file={}", fname)
+        except Exception as exc:
+            logger.warning("Could not read source file {}: {}", fname, exc)
+
     # ── 3. LLM fix plan ───────────────────────────────────────────────────────
     fix_plan: dict = {
         "fixable":          False,
@@ -366,9 +378,10 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
     try:
         import anthropic
         context_block = f"\nStack trace:\n{issue_context}" if issue_context else ""
+        file_block    = file_context if file_context else ""
         prompt = (
             f"You are an AI assistant that investigates and fixes software bugs reported in Sentry.\n\n"
-            f"Issue: {title}\nLevel: {level}\nProject: {project}{context_block}\n\n"
+            f"Issue: {title}\nLevel: {level}\nProject: {project}{context_block}{file_block}\n\n"
             "Analyze this error and decide if it can be fixed with a targeted, surgical code patch.\n"
             "Respond with ONLY a JSON object — no markdown, no explanation:\n"
             "{\n"
@@ -383,8 +396,8 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
             "}\n\n"
             "Rules:\n"
             "- fixable=true only when you have HIGH confidence the patch will resolve the issue\n"
-            "- Each 'old' must be an exact, unique string from that file\n"
-            "- For environmental issues (network, config, external service): fixable=false\n"
+            "- Each 'old' must be an EXACT verbatim string copied from the file content above\n"
+            "- For environmental issues (network, config, credentials): fixable=false\n"
             "- resolve_in_sentry=true only if the patch fully addresses the root cause"
         )
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)

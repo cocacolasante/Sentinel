@@ -27,15 +27,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import logging
 import uuid
 
+from loguru import logger
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/sentry", tags=["sentry"])
@@ -192,15 +191,27 @@ async def _process_sentry_event(payload: dict) -> None:
 
         task_id    = str(uuid.uuid4())
         task_title = f"[Sentry {level.upper()}] {title[:120]}"
+        # Extract affected app/ filenames from the webhook's inline stack trace
+        _affected: list[str] = []
+        for entry in issue.get("entries", []):
+            if entry.get("type") != "exception":
+                continue
+            for exc_val in (entry.get("data") or {}).get("values", []):
+                for frame in (exc_val.get("stacktrace") or {}).get("frames", []):
+                    fn = frame.get("filename", "")
+                    if fn.startswith("app/") and fn not in _affected:
+                        _affected.append(fn)
+
         task_params = {
-            "issue_id":  issue_id,
-            "title":     title,
-            "level":     level,
-            "project":   project,
-            "permalink": permalink,
-            "count":     count,
-            "platform":  platform,
-            "first_seen": first_seen,
+            "issue_id":       issue_id,
+            "title":          title,
+            "level":          level,
+            "project":        project,
+            "permalink":      permalink,
+            "count":          count,
+            "platform":       platform,
+            "first_seen":     first_seen,
+            "affected_files": _affected,
         }
 
         _create_pending_task(task_id, task_title, task_params, category)

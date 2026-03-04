@@ -136,7 +136,14 @@
       "Bash(git commit -m \"$\\(cat <<'EOF'\nfeat: update root endpoint to v2.2.0\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git push origin feat/update-root-endpoint --force 2>&1)",
       "Bash(git checkout main && git stash pop 2>&1)",
-      "Bash(git stash && git checkout main && git stash pop 2>&1)"
+      "Bash(git stash && git checkout main && git stash pop 2>&1)",
+      "Bash(which pip3 && pip3 --version 2>/dev/null || echo \"pip3 not found\")",
+      "Bash(docker restart ai-brain)",
+      "Bash(docker inspect ai-brain --format '{{json .HostConfig.Binds}}' && docker exec ai-brain python -c \"import app.brain.dispatcher as d; import inspect; src = inspect.getsourcefile\\(d\\); print\\(src\\)\")",
+      "Bash(docker cp /root/sentinel/app/brain/dispatcher.py ai-brain:/app/app/brain/dispatcher.py && docker restart ai-brain)",
+      "Bash(docker exec ai-brain grep -n \"Gmail invite skipped\" /app/app/brain/dispatcher.py)",
+      "Bash(docker exec ai-brain python3 -c \"\nimport os, urllib.parse, urllib.request, json\n\nclient_id     = os.environ['GOOGLE_CLIENT_ID']\nclient_secret = os.environ['GOOGLE_CLIENT_SECRET']\nrefresh_token = os.environ['GOOGLE_REFRESH_TOKEN']\n\ndata = urllib.parse.urlencode\\({\n    'client_id':     client_id,\n    'client_secret': client_secret,\n    'refresh_token': refresh_token,\n    'grant_type':    'refresh_token',\n}\\).encode\\(\\)\n\nreq = urllib.request.Request\\('https://oauth2.googleapis.com/token', data=data, method='POST'\\)\nreq.add_header\\('Content-Type', 'application/x-www-form-urlencoded'\\)\ntry:\n    with urllib.request.urlopen\\(req\\) as r:\n        resp = json.loads\\(r.read\\(\\)\\)\n        print\\('OK — scopes:', resp.get\\('scope'\\)\\)\n        print\\('token type:', resp.get\\('token_type'\\)\\)\nexcept urllib.error.HTTPError as e:\n    print\\('ERROR', e.code, json.loads\\(e.read\\(\\)\\)\\)\n\")",
+      "Bash(docker exec ai-brain python3 -c \"\nfrom app.config import get_settings\ns = get_settings\\(\\)\naccs = s.google_accounts\nprint\\('accounts:', len\\(accs\\)\\)\nfor a in accs:\n    print\\('  name:', a.get\\('name'\\)\\)\n    print\\('  client_id:', a.get\\('client_id',''\\)[:20]+'...'\\)\n    print\\('  refresh_token:', a.get\\('refresh_token',''\\)[:20]+'...'\\)\n\")"
     ]
   }
 }
