@@ -1011,59 +1011,6 @@
       }
     },
     {
-      "id": 21,
-      "type": "timeseries",
-      "title": "HTTP Error Rate (4xx / min)",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 83
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) * 60",
-          "legendFormat": "4xx errors/min",
-          "refId": "A",
-          "interval": "5s"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "lineWidth": 2
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "4xx errors/min"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "yellow"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
       "id": 20,
       "type": "table",
       "title": "Top Errors by Frequency",

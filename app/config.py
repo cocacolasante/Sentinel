@@ -1,5 +1,4 @@
 from functools import lru_cache
-from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -119,14 +118,6 @@ class Settings(BaseSettings):
     # ── TELOS ──────────────────────────────────────────────────
     telos_dir: str = "/home/ubuntu/ai-brain/telos"
     telos_cache_ttl_seconds: int = 300
-
-    # ── Error Collection & Auto-Remediation ────────────────────
-    error_collection_enabled: bool = Field(default=True)
-    log_monitor_enabled: bool = Field(default=True)
-    error_debounce_window: int = Field(default=300)  # seconds
-    error_buffer_size: int = Field(default=100)
-    auto_create_remediation_tasks: bool = Field(default=True)
-    error_log_path: str = Field(default="/tmp/sentinel_errors.json")
 
     # ── Observability / Sentry ───────────────────────────────────
     sentry_dsn:             str = ""

@@ -72,14 +72,6 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
-    "collect-live-logs": {
-        "task": "app.worker.error_tasks.collect_live_logs",
-        "schedule": crontab(minute="*/5"),  # Every 5 minutes
-    },
-    "aggregate-error-metrics": {
-        "task": "app.worker.error_tasks.aggregate_error_metrics",
-        "schedule": crontab(minute=0),  # Every hour
-    },
     # Weekly Sunday 09:00 UTC — agent quality evals + Slack scorecard
     "weekly-agent-evals": {
         "task":     "app.worker.tasks.run_weekly_agent_evals",

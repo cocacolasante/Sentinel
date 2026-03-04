@@ -69,7 +69,6 @@ Intent-specific param examples:
   n8n_manage:     {{"action": "list" | "get" | "create" | "activate" | "deactivate" | "delete", "workflow_id": "", "name": ""}}
   cicd_read:      {{"action": "list_workflows" | "list_runs" | "get_run", "repo": "owner/name", "workflow_id": "", "run_id": ""}}
   cicd_trigger:   {{"repo": "owner/name", "workflow_id": "deploy.yml", "ref": "main", "inputs": {{}}}}
-  cicd_debug:     {{"repo": "owner/name", "run_id": "", "fix": false}}   # debug/fix a failed CI run
   contacts_read:  {{"action": "search" | "list" | "lookup_email", "query": "Laura", "email": ""}}
   contacts_write: {{"action": "add" | "update" | "delete", "name": "Laura Smith", "email": "laura@co.com", "phone": "+12125551234", "company": "", "id": ""}}
   whatsapp_read:  {{"action": "list" | "get", "to": "+12125551234", "limit": 20}}
@@ -212,7 +211,6 @@ n8n_execute     — run a specific n8n workflow by name
 n8n_manage      — list, create, activate, or delete n8n workflows
 cicd_read       — check CI/CD pipelines: list GitHub Actions workflows, view run status
 cicd_trigger    — trigger a GitHub Actions workflow manually
-cicd_debug      — fetch failed CI/CD run logs, parse errors, and suggest or apply fixes
 contacts_read   — search or look up a contact by name or email in the address book
 contacts_write  — add, update, or delete a contact in the address book
 whatsapp_read   — read or check recent WhatsApp messages
