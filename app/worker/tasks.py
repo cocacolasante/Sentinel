@@ -101,6 +101,47 @@ def deploy_brain(self, reason: str = "") -> dict:
 
 @celery_app.task(
     bind=True,
+    name="app.worker.tasks.plan_and_execute_board_task",
+    queue="tasks_general",
+    max_retries=0,
+    soft_time_limit=540,
+    time_limit=600,
+)
+def plan_and_execute_board_task(self, task_id: int) -> dict:
+    """
+    Use the LLM agent loop to plan and execute a task that has no pre-defined commands.
+    The agent reads files, makes edits, and commits — all autonomously.
+    """
+    try:
+        return asyncio.run(_llm_execute_task(self.request.id or str(task_id), task_id))
+    except Exception as exc:
+        logger.error("plan_and_execute_board_task(%s) crashed: %s", task_id, exc, exc_info=True)
+        _mark_task(task_id, "failed", str(exc))
+        return {"error": str(exc)}
+
+
+@celery_app.task(
+    bind=True,
+    name="app.worker.tasks.scan_pending_tasks",
+    queue="celery",
+    max_retries=0,
+    soft_time_limit=60,
+    time_limit=90,
+)
+def scan_pending_tasks(self) -> dict:
+    """
+    Scan for pending tasks that have never been dispatched (celery_task_id IS NULL)
+    and auto-queue them based on whether they have pre-defined commands or need LLM planning.
+    """
+    try:
+        return asyncio.run(_scan_pending_tasks())
+    except Exception as exc:
+        logger.error("scan_pending_tasks failed: %s", exc)
+        return {"error": str(exc)}
+
+
+@celery_app.task(
+    bind=True,
     name="app.worker.tasks.execute_board_task",
     queue="tasks_general",      # overridden to tasks_workspace at call-time if needed
     max_retries=0,
@@ -485,8 +526,9 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
             thread_ts = ctx.get("thread_ts", "")
 
     if not commands:
-        _mark_task(task_id, "failed", "no commands to execute")
-        return {"error": "no commands"}
+        # No pre-defined commands — hand off to the LLM agent loop
+        logger.info("Task #%s has no commands — routing to LLM agent loop", task_id)
+        return await _llm_execute_task(celery_task_id, task_id)
 
     needs_lock = _touches_workspace(commands)
 
@@ -569,6 +611,292 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
         post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
 
     return {"task_id": task_id, "passed": all_passed, "steps": len(results)}
+
+
+async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
+    """
+    Agentic loop for tasks with no pre-defined commands.
+
+    Each round asks the LLM for the next shell command to run.  The LLM sees
+    the full command history so far and decides whether to run another command
+    or declare the task done / failed.  Supports up to 8 rounds.
+
+    LLM response schema (strict JSON, one of):
+      {"command": "...", "reasoning": "..."}
+      {"done": true, "summary": "..."}
+      {"done": true, "failed": true, "summary": "..."}
+    """
+    import anthropic
+    from app.config import get_settings
+    from app.db import postgres
+    from app.memory.redis_client import RedisMemory
+    from app.integrations.slack_notifier import post_thread_reply_sync
+
+    settings = get_settings()
+    redis    = RedisMemory()
+    code_root = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
+
+    # ── Load task ─────────────────────────────────────────────────────────────
+    row = postgres.execute_one(
+        "SELECT id, title, description, slack_channel, slack_thread_ts, session_id, "
+        "       blocked_by, approval_level "
+        "FROM tasks WHERE id = %s",
+        (task_id,),
+    )
+    if not row:
+        return {"error": f"Task #{task_id} not found"}
+
+    title       = row.get("title", f"Task #{task_id}")
+    description = row.get("description") or ""
+    channel     = row.get("slack_channel") or ""
+    thread_ts   = row.get("slack_thread_ts") or ""
+
+    # blocked_by check
+    import json as _json
+    raw_blocked = row.get("blocked_by") or []
+    if isinstance(raw_blocked, str):
+        raw_blocked = _json.loads(raw_blocked)
+    blocker_ids = [int(x) for x in raw_blocked if x]
+    if blocker_ids:
+        blocker_rows = postgres.execute(
+            "SELECT id, status FROM tasks WHERE id = ANY(%s)", (blocker_ids,)
+        )
+        incomplete = [r["id"] for r in blocker_rows if r["status"] != "done"]
+        if incomplete:
+            execute_board_task.apply_async(args=[task_id], countdown=30)
+            return {"status": "requeued", "blocked_by": incomplete}
+
+    # approval_level gate
+    approval_level = row.get("approval_level") or 1
+    pending_row = postgres.execute_one("SELECT status FROM tasks WHERE id = %s", (task_id,))
+    current_status = (pending_row or {}).get("status", "pending")
+    if approval_level >= 2 and current_status == "pending":
+        from app.config import get_settings as _gs
+        _s = _gs()
+        if _s.slack_owner_user_id and _s.slack_bot_token:
+            from app.integrations.slack_notifier import post_dm_sync, post_alert_sync as _pas
+            _domain = _s.domain or "sentinelai.cloud"
+            _dm = (
+                f"🔐 *Approval needed — Task #{task_id}: {title}*\n"
+                f"PATCH https://{_domain}/api/v1/board/tasks/{task_id} "
+                '`{"status": "in_progress"}` to approve.'
+            )
+            post_dm_sync(_dm)
+        _mark_task(task_id, "pending")
+        return {"status": "awaiting_approval", "approval_level": approval_level}
+
+    _mark_task(task_id, "in_progress")
+
+    if channel and thread_ts:
+        post_thread_reply_sync(
+            f"🧠 *Task #{task_id} — {title}*\n_Planning and executing autonomously..._",
+            channel, thread_ts,
+        )
+
+    # ── Agent loop ────────────────────────────────────────────────────────────
+    system_prompt = (
+        "You are Sentinel, an autonomous AI agent executing server tasks via shell commands.\n"
+        f"Workspace: {code_root}  (a git repository — always commit + push after file changes)\n\n"
+        "Each response must be ONLY a JSON object — one of:\n"
+        '  {"command": "<bash command>", "reasoning": "<why>"}\n'
+        '  {"done": true, "summary": "<what was accomplished>"}\n'
+        '  {"done": true, "failed": true, "summary": "<why it failed>"}\n\n'
+        "Rules:\n"
+        f"- Use absolute paths starting with {code_root}/\n"
+        "- JSON file edits: python3 -c with json.load/json.dump\n"
+        "- After any file change: git -C {code_root} add -A && "
+        f"git -C {code_root} commit -m '<msg>' && git -C {code_root} push\n"
+        "- Max one command per response\n"
+        "- Never ask questions — decide autonomously\n"
+        "- No markdown in your response — pure JSON only"
+    )
+
+    messages: list[dict] = [
+        {"role": "user", "content": f"Task #{task_id}: {title}\nDescription: {description or '(none)'}"}
+    ]
+
+    results: list[str] = []
+    all_passed    = True
+    workspace_lock_held = False
+    max_rounds    = 8
+    round_num     = 0
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+    for round_num in range(max_rounds):
+        # Ask LLM for the next action
+        try:
+            resp = await asyncio.to_thread(
+                client.messages.create,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=512,
+                system=system_prompt,
+                messages=messages,
+            )
+            raw = resp.content[0].text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            action = json.loads(raw)
+        except Exception as exc:
+            logger.error("LLM round %d failed for task #%s: %s", round_num, task_id, exc)
+            all_passed = False
+            results.append(f"❌ *LLM error (round {round_num + 1}):* {exc}")
+            break
+
+        if action.get("done"):
+            summary = action.get("summary", "Task completed")
+            icon = "❌" if action.get("failed") else "✅"
+            results.append(f"{icon} *Summary:* {summary}")
+            if action.get("failed"):
+                all_passed = False
+            break
+
+        cmd = (action.get("command") or "").strip()
+        if not cmd:
+            break
+
+        # Acquire workspace lock on first workspace-touching command
+        if not workspace_lock_held and code_root in cmd:
+            acquired = False
+            for _ in range(10):
+                if redis.acquire_workspace_lock(celery_task_id):
+                    acquired = True
+                    workspace_lock_held = True
+                    break
+                await asyncio.sleep(30)
+            if not acquired:
+                all_passed = False
+                results.append("❌ Could not acquire workspace lock after 5 minutes")
+                break
+
+        cwd = code_root if workspace_lock_held else "/root"
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=cwd,
+                executable="/bin/bash",
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+            output    = (stdout or b"").decode("utf-8", errors="replace")[:2_000].strip()
+            exit_code = proc.returncode or 0
+        except asyncio.TimeoutError:
+            output, exit_code = "[timed out after 120s]", -1
+        except Exception as exc:
+            output, exit_code = f"[error: {exc}]", -1
+
+        status_icon = "✅" if exit_code == 0 else "❌"
+        snippet     = f"```\n{output}\n```" if output else ""
+        results.append(f"{status_icon} *Round {round_num + 1}:* `{cmd[:120]}`\n{snippet}".strip())
+        logger.info(
+            "Task #%s round %d/%d exit=%d cmd=%s",
+            task_id, round_num + 1, max_rounds, exit_code, cmd[:80],
+        )
+
+        # Feed result back to LLM
+        messages.append({"role": "assistant", "content": raw})
+        messages.append({
+            "role": "user",
+            "content": (
+                f"Command output (exit {exit_code}):\n```\n{output[:1_500]}\n```\n"
+                + (
+                    "Command succeeded. Continue with next step or mark done."
+                    if exit_code == 0
+                    else "Command FAILED. You may retry, try an alternative, or mark done/failed."
+                )
+            ),
+        })
+
+        if exit_code != 0 and round_num >= max_rounds - 2:
+            all_passed = False
+            break
+
+    # ── Cleanup ───────────────────────────────────────────────────────────────
+    if workspace_lock_held:
+        redis.release_workspace_lock(celery_task_id)
+
+    _mark_task(task_id, "done" if all_passed else "failed")
+
+    if channel and thread_ts:
+        header = (
+            f"✅ *Task #{task_id} — {title}* — complete"
+            if all_passed
+            else f"❌ *Task #{task_id} — {title}* — failed"
+        )
+        divider = "─" * 36
+        body    = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
+        post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
+
+    return {"task_id": task_id, "passed": all_passed, "rounds": round_num + 1}
+
+
+async def _scan_pending_tasks() -> dict:
+    """
+    Find all pending tasks that:
+      - Have approval_level == 1 (auto-approve)
+      - Have never been dispatched (celery_task_id IS NULL)
+      - Are not blocked by other tasks
+
+    Tasks with pre-defined commands go to execute_board_task.
+    Tasks without commands go to plan_and_execute_board_task (LLM agent loop).
+    """
+    import json as _json
+    from app.db import postgres
+
+    rows = postgres.execute(
+        """
+        SELECT id, title, commands, execution_queue, blocked_by
+        FROM   tasks
+        WHERE  status        = 'pending'
+          AND  approval_level = 1
+          AND  (celery_task_id IS NULL OR celery_task_id = '')
+        ORDER BY COALESCE(priority_num, 3) DESC, created_at ASC
+        LIMIT 10
+        """,
+    )
+
+    dispatched = 0
+    for row in (rows or []):
+        task_id = row["id"]
+
+        # Skip blocked tasks
+        raw_blocked = row.get("blocked_by") or []
+        if isinstance(raw_blocked, str):
+            raw_blocked = _json.loads(raw_blocked) if raw_blocked else []
+        if raw_blocked:
+            blocker_ids = [int(x) for x in raw_blocked if x]
+            if blocker_ids:
+                blocker_rows = postgres.execute(
+                    "SELECT status FROM tasks WHERE id = ANY(%s)", (blocker_ids,)
+                )
+                if any(r["status"] != "done" for r in (blocker_rows or [])):
+                    logger.info("scan_pending_tasks: task #%s still blocked — skipping", task_id)
+                    continue
+
+        raw_cmds = row.get("commands") or []
+        if isinstance(raw_cmds, str):
+            raw_cmds = _json.loads(raw_cmds) if raw_cmds else []
+        commands = [c for c in raw_cmds if c and c.strip()]
+
+        q = row.get("execution_queue") or "tasks_general"
+        if commands:
+            result = execute_board_task.apply_async(args=[task_id], queue=q)
+        else:
+            result = plan_and_execute_board_task.apply_async(args=[task_id], queue=q)
+
+        postgres.execute(
+            "UPDATE tasks SET celery_task_id=%s WHERE id=%s",
+            (result.id, task_id),
+        )
+        task_type = "cmd" if commands else "llm"
+        logger.info(
+            "scan_pending_tasks: dispatched task #%s (%s) → %s celery_id=%s",
+            task_id, task_type, q, result.id[:8],
+        )
+        dispatched += 1
+
+    return {"dispatched": dispatched}
 
 
 def post_alert_sync(text: str) -> None:

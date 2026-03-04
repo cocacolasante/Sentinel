@@ -62,6 +62,9 @@ celery_app.conf.update(
             # This entry is a fallback; the skill chooses the queue based on commands.
             "queue": "tasks_general",
         },
+        "app.worker.tasks.plan_and_execute_board_task": {
+            "queue": "tasks_general",
+        },
         "app.worker.tasks.run_shell_and_report_back": {
             "queue": "tasks_general",
         },
@@ -85,6 +88,12 @@ celery_app.conf.beat_schedule = {
     "health-check": {
         "task":     "app.worker.tasks.run_health_check",
         "schedule": crontab(minute="*/30"),
+        "options":  {"queue": "celery"},
+    },
+    # Every 3 min — scan for pending tasks and dispatch them to workers
+    "scan-pending-tasks": {
+        "task":     "app.worker.tasks.scan_pending_tasks",
+        "schedule": crontab(minute="*/3"),
         "options":  {"queue": "celery"},
     },
 }
