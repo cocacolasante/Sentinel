@@ -650,26 +650,34 @@ class Dispatcher:
                 logger.info("Calendar event created | account={} | title={} | start={} | attendees={}", cal.account_name, title, start, attendees)
 
                 # Send a personal Gmail invite to each attendee (use same account)
-                gmail_client  = get_gmail_client(account_name=account)
+                # Google Calendar's sendUpdates="all" already delivers the native invite;
+                # this is an optional extra email — skip silently if Gmail isn't authorised.
                 gmail_results = []
-                for email in attendees:
-                    invite_body = await asyncio.to_thread(
-                        self.llm.route,
-                        (
-                            f"Write a short, friendly email inviting someone to: {title}\n"
-                            f"When: {start}\n"
-                            f"Keep it warm and concise — 2-3 sentences max. "
-                            "Output ONLY the email body."
-                        ),
-                        None, None,
-                    )
-                    await gmail_client.send_email(
-                        to=email,
-                        subject=f"Invitation: {title}",
-                        body=invite_body,
-                    )
-                    gmail_results.append(email)
-                    logger.info("Invite email sent | to={} | event={}", email, title)
+                gmail_skip_note = ""
+                if attendees:
+                    try:
+                        gmail_client = get_gmail_client(account_name=account)
+                        for email in attendees:
+                            invite_body = await asyncio.to_thread(
+                                self.llm.route,
+                                (
+                                    f"Write a short, friendly email inviting someone to: {title}\n"
+                                    f"When: {start}\n"
+                                    f"Keep it warm and concise — 2-3 sentences max. "
+                                    "Output ONLY the email body."
+                                ),
+                                None, None,
+                            )
+                            await gmail_client.send_email(
+                                to=email,
+                                subject=f"Invitation: {title}",
+                                body=invite_body,
+                            )
+                            gmail_results.append(email)
+                            logger.info("Invite email sent | to={} | event={}", email, title)
+                    except Exception as gmail_exc:
+                        logger.warning("Gmail invite skipped ({}): {}", type(gmail_exc).__name__, gmail_exc)
+                        gmail_skip_note = "\n_(Google Calendar invite already sent; Gmail follow-up skipped — re-run `google_auth.py` to enable it.)_"
 
                 reply = (
                     f"Done! **{title}** has been added to the **{cal.account_name}** calendar.\n"
@@ -678,6 +686,7 @@ class Dispatcher:
                 )
                 if gmail_results:
                     reply += f"\nInvite email sent from your Gmail to: {', '.join(gmail_results)}"
+                reply += gmail_skip_note
                 task_id = pending.get("_task_id")
                 if task_id:
                     self._update_write_task_status(task_id, "completed")

@@ -1,117 +1,175 @@
 #!/usr/bin/env python3
 """
-Google OAuth Setup Script — run ONCE to get your refresh token.
+Google OAuth Setup Script — two-phase, no SSH tunnel required.
 
-What this does:
-  1. Opens a browser for you to sign in to Google
-  2. Requests offline access to Gmail + Calendar
-  3. Saves the refresh token to .env
+Phase 1 (auto):  Prints an auth URL and waits for you to drop the code.
+Phase 2 (auto):  You visit the URL, approve, copy the redirect URL from
+                 the browser bar, then paste it here via Claude Code:
 
-Usage:
-  cd ~/ai-brain
-  python3 scripts/google_auth.py
+    Write "/tmp/google_oauth_code.txt" with the full redirect URL.
 
-Prerequisites:
-  1. Go to https://console.cloud.google.com
-  2. Create a project (or use an existing one)
-  3. Enable: Gmail API + Google Calendar API
-  4. Go to APIs & Services > Credentials > Create Credentials > OAuth client ID
-  5. Application type: Desktop app
-  6. Download the JSON file and save it as google_credentials.json in ~/ai-brain/
-  7. Run this script
-
-After running, add the printed values to your .env file.
+The script detects the file, exchanges the code, updates .env, done.
 """
 
 import json
 import os
 import sys
+import time
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
+CREDS_FILE   = PROJECT_ROOT / "google_credentials.json"
+TOKEN_FILE   = PROJECT_ROOT / "google_token.json"
+ENV_FILE     = PROJECT_ROOT / ".env"
+CODE_FILE    = Path("/tmp/google_oauth_code.txt")
 
-SCOPES = [
+SCOPES = " ".join([
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.compose",
     "https://www.googleapis.com/auth/calendar",
-]
+    "https://www.googleapis.com/auth/gmail.modify",
+])
 
-CREDS_FILE   = PROJECT_ROOT / "google_credentials.json"
-TOKEN_FILE   = PROJECT_ROOT / "google_token.json"
-ENV_FILE     = PROJECT_ROOT / ".env"
+REDIRECT_URI  = "http://localhost"
+AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/auth"
+TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+
+
+def load_client_secrets():
+    data = json.loads(CREDS_FILE.read_text())
+    kind = list(data.keys())[0]
+    info = data[kind]
+    return info["client_id"], info["client_secret"]
+
+
+def build_auth_url(client_id: str) -> str:
+    params = {
+        "response_type": "code",
+        "client_id":     client_id,
+        "redirect_uri":  REDIRECT_URI,
+        "scope":         SCOPES,
+        "access_type":   "offline",
+        "prompt":        "consent",
+    }
+    return AUTH_ENDPOINT + "?" + urllib.parse.urlencode(params)
+
+
+def exchange_code(client_id: str, client_secret: str, code: str) -> dict:
+    data = urllib.parse.urlencode({
+        "code":          code,
+        "client_id":     client_id,
+        "client_secret": client_secret,
+        "redirect_uri":  REDIRECT_URI,
+        "grant_type":    "authorization_code",
+    }).encode()
+    req = urllib.request.Request(TOKEN_ENDPOINT, data=data, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read())
+
+
+def update_env(client_id: str, client_secret: str, refresh_token: str):
+    def _set(content, key, value):
+        lines = content.splitlines()
+        new_lines, replaced = [], False
+        for line in lines:
+            if line.startswith(f"{key}="):
+                new_lines.append(f"{key}={value}")
+                replaced = True
+            else:
+                new_lines.append(line)
+        if not replaced:
+            new_lines.append(f"{key}={value}")
+        return "\n".join(new_lines) + "\n"
+
+    content = ENV_FILE.read_text() if ENV_FILE.exists() else ""
+    content = _set(content, "GOOGLE_CLIENT_ID",     client_id)
+    content = _set(content, "GOOGLE_CLIENT_SECRET", client_secret)
+    content = _set(content, "GOOGLE_REFRESH_TOKEN", refresh_token)
+    ENV_FILE.write_text(content)
 
 
 def main():
     if not CREDS_FILE.exists():
         print(f"ERROR: {CREDS_FILE} not found.")
-        print("Download your OAuth credentials JSON from Google Cloud Console")
-        print("and save it as google_credentials.json in the project root.")
         sys.exit(1)
 
-    try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        from google.auth.transport.requests import Request
-        from google.oauth2.credentials import Credentials
-    except ImportError:
-        print("Missing dependencies. Run: pip install google-auth-oauthlib google-auth-httplib2")
+    client_id, client_secret = load_client_secrets()
+
+    # ── Phase 1: generate URL ─────────────────────────────────────────────
+    CODE_FILE.unlink(missing_ok=True)
+    auth_url = build_auth_url(client_id)
+
+    print("\n" + "=" * 70)
+    print("STEP 1 — Open this URL in any browser:")
+    print("=" * 70)
+    print(f"\n{auth_url}\n")
+    print("=" * 70)
+    print("STEP 2 — After approving, Google redirects to:")
+    print("  http://localhost/?code=...  (page will fail to load — that's fine)")
+    print()
+    print("Copy the FULL URL from your browser address bar, then run this")
+    print("command in Claude Code (replace <URL> with what you copied):")
+    print()
+    print("  Write the URL into /tmp/google_oauth_code.txt")
+    print()
+    print("Waiting up to 10 minutes for /tmp/google_oauth_code.txt ...")
+    print("=" * 70 + "\n")
+    sys.stdout.flush()
+
+    # ── Phase 2: wait for code file ───────────────────────────────────────
+    for _ in range(600):
+        if CODE_FILE.exists():
+            break
+        time.sleep(1)
+    else:
+        print("Timed out. Re-run the script to try again.")
         sys.exit(1)
 
-    creds = None
+    raw = CODE_FILE.read_text().strip()
+    CODE_FILE.unlink(missing_ok=True)
 
-    # Load existing token if available
-    if TOKEN_FILE.exists():
-        creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
+    if raw.startswith("http"):
+        parsed = urllib.parse.parse_qs(urllib.parse.urlparse(raw).query)
+        code = parsed.get("code", [raw])[0]
+    else:
+        code = raw
 
-    # Refresh or run new flow
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(str(CREDS_FILE), SCOPES)
-            creds = flow.run_local_server(port=0)
+    print(f"Got code. Exchanging for tokens...")
 
-        TOKEN_FILE.write_text(creds.to_json())
+    # ── Phase 3: exchange & save ──────────────────────────────────────────
+    tokens = exchange_code(client_id, client_secret, code)
+    refresh_token = tokens.get("refresh_token")
+    if not refresh_token:
+        print(f"ERROR: no refresh_token in response: {tokens}")
+        sys.exit(1)
 
-    print("\n" + "=" * 60)
-    print("SUCCESS — Google OAuth authorised!")
-    print("=" * 60)
-    print(f"\nClient ID:      {creds.client_id}")
-    print(f"Client Secret:  {creds.client_secret}")
-    print(f"Refresh Token:  {creds.refresh_token}")
-    print("\nAdd these to your .env file:")
-    print(f"  GOOGLE_CLIENT_ID={creds.client_id}")
-    print(f"  GOOGLE_CLIENT_SECRET={creds.client_secret}")
-    print(f"  GOOGLE_REFRESH_TOKEN={creds.refresh_token}")
+    # Save token file (for future refreshes)
+    token_data = {
+        "token":         tokens.get("access_token"),
+        "refresh_token": refresh_token,
+        "token_uri":     TOKEN_ENDPOINT,
+        "client_id":     client_id,
+        "client_secret": client_secret,
+        "scopes":        SCOPES.split(),
+    }
+    TOKEN_FILE.write_text(json.dumps(token_data, indent=2))
 
-    # Optionally write directly to .env
-    if ENV_FILE.exists():
-        answer = input("\nAuto-update .env with these values? [y/N] ").strip().lower()
-        if answer == "y":
-            env_content = ENV_FILE.read_text()
+    # Auto-update .env
+    update_env(client_id, client_secret, refresh_token)
 
-            def _replace_or_append(content: str, key: str, value: str) -> str:
-                lines = content.splitlines()
-                replaced = False
-                new_lines = []
-                for line in lines:
-                    if line.startswith(f"{key}="):
-                        new_lines.append(f"{key}={value}")
-                        replaced = True
-                    else:
-                        new_lines.append(line)
-                if not replaced:
-                    new_lines.append(f"{key}={value}")
-                return "\n".join(new_lines) + "\n"
-
-            env_content = _replace_or_append(env_content, "GOOGLE_CLIENT_ID",     creds.client_id)
-            env_content = _replace_or_append(env_content, "GOOGLE_CLIENT_SECRET", creds.client_secret)
-            env_content = _replace_or_append(env_content, "GOOGLE_REFRESH_TOKEN", creds.refresh_token)
-            ENV_FILE.write_text(env_content)
-            print(f".env updated at {ENV_FILE}")
-
-    print("\nYou can now restart the Brain and Gmail/Calendar will be active.")
-    print(f"(Token also saved to {TOKEN_FILE} — delete it to re-authorise)")
+    print("\n" + "=" * 70)
+    print("SUCCESS — .env updated with new refresh token (Gmail + Calendar).")
+    print("=" * 70)
+    print(f"\nRefresh token: {refresh_token[:20]}...")
+    print(f"Token file:    {TOKEN_FILE}")
+    print(f".env file:     {ENV_FILE}")
+    print("\nNow restart the brain:")
+    print("  docker restart ai-brain")
+    print()
 
 
 if __name__ == "__main__":
