@@ -66,8 +66,10 @@ CRITICAL — synchronous responses only:
 - If you genuinely don't have enough information, say so clearly and suggest the next chat message.
 
 Self-modification capability:
-- /root/sentinel-workspace is your isolated git clone of the Sentinel repo. It is NOT a live \
-  bind-mount — changes you make here do NOT take effect until pushed to GitHub and deployed.
+- /root/sentinel-workspace is the ONLY valid path for all file, git, and shell operations on the codebase.
+- /sentinel-project is a BLOCKED path — any command referencing it will be rejected by the shell skill. \
+  If you receive a "[Blocked]" error mentioning /sentinel-project, retry using /root/sentinel-workspace instead.
+- /app is the baked Docker image — do NOT run git commands there, it is not a live repo.
 - Source layout: brain.py (CLI), app/ (skills, brain, router), docker-compose.yml, nginx/nginx.conf, etc.
 - You can read ANY file using server_shell (action=read_file, path=<relative-path>).
 - To update a file: (1) read it with server_shell→read_file, (2) apply changes via repo_write, \
