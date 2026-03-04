@@ -191,6 +191,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AI Brain",
+from app.services.error_middleware import ErrorCollectionMiddleware
+app.add_middleware(ErrorCollectionMiddleware)
     description="Personalized AI Assistant — CSuite Code",
     version="2.0.0",
     lifespan=lifespan,

@@ -2,7 +2,15 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings
 
 
-class Settings(BaseSettings):
+# Error Collection & Auto-Remediation
+    ERROR_COLLECTION_ENABLED: bool = Field(default=True, env="ERROR_COLLECTION_ENABLED")
+    LOG_MONITOR_ENABLED: bool = Field(default=True, env="LOG_MONITOR_ENABLED")
+    ERROR_DEBOUNCE_WINDOW: int = Field(default=300, env="ERROR_DEBOUNCE_WINDOW")  # seconds
+    ERROR_BUFFER_SIZE: int = Field(default=100, env="ERROR_BUFFER_SIZE")
+    AUTO_CREATE_REMEDIATION_TASKS: bool = Field(default=True, env="AUTO_CREATE_REMEDIATION_TASKS")
+    ERROR_LOG_PATH: str = Field(default="/tmp/sentinel_errors.json", env="ERROR_LOG_PATH")
+    
+    class Settings(BaseSettings):
     # ── Brain ─────────────────────────────────────────────────
     secret_key: str = "change-me-in-production"
     environment: str = "development"
