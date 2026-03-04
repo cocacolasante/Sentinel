@@ -30,6 +30,22 @@ settings = get_settings()
 
 SSH_KEY = Path(settings.repo_ssh_key_path)
 
+# ── Protected path guardrail ───────────────────────────────────────────────────
+_PROTECTED_DIR = Path("/root/sentinel")
+
+
+def _assert_not_protected(path: Path) -> None:
+    """Raise PermissionError if *path* is inside /root/sentinel."""
+    try:
+        resolved = path.resolve()
+    except Exception:
+        resolved = path
+    if resolved == _PROTECTED_DIR or str(resolved).startswith(str(_PROTECTED_DIR) + "/"):
+        raise PermissionError(
+            f"Access denied: /root/sentinel is a protected path. "
+            f"All file operations must target /root/sentinel-workspace."
+        )
+
 
 def _resolve_workspace() -> Path:
     """
@@ -82,7 +98,7 @@ class RepoClient:
       Remote mode  — GITHUB_BRAIN_REPO_URL is set.
                      Clone/pull into REPO_WORKSPACE, commit, push to GitHub.
       Local mode   — No remote URL, but REPO_LOCAL_PATH/.git exists.
-                     Read/write/commit directly in the bind-mounted live dir.
+                     Read/write/commit directly in the named-volume workspace.
                      Push still works if the remote is configured in that git repo.
     """
 
@@ -165,6 +181,7 @@ class RepoClient:
             target = Path(path)
         else:
             target = (self._workspace / path) if path else self._workspace
+        _assert_not_protected(target)
         if not target.exists():
             raise FileNotFoundError(f"Path not found: {path}")
         try:
@@ -185,6 +202,7 @@ class RepoClient:
             full = Path(path)
         else:
             full = self._workspace / path
+        _assert_not_protected(full)
         if not full.exists():
             raise FileNotFoundError(f"File not found: {path}")
         content = full.read_text(errors="replace")
@@ -194,12 +212,14 @@ class RepoClient:
 
     def _write_file_sync(self, path: str, content: str) -> str:
         full = self._workspace / path
+        _assert_not_protected(full)
         full.parent.mkdir(parents=True, exist_ok=True)
         full.write_text(content)
         return f"Written: {path} ({len(content.splitlines())} lines)"
 
     def _patch_file_sync(self, path: str, old: str, new: str) -> str:
         full = self._workspace / path
+        _assert_not_protected(full)
         if not full.exists():
             raise FileNotFoundError(f"File not found: {path}")
         original = full.read_text()

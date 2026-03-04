@@ -89,7 +89,7 @@ def run_health_check(self) -> dict:
 def deploy_brain(self, reason: str = "") -> dict:
     """
     Pull latest code from GitHub → rebuild Brain Docker image → restart container.
-    Runs inside the Celery worker, which has /var/run/docker.sock and /sentinel-project mounted.
+    Runs inside the Celery worker, which has /var/run/docker.sock and /root/sentinel-workspace mounted.
     """
     try:
         return asyncio.run(_deploy_brain(reason))
@@ -194,14 +194,14 @@ async def _deploy_brain(reason: str) -> dict:
     """
     1. Post 'deploy started' to Slack.
     2. Sleep 5 s — gives the brain time to finish sending its response.
-    3. git pull origin main  (updates /sentinel-project = /root/sentinel on host).
+    3. git pull origin main  (updates /root/sentinel-workspace = /root/sentinel on host).
     4. docker compose build brain.
     5. docker compose up -d brain  (hot-swap with new image).
     6. Post result to Slack.
     """
     from app.integrations.slack_notifier import post_alert_sync as _notify
 
-    project_dir  = "/sentinel-project"
+    project_dir  = "/root/sentinel-workspace"
     compose_file = f"{project_dir}/docker-compose.yml"
     steps:  list[str] = []
     errors: list[str] = []
@@ -356,7 +356,7 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
 
     # ── 2b. Read affected source files from repo ──────────────────────────────
     import os as _os
-    _CODE_ROOT = "/sentinel-project" if _os.path.isdir("/sentinel-project") else "/app"
+    _CODE_ROOT = "/root/sentinel-workspace" if _os.path.isdir("/root/sentinel-workspace") else "/app"
     file_context = ""
     for fname in issue_params.get("affected_files", []):
         try:

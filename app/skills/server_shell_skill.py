@@ -72,8 +72,20 @@ _FORBIDDEN_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ── Protected path guardrail ───────────────────────────────────────────────────
+# /root/sentinel is the host-side repo directory. The AI must only operate on
+# /root/sentinel-workspace (the container bind-mount). Any command or path that
+# references /root/sentinel (the raw host path), /sentinel-project (old mount),
+# or bare /sentinel is unconditionally blocked.
+_PROTECTED_PATH_RE = re.compile(
+    r"/root/sentinel(?!/\s*-\s*workspace)(?:/|\s|['\"]|$)"   # /root/sentinel (not -workspace)
+    r"|/sentinel-project(?:/|\s|['\"]|$)"                     # old mount point
+    r"|(?<![a-zA-Z0-9_\-])/sentinel(?:/|\s|['\"]|$)",         # bare /sentinel
+    re.IGNORECASE,
+)
+
 # Use the bind-mounted live host code when available, fall back to container /app
-_CODE_ROOT   = "/sentinel-project" if os.path.isdir("/sentinel-project") else "/app"
+_CODE_ROOT   = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
 _DEFAULT_CWD = _CODE_ROOT
 _MAX_OUTPUT  = 8_000   # chars
 
@@ -84,6 +96,11 @@ def _is_destructive(command: str) -> bool:
 
 def _is_forbidden(command: str) -> bool:
     return bool(_FORBIDDEN_RE.search(command))
+
+
+def _touches_protected_path(text: str) -> bool:
+    """Return True if *text* contains a reference to the protected /root/sentinel tree."""
+    return bool(_PROTECTED_PATH_RE.search(text))
 
 
 async def _run_command(command: str, cwd: str) -> tuple[str, int]:
@@ -193,6 +210,20 @@ class ServerShellSkill(BaseSkill):
                 context_data=(
                     "[server_shell requires either a 'command' param or an 'action' of "
                     "read_file / search_code / list_files. Ask the user what they want to run.]"
+                ),
+                skill_name=self.name,
+            )
+
+        # Protected path block — /root/sentinel must never be accessed or modified
+        _check_targets = [command, cwd] + [
+            str(v) for k, v in params.items() if k in ("path", "search_path") and v
+        ]
+        if any(_touches_protected_path(t) for t in _check_targets):
+            return SkillResult(
+                context_data=(
+                    "[Blocked — /root/sentinel, /sentinel-project, and /sentinel are "
+                    "protected paths that must never be accessed, modified, or deleted. "
+                    "Use /root/sentinel-workspace for all file and shell operations.]"
                 ),
                 skill_name=self.name,
             )

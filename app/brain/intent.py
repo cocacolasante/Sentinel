@@ -92,7 +92,7 @@ Intent-specific param examples:
   deploy:         {{"reason": "applied fix for contacts bug"}}
   sentry_read:    {{"action": "list" | "get" | "db", "project": "", "query": "is:unresolved", "issue_id": "", "limit": 20}}
   sentry_manage:  {{"action": "resolve" | "ignore" | "assign" | "comment", "issue_id": "123456", "assignee": "user@co.com", "text": "looking into this"}}
-  server_shell:   {{"command": "ls -la /sentinel-project", "cwd": "/sentinel-project", "action": "read_file" | "search_code" | "list_files" | "inspect_env" | "docker_restart" | "docker_compose", "path": "/sentinel-project/app/brain/dispatcher.py", "pattern": "def classify", "service": "ai-brain", "sub_command": "ps"}}
+  server_shell:   {{"command": "ls -la /root/sentinel-workspace", "cwd": "/root/sentinel-workspace", "action": "read_file" | "search_code" | "list_files" | "inspect_env" | "docker_restart" | "docker_compose", "path": "/root/sentinel-workspace/app/brain/dispatcher.py", "pattern": "def classify", "service": "ai-brain", "sub_command": "ps"}}
   task_create:    {{"title": "Fix the login bug", "description": "Users can't log in on mobile", "priority": 3, "approval_level": 2, "due_date": "2026-03-10", "tags": "bug,mobile", "assigned_to": ""}}
   task_read:      {{"action": "list" | "get", "status": "pending" | "in_progress" | "done" | "cancelled" | "", "priority": 4, "id": "", "limit": 20}}
   task_update:    {{"id": 42, "status": "in_progress" | "done" | "cancelled" | "pending", "priority": 4, "approval_level": 1, "title": "", "description": "", "tags": "", "assigned_to": ""}}
@@ -102,7 +102,7 @@ Intent-specific param examples:
 
 Routing guidance:
   - "update the CLI", "improve the CLI", "rewrite the CLI", "edit the CLI", "fix the CLI", "make the CLI better", "update brain.py", "edit brain.py", "rewrite brain.py", "show me brain.py", "read brain.py", "open brain.py", "show the CLI code", "look at the CLI code", "read the CLI" → server_shell with action=read_file, path=brain.py
-  - "update your code", "edit your own code", "improve yourself", "rewrite yourself", "change your code", "look at yourself", "read your own code" → server_shell with action=list_files, path=/sentinel-project
+  - "update your code", "edit your own code", "improve yourself", "rewrite yourself", "change your code", "look at yourself", "read your own code" → server_shell with action=list_files, path=/root/sentinel-workspace
   - "deploy an ubuntu server", "provision a server", "spin up a VPS", "create a cloud server", "set up an ubuntu vps" → ionos_cloud action=provision_server
   - "create a datacenter", "create a VDC", "new IONOS datacenter" → ionos_cloud action=create_datacenter
   - "list my datacenters", "show IONOS datacenters" → ionos_cloud action=list_datacenters
@@ -141,7 +141,10 @@ Routing guidance:
   - "read file X", "show me the code in X", "cat X", "open X" → server_shell with action=read_file, path=X
   - "search for X in the code", "grep X", "find where X is defined" → server_shell with action=search_code, pattern=X
   - "list files in X", "what files are in X", "show directory X" → server_shell with action=list_files, path=X
-  - "show me the codebase", "review the source", "look at the code" → server_shell with action=list_files, path=/sentinel-project
+  - "show me the codebase", "review the source", "look at the code" → server_shell with action=list_files, path=/root/sentinel-workspace
+  - "what does X skill do", "how does X work", "explain X", "show me X" where X is a skill/file/module → server_shell with action=read_file, path=<most relevant file>
+  - "what files exist in X", "find all python files", "list all skills" → server_shell with action=list_files or command with find
+  - ANY request that requires understanding existing code before acting → server_shell to read the relevant file first
   - "show me X" where X is a git operation (diff, status) → repo_read
   - Requests to edit/create a specific file with a path → repo_write
   - Ambiguous improvement requests without a specific file → code (let LLM suggest approach)
@@ -155,9 +158,9 @@ Routing guidance:
   - "install packages", "pip install", "npm install", "apt install" → server_shell
   - "show me the logs", "tail the logs", "check server logs" → server_shell
   - "what's running", "ps aux", "top", "htop", "check memory / disk" → server_shell
-  - "push to github", "git push", "push the code", "push changes", "push commits" → server_shell with command="cd /sentinel-project && git push origin HEAD"
-  - "git commit", "commit the changes", "commit all changes" → server_shell with command="cd /sentinel-project && git add -A && git commit -m '<message>'"
-  - "git pull", "pull latest", "pull from github" → server_shell with command="cd /sentinel-project && git pull"
+  - "push to github", "git push", "push the code", "push changes", "push commits" → server_shell with command="cd /root/sentinel-workspace && git push origin HEAD"
+  - "git commit", "commit the changes", "commit all changes" → server_shell with command="cd /root/sentinel-workspace && git add -A && git commit -m '<message>'"
+  - "git pull", "pull latest", "pull from github" → server_shell with command="cd /root/sentinel-workspace && git pull"
   - "restart the brain", "restart ai-brain", "restart the container", "docker restart" → server_shell with action=docker_restart, service="ai-brain"
   - "restart nginx", "restart the proxy", "docker restart nginx" → server_shell with action=docker_restart, service="ai-nginx"
   - "docker ps", "what containers are running", "show docker status", "container status" → server_shell with action=docker_compose, sub_command="ps"

@@ -455,7 +455,7 @@ class Dispatcher:
                 "Do NOT ask the user for confirmation. Do NOT say 'reply confirm to proceed'. "
                 "Execute operations immediately and report the results. "
                 "You have full access to all environment variables and configured integrations. "
-                "The live code is at /sentinel-project inside the container."
+                "The live code is at /root/sentinel-workspace inside the container."
             )
 
         # Cross-interface context — comes first so the LLM has full picture
