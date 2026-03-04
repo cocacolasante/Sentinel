@@ -58,6 +58,47 @@ def post_thread_reply_sync(text: str, channel: str, thread_ts: str) -> bool:
         return False
 
 
+async def post_dm(text: str, user_id: str | None = None) -> bool:
+    """Open a DM with the owner user and post a message asynchronously."""
+    settings = get_settings()
+    target = user_id or settings.slack_owner_user_id
+    if not settings.slack_bot_token or not target:
+        logger.warning("Slack DM skipped — bot token or owner user ID not configured")
+        return False
+    try:
+        from slack_sdk.web.async_client import AsyncWebClient
+        client = AsyncWebClient(token=settings.slack_bot_token)
+        conv   = await client.conversations_open(users=target)
+        dm_channel = conv["channel"]["id"]
+        resp = await client.chat_postMessage(channel=dm_channel, text=text, mrkdwn=True)
+        if resp.get("ok"):
+            logger.info("Slack DM posted | user=%s", target)
+            return True
+        logger.error("Slack DM failed: %s", resp.get("error"))
+        return False
+    except Exception as exc:
+        logger.error("Slack DM exception: %s", exc)
+        return False
+
+
+def post_dm_sync(text: str, user_id: str | None = None) -> bool:
+    """Open a DM with the owner user and post a message synchronously (safe in Celery)."""
+    settings = get_settings()
+    target = user_id or settings.slack_owner_user_id
+    if not settings.slack_bot_token or not target:
+        return False
+    try:
+        from slack_sdk import WebClient
+        client = WebClient(token=settings.slack_bot_token)
+        conv   = client.conversations_open(users=target)
+        dm_channel = conv["channel"]["id"]
+        resp = client.chat_postMessage(channel=dm_channel, text=text, mrkdwn=True)
+        return bool(resp.get("ok"))
+    except Exception as exc:
+        logger.error("Slack DM (sync) exception: %s", exc)
+        return False
+
+
 def post_alert_sync(text: str, channel: str | None = None) -> bool:
     """Post a message to Slack synchronously (safe inside Celery tasks)."""
     settings = get_settings()

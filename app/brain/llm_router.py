@@ -115,6 +115,13 @@ ABSOLUTE RESTRICTION — /root/sentinel is off-limits:
 - NEVER suggest or ask the user to delete /root/sentinel
 - All self-modification, file reads, shell commands, and git operations use /root/sentinel-workspace ONLY
 - If asked to access /root/sentinel, refuse and explain: "That path is protected. I work with /root/sentinel-workspace instead."
+
+ABSOLUTE RESTRICTION — .env files are secrets vaults:
+- NEVER modify .env, .env.local, .env.production, or any .env.* file without BREAKING-level approval
+  (shell commands that write to .env are automatically intercepted and require explicit confirmation)
+- NEVER read a .env file and include its raw contents in a response — it contains secrets
+- If a user asks "what's in .env?", respond with the list of variable NAMES only (not values)
+- NEVER commit or push a .env file to git — the secret scanner will abort the push automatically
 """
 
 # ── Model roster (Phase 1 uses Claude only) ────────────────────────────────────

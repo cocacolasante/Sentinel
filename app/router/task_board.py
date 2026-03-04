@@ -11,6 +11,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import json as _json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -29,24 +30,26 @@ _APPROVAL_LABEL   = {1: "auto-approve", 2: "needs review", 3: "requires sign-off
 
 class TaskCreate(BaseModel):
     title:          str
-    description:    str  = ""
-    priority:       int  = 3   # 1–5
-    approval_level: int  = 2   # 1–3
+    description:    str        = ""
+    priority:       int        = 3   # 1–5
+    approval_level: int        = 2   # 1–3
     due_date:       str | None = None
-    source:         str  = "brain"
-    tags:           str  = ""
-    assigned_to:    str  = ""
+    source:         str        = "brain"
+    tags:           str        = ""
+    assigned_to:    str        = ""
+    blocked_by:     list[int]  = []  # task IDs that must be done first
 
 
 class TaskUpdate(BaseModel):
-    title:          str | None = None
-    description:    str | None = None
-    status:         str | None = None   # pending | in_progress | done | cancelled
-    priority:       int | None = None
-    approval_level: int | None = None
-    due_date:       str | None = None
-    tags:           str | None = None
-    assigned_to:    str | None = None
+    title:          str | None       = None
+    description:    str | None       = None
+    status:         str | None       = None   # pending | in_progress | done | cancelled
+    priority:       int | None       = None
+    approval_level: int | None       = None
+    due_date:       str | None       = None
+    tags:           str | None       = None
+    assigned_to:    str | None       = None
+    blocked_by:     list[int] | None = None  # replace the blocked_by list
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -86,7 +89,7 @@ async def list_tasks(
         f"""
         SELECT id, title, description, status, priority, priority_num,
                approval_level, due_date, source, tags, assigned_to,
-               created_at, updated_at
+               blocked_by, created_at, updated_at
         FROM   tasks
         {where}
         ORDER BY
@@ -114,14 +117,16 @@ async def create_task(body: TaskCreate):
         """
         INSERT INTO tasks
             (title, description, status, priority, priority_num, approval_level,
-             due_date, source, tags, assigned_to)
-        VALUES (%s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s)
+             due_date, source, tags, assigned_to, blocked_by)
+        VALUES (%s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
         RETURNING id, title, description, status, priority, priority_num,
-                  approval_level, due_date, source, tags, assigned_to, created_at, updated_at
+                  approval_level, due_date, source, tags, assigned_to,
+                  blocked_by, created_at, updated_at
         """,
         (
             body.title, body.description, priority_text, priority_num, approval_level,
             body.due_date or None, body.source, body.tags or None, body.assigned_to or None,
+            _json.dumps(body.blocked_by),
         ),
     )
     return _enrich(row)
@@ -133,7 +138,7 @@ async def get_task(task_id: int):
         """
         SELECT id, title, description, status, priority, priority_num,
                approval_level, due_date, source, tags, assigned_to,
-               created_at, updated_at
+               blocked_by, created_at, updated_at
         FROM   tasks WHERE id = %s
         """,
         (task_id,),
@@ -173,6 +178,8 @@ async def update_task(task_id: int, body: TaskUpdate):
         fields.append("tags = %s");        values.append(body.tags or None)
     if body.assigned_to is not None:
         fields.append("assigned_to = %s"); values.append(body.assigned_to or None)
+    if body.blocked_by is not None:
+        fields.append("blocked_by = %s::jsonb"); values.append(_json.dumps(body.blocked_by))
 
     if not fields:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -184,7 +191,8 @@ async def update_task(task_id: int, body: TaskUpdate):
         f"""
         UPDATE tasks SET {', '.join(fields)} WHERE id = %s
         RETURNING id, title, description, status, priority, priority_num,
-                  approval_level, due_date, source, tags, assigned_to, created_at, updated_at
+                  approval_level, due_date, source, tags, assigned_to,
+                  blocked_by, created_at, updated_at
         """,
         values,
     )

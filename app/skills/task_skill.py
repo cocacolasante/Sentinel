@@ -75,6 +75,15 @@ class TaskCreateSkill(BaseSkill):
         assigned_to    = params.get("assigned_to") or None
         session_id     = (params.get("session_id") or "").strip()
 
+        # blocked_by: list of task IDs that must be done before this task runs
+        raw_blocked = params.get("blocked_by") or []
+        if isinstance(raw_blocked, str):
+            try:
+                raw_blocked = _json.loads(raw_blocked)
+            except Exception:
+                raw_blocked = []
+        blocked_by: list[int] = [int(x) for x in raw_blocked if x]
+
         # Background execution fields
         raw_commands = params.get("commands") or []
         if isinstance(raw_commands, str):
@@ -101,8 +110,9 @@ class TaskCreateSkill(BaseSkill):
                 skill_name=self.name,
             )
 
-        priority_text = _PRIORITY_TO_TEXT[priority_num]
-        commands_json = _json.dumps(commands)
+        priority_text  = _PRIORITY_TO_TEXT[priority_num]
+        commands_json  = _json.dumps(commands)
+        blocked_by_json = _json.dumps(blocked_by)
 
         # Look up stored Slack context so the task can report back
         slack_channel = slack_thread_ts = None
@@ -122,16 +132,19 @@ class TaskCreateSkill(BaseSkill):
                 INSERT INTO tasks
                     (title, description, status, priority, priority_num, approval_level,
                      due_date, source, tags, assigned_to,
-                     commands, execution_queue, slack_channel, slack_thread_ts, session_id)
+                     commands, execution_queue, slack_channel, slack_thread_ts, session_id,
+                     blocked_by)
                 VALUES (%s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s,
-                        %s::jsonb, %s, %s, %s, %s)
+                        %s::jsonb, %s, %s, %s, %s,
+                        %s::jsonb)
                 RETURNING id, title, status, priority, priority_num, approval_level,
-                          due_date, source, tags, assigned_to, created_at
+                          due_date, source, tags, assigned_to, created_at, blocked_by
                 """,
                 (
                     title, description, priority_text, priority_num, approval_level,
                     due_date, source, tags, assigned_to,
                     commands_json, execution_queue, slack_channel, slack_thread_ts, session_id or None,
+                    blocked_by_json,
                 ),
             )
         except Exception as exc:
@@ -142,25 +155,52 @@ class TaskCreateSkill(BaseSkill):
 
         # Auto-queue if commands were provided
         if commands:
-            try:
-                from app.worker.tasks import execute_board_task
-                result = execute_board_task.apply_async(
-                    args=[row["id"]],
-                    queue=execution_queue,
-                )
-                celery_id = result.id
-                postgres.execute(
-                    "UPDATE tasks SET celery_task_id=%s WHERE id=%s",
-                    (celery_id, row["id"]),
-                )
-                lock_note = " (serialised — workspace lock acquired when it starts)" if uses_workspace else ""
+            # Tasks with approval_level >= 2 require owner sign-off before running
+            if approval_level >= 2:
+                from app.config import get_settings as _gs
+                _s = _gs()
+                if _s.slack_owner_user_id and _s.slack_bot_token:
+                    from app.integrations.slack_notifier import post_dm_sync, post_alert_sync
+                    _domain = _s.domain or "sentinelai.cloud"
+                    _dm_text = (
+                        f"🔐 *Approval needed — Task #{row['id']}*\n"
+                        f"Action: {title}\n"
+                        f"Category: {'requires sign-off' if approval_level == 3 else 'needs review'}\n\n"
+                        f"✅ Approve: `POST https://{_domain}/api/v1/board/tasks/{row['id']}` "
+                        f"(set status=in_progress)\n"
+                        f"❌ Cancel: `DELETE https://{_domain}/api/v1/board/tasks/{row['id']}`\n\n"
+                        "Or reply *confirm* / *cancel* in the originating Slack thread."
+                    )
+                    post_dm_sync(_dm_text)
+                    post_alert_sync(
+                        f"🔐 *Approval needed — Task #{row['id']}: {title}*\n"
+                        f"Approval level: {_APPROVAL_LABEL.get(approval_level)}\n"
+                        f"DM sent to owner for review."
+                    )
                 queue_note = (
-                    f"\n🔄 Queued on `{execution_queue}`{lock_note} — "
-                    f"Celery ID `{celery_id[:8]}…`  "
-                    "I'll post the result back to this thread when done."
+                    f"\n⏳ Task #{row['id']} requires approval (level {approval_level}) before it runs. "
+                    "I've DM'd the owner for sign-off."
                 )
-            except Exception as exc:
-                queue_note = f"\n⚠️ Task created but could not queue: {exc}"
+            else:
+                try:
+                    from app.worker.tasks import execute_board_task
+                    result = execute_board_task.apply_async(
+                        args=[row["id"]],
+                        queue=execution_queue,
+                    )
+                    celery_id = result.id
+                    postgres.execute(
+                        "UPDATE tasks SET celery_task_id=%s WHERE id=%s",
+                        (celery_id, row["id"]),
+                    )
+                    lock_note = " (serialised — workspace lock acquired when it starts)" if uses_workspace else ""
+                    queue_note = (
+                        f"\n🔄 Queued on `{execution_queue}`{lock_note} — "
+                        f"Celery ID `{celery_id[:8]}…`  "
+                        "I'll post the result back to this thread when done."
+                    )
+                except Exception as exc:
+                    queue_note = f"\n⚠️ Task created but could not queue: {exc}"
 
         context = (
             "Task created successfully!\n\n"

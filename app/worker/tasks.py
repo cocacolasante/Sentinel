@@ -304,7 +304,11 @@ def _touches_workspace(commands: list[str]) -> bool:
 
 
 def _mark_task(task_id: int, status: str, error: str | None = None) -> None:
-    """Update a task board row status synchronously (safe from Celery)."""
+    """Update a task board row status synchronously (safe from Celery).
+
+    When status is 'done', also auto-enqueue any tasks whose blocked_by list
+    contained this task_id and are now fully unblocked.
+    """
     try:
         from app.db import postgres
         postgres.execute(
@@ -315,6 +319,71 @@ def _mark_task(task_id: int, status: str, error: str | None = None) -> None:
             logger.warning("Task #%s marked %s — %s", task_id, status, error[:200])
     except Exception as exc:
         logger.warning("Could not update task #%s status: %s", task_id, exc)
+
+    # On completion, unblock dependent tasks
+    if status == "done":
+        _unblock_dependents(task_id)
+
+
+def _unblock_dependents(completed_task_id: int) -> None:
+    """Find tasks blocked by completed_task_id and auto-enqueue those now fully unblocked."""
+    try:
+        from app.db import postgres
+        # Find all pending tasks that list completed_task_id in their blocked_by array
+        dependents = postgres.execute(
+            """
+            SELECT id, execution_queue, commands, approval_level,
+                   blocked_by
+            FROM   tasks
+            WHERE  status = 'pending'
+              AND  blocked_by @> %s::jsonb
+            """,
+            (json.dumps([completed_task_id]),),
+        )
+        if not dependents:
+            return
+
+        for dep in dependents:
+            dep_id = dep["id"]
+            # Check if ALL blockers are now done
+            raw_blocked = dep.get("blocked_by") or []
+            if isinstance(raw_blocked, str):
+                raw_blocked = json.loads(raw_blocked)
+            blocker_ids: list[int] = [int(x) for x in raw_blocked if x]
+
+            if blocker_ids:
+                statuses = postgres.execute(
+                    "SELECT id, status FROM tasks WHERE id = ANY(%s)",
+                    (blocker_ids,),
+                )
+                still_blocked = any(r["status"] != "done" for r in statuses)
+                if still_blocked:
+                    logger.info(
+                        "Task #%s still blocked after #%s completed",
+                        dep_id, completed_task_id,
+                    )
+                    continue
+
+            # All blockers done — enqueue if it has commands and approval_level == 1
+            raw_cmds = dep.get("commands") or []
+            if isinstance(raw_cmds, str):
+                raw_cmds = json.loads(raw_cmds)
+            if raw_cmds and dep.get("approval_level", 2) == 1:
+                q = dep.get("execution_queue") or "tasks_general"
+                result = execute_board_task.apply_async(args=[dep_id], queue=q)
+                postgres.execute(
+                    "UPDATE tasks SET celery_task_id=%s WHERE id=%s",
+                    (result.id, dep_id),
+                )
+                logger.info("Auto-enqueued task #%s (unblocked by #%s)", dep_id, completed_task_id)
+            else:
+                logger.info(
+                    "Task #%s unblocked by #%s but not auto-queued "
+                    "(no commands or approval_level>1)",
+                    dep_id, completed_task_id,
+                )
+    except Exception as exc:
+        logger.warning("Could not unblock dependents of task #%s: %s", completed_task_id, exc)
 
 
 async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
@@ -337,7 +406,8 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
 
     # ── 1. Load task ──────────────────────────────────────────────────────────
     row = postgres.execute_one(
-        "SELECT id, title, commands, slack_channel, slack_thread_ts, session_id "
+        "SELECT id, title, commands, slack_channel, slack_thread_ts, session_id, "
+        "       blocked_by, approval_level "
         "FROM tasks WHERE id = %s",
         (task_id,),
     )
@@ -350,9 +420,62 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
         raw_cmds if isinstance(raw_cmds, list)
         else _json.loads(raw_cmds) if isinstance(raw_cmds, str) else []
     )
-    channel    = row.get("slack_channel") or ""
-    thread_ts  = row.get("slack_thread_ts") or ""
-    session_id = row.get("session_id") or ""
+    channel        = row.get("slack_channel") or ""
+    thread_ts      = row.get("slack_thread_ts") or ""
+    session_id     = row.get("session_id") or ""
+    approval_level = row.get("approval_level") or 1
+
+    # ── 1b. blocked_by check ──────────────────────────────────────────────────
+    raw_blocked = row.get("blocked_by") or []
+    if isinstance(raw_blocked, str):
+        raw_blocked = _json.loads(raw_blocked)
+    blocker_ids: list[int] = [int(x) for x in raw_blocked if x]
+
+    if blocker_ids:
+        blocker_rows = postgres.execute(
+            "SELECT id, status FROM tasks WHERE id = ANY(%s)",
+            (blocker_ids,),
+        )
+        incomplete = [r["id"] for r in blocker_rows if r["status"] != "done"]
+        if incomplete:
+            logger.info(
+                "Task #%s blocked by task(s) %s — re-queuing in 30s (attempt via Celery retry)",
+                task_id, incomplete,
+            )
+            # Re-queue with a 30s countdown instead of executing now
+            execute_board_task.apply_async(args=[task_id], countdown=30)
+            return {"status": "requeued", "blocked_by": incomplete}
+
+    # ── 1c. approval_level gate ───────────────────────────────────────────────
+    # Tasks with approval_level >= 2 must not auto-run unless manually approved.
+    # (Approved tasks arrive here via the task board PATCH endpoint which sets
+    # status=in_progress; at that point approval_level can be ignored.)
+    # We only block tasks that are still in 'pending' status here.
+    pending_status_row = postgres.execute_one(
+        "SELECT status FROM tasks WHERE id = %s", (task_id,)
+    )
+    current_status = (pending_status_row or {}).get("status", "pending")
+    if approval_level >= 2 and current_status == "pending":
+        from app.config import get_settings as _gs
+        _s = _gs()
+        if _s.slack_owner_user_id and _s.slack_bot_token:
+            from app.integrations.slack_notifier import post_dm_sync, post_alert_sync as _pas
+            _domain = _s.domain or "sentinelai.cloud"
+            _dm = (
+                f"🔐 *Approval needed — Task #{task_id}: {title}*\n"
+                f"Approval level: {'requires sign-off' if approval_level == 3 else 'needs review'}\n\n"
+                f"To approve, PATCH the task to in_progress:\n"
+                f"`PATCH https://{_domain}/api/v1/board/tasks/{task_id}` "
+                f'with `{{"status": "in_progress"}}`\n\n'
+                "Or reply *confirm* in the originating Slack thread."
+            )
+            post_dm_sync(_dm)
+            _pas(
+                f"🔐 *Approval needed — Task #{task_id}: {title}*\n"
+                f"Approval level {approval_level} — DM sent to owner."
+            )
+        _mark_task(task_id, "pending")  # stays pending until approved
+        return {"status": "awaiting_approval", "approval_level": approval_level}
 
     # Fall back to session-keyed Slack context if not stored on the task itself
     if (not channel or not thread_ts) and session_id:

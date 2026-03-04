@@ -113,19 +113,125 @@ class SkillDiscoverySkill(BaseSkill):
                 f"Gap: {analysis.get('gap_description', 'Unknown capability needed')}"
             )
 
+        build_task_id: int | None = None
+        originating_task_id: int | None = params.get("originating_task_id")
+
         if analysis.get("new_skill_needed") and proposed:
-            lines.append(
-                f"\n**Proposed new skill:** `{proposed.get('name')}`\n"
-                f"Intent: `{proposed.get('intent')}`\n"
-                f"Description: {proposed.get('description')}\n"
-                f"Needs: {proposed.get('integration')}\n"
-                f"Notes: {proposed.get('implementation_hints')}\n\n"
-                "Would you like me to build this skill? Say **'yes, build it'** and I'll "
-                "write the code, add it to the dispatcher, and deploy it."
-            )
+            skill_name   = proposed.get("name", "new_skill")
+            skill_intent = proposed.get("intent", skill_name)
+            skill_desc   = proposed.get("description", "")
+            integration  = proposed.get("integration", "")
+            hints        = proposed.get("implementation_hints", "")
+
+            # Auto-build: create a workspace task to scaffold + commit the new skill
+            skill_file   = f"app/skills/{skill_name}.py"
+            build_cmds   = [
+                "cd /root/sentinel-workspace && git pull",
+                (
+                    f"cat > {skill_file} << 'PYEOF'\n"
+                    f'"""\n{skill_desc}\nIntegration: {integration}\n"""\n\n'
+                    "from __future__ import annotations\n"
+                    "from app.skills.base import ApprovalCategory, BaseSkill, SkillResult\n\n\n"
+                    f"class {_snake_to_camel(skill_name)}Skill(BaseSkill):\n"
+                    f'    name              = "{skill_name}"\n'
+                    f'    description       = "{skill_desc}"\n'
+                    f'    trigger_intents   = ["{skill_intent}"]\n'
+                    "    approval_category = ApprovalCategory.NONE\n\n"
+                    "    async def execute(self, params: dict, original_message: str) -> SkillResult:\n"
+                    f'        # TODO: implement — {hints}\n'
+                    '        return SkillResult(\n'
+                    f'            context_data="[{skill_name} skill not yet implemented]",\n'
+                    '            skill_name=self.name,\n'
+                    '        )\n'
+                    "PYEOF"
+                ),
+                (
+                    f"cd /root/sentinel-workspace && git add {skill_file} && "
+                    f'git commit -m "feat: scaffold {skill_name} skill (auto-generated)" && '
+                    "git push origin HEAD"
+                ),
+            ]
+            try:
+                from app.skills.task_skill import TaskCreateSkill
+                _tc = TaskCreateSkill()
+                _tc_params = {
+                    "title":          f"Build {skill_name} skill",
+                    "description":    (
+                        f"Auto-generated skill scaffold for: {skill_desc}\n"
+                        f"Integration needed: {integration}\n"
+                        f"Implementation notes: {hints}"
+                    ),
+                    "priority":       5,
+                    "approval_level": 1,
+                    "commands":       build_cmds,
+                    "execution_queue": "tasks_workspace",
+                    "source":         "skill_discovery",
+                    "session_id":     params.get("session_id", ""),
+                }
+                _tc_result = await _tc.execute(_tc_params, original_message)
+                # Extract task ID from context
+                import re as _re
+                _m = _re.search(r"Task ID: #(\d+)", _tc_result.context_data or "")
+                if _m:
+                    build_task_id = int(_m.group(1))
+            except Exception as _build_exc:
+                lines.append(f"\n⚠️ Auto-build task creation failed: {_build_exc}")
+
+            if build_task_id:
+                # If there's an originating task, block it on the build task
+                if originating_task_id:
+                    try:
+                        from app.db import postgres
+                        postgres.execute(
+                            "UPDATE tasks SET blocked_by=%s::jsonb WHERE id=%s",
+                            (json.dumps([build_task_id]), originating_task_id),
+                        )
+                    except Exception:
+                        pass
+
+                # DM owner
+                try:
+                    from app.config import get_settings as _gs
+                    from app.integrations.slack_notifier import post_dm
+                    _s = _gs()
+                    if _s.slack_owner_user_id:
+                        _dm = (
+                            f"🔧 *Missing skill detected: `{skill_name}`*\n"
+                            f"Auto-building as Task #{build_task_id}."
+                        )
+                        if originating_task_id:
+                            _dm += f"\nYour original Task #{originating_task_id} is blocked until it deploys."
+                        await post_dm(_dm)
+                except Exception:
+                    pass
+
+                lines.append(
+                    f"\n**Auto-building new skill:** `{skill_name}` as Task #{build_task_id}\n"
+                    f"Intent: `{skill_intent}` | Needs: {integration}\n"
+                    f"Notes: {hints}"
+                )
+                if originating_task_id:
+                    lines.append(
+                        f"\nTask #{originating_task_id} is now blocked until the skill deploys."
+                    )
+            else:
+                lines.append(
+                    f"\n**Proposed new skill:** `{skill_name}`\n"
+                    f"Intent: `{skill_intent}`\n"
+                    f"Description: {skill_desc}\n"
+                    f"Needs: {integration}\n"
+                    f"Notes: {hints}\n\n"
+                    "Would you like me to build this skill? Say **'yes, build it'** and I'll "
+                    "write the code, add it to the dispatcher, and deploy it."
+                )
 
         context = "\n".join(lines)
         return SkillResult(context_data=context, skill_name=self.name)
+
+
+def _snake_to_camel(name: str) -> str:
+    """Convert snake_case to CamelCase for class names."""
+    return "".join(word.capitalize() for word in name.split("_"))
 
 
 class SkillGapHandler:

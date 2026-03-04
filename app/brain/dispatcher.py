@@ -388,6 +388,12 @@ class Dispatcher:
                 result.pending_action["_task_id"] = task_id
                 reply = f"{reply}\n\n_Reply **confirm** to proceed or **cancel** to abort._"
                 self.memory.redis.set_pending_action(session_id, result.pending_action)
+
+                # DM the owner so approval can happen outside the current thread
+                if settings.slack_owner_user_id:
+                    asyncio.create_task(self._dm_approval_request(
+                        task_id, result.pending_action, skill,
+                    ))
             else:
                 # Auto-execute — approval level says this write doesn't need confirmation
                 logger.info(
@@ -503,6 +509,31 @@ class Dispatcher:
             return approval_level <= 2    # confirm at levels 1 & 2
         # STANDARD
         return approval_level <= 1        # confirm only at level 1
+
+    @staticmethod
+    async def _dm_approval_request(task_id: str, pending: dict, skill) -> None:
+        """DM the owner and post to brain-alerts when a write action needs confirmation."""
+        try:
+            from app.integrations.slack_notifier import post_dm, post_alert
+            action_desc = pending.get("action") or pending.get("intent") or "unknown action"
+            cat_name    = getattr(getattr(skill, "approval_category", None), "value", "standard")
+            domain      = settings.domain or "sentinelai.cloud"
+            dm_text = (
+                f"🔐 *Approval needed — `{task_id[:8]}`*\n"
+                f"Action: {action_desc}\n"
+                f"Category: {cat_name}\n\n"
+                f"✅ Approve: POST `https://{domain}/api/v1/approval/approve/{task_id}`\n"
+                f"❌ Cancel:  POST `https://{domain}/api/v1/approval/cancel/{task_id}`\n\n"
+                "Or reply *confirm* / *cancel* in the originating Slack thread."
+            )
+            await post_dm(dm_text)
+            await post_alert(
+                f"🔐 *Approval needed — `{action_desc}`*\n"
+                f"Category: {cat_name} | ID: `{task_id[:8]}`\n"
+                "DM sent to owner for review."
+            )
+        except Exception as exc:
+            logger.debug("DM approval request failed: {}", exc)
 
     @staticmethod
     async def _fire_milestone(pending: dict, session_id: str, agent: str = "") -> None:

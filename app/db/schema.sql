@@ -210,6 +210,11 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS slack_channel    TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS slack_thread_ts  TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS session_id       TEXT;
 
+-- ── Task board: dependency tracking ───────────────────────────────────────────
+-- blocked_by: list of task IDs that must reach status='done' before this task runs.
+--             Stored as JSONB array of integers: e.g. [3, 7]
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS blocked_by JSONB DEFAULT '[]';
+
 -- ── AI Milestone log ──────────────────────────────────────────────────────────
 -- Every confirmed write action the AI executes is recorded here and posted to
 -- #sentinel-milestones in Slack.

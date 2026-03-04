@@ -72,6 +72,26 @@ _FORBIDDEN_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ── .env write guardrail ───────────────────────────────────────────────────────
+# Any command that writes to a .env file requires BREAKING-level approval.
+_ENV_WRITE_RE = re.compile(
+    r"""
+    (                                        # output-redirect writes
+        (?:>>?|tee\b)                        #   >, >>, tee
+        \s*[\"']?                            #   optional quote
+        (?:.*[/\\])?                         #   optional path prefix
+        \.env(?:\.[a-z]+)?[\"']?             #   .env or .env.local etc.
+    )
+    |                                        # OR in-place edit tools
+    (?:
+        sed\s+-i                             #   sed -i
+      | awk\s+.*>                            #   awk ... >
+    )
+    \s*[\"']?(?:.*[/\\])?\.env(?:\.[a-z]+)?[\"']?
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
 # ── Protected path guardrail ───────────────────────────────────────────────────
 # /root/sentinel is the host-side repo directory. The AI must only operate on
 # /root/sentinel-workspace (the container bind-mount). Any command or path that
@@ -237,6 +257,28 @@ class ServerShellSkill(BaseSkill):
                     f"[Command blocked — '{command}' is a low-level disk operation "
                     "that could irreversibly damage the server. Not supported.]"
                 ),
+                skill_name=self.name,
+            )
+
+        # .env write guard — requires BREAKING-level approval
+        if _ENV_WRITE_RE.search(command):
+            # Elevate this skill's approval category so the dispatcher always confirms
+            self.approval_category = ApprovalCategory.BREAKING  # type: ignore[assignment]
+            pending = {
+                "intent":   "server_shell",
+                "action":   "shell_exec",
+                "params":   params,
+                "original": original_message,
+            }
+            context = (
+                "⚠️ This command writes to a `.env` file and requires explicit approval:\n\n"
+                f"```bash\n{command}\n```\n"
+                "`.env` modifications can expose secrets or break the system. "
+                "Reply **confirm** to execute or **cancel** to abort."
+            )
+            return SkillResult(
+                context_data=context,
+                pending_action=pending,
                 skill_name=self.name,
             )
 

@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     slack_bot_token: str = ""
     slack_signing_secret: str = ""
     slack_app_token: str = ""   # xapp- token for Socket Mode
+    slack_owner_user_id: str = ""  # Slack user ID to DM for approvals
 
     # ── n8n ────────────────────────────────────────────────────
     n8n_host: str = "localhost"

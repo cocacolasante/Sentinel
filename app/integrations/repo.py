@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -33,9 +34,48 @@ SSH_KEY = Path(settings.repo_ssh_key_path)
 # ── Protected path guardrail ───────────────────────────────────────────────────
 _PROTECTED_DIR = Path("/root/sentinel")
 
+# ── Secret scanner ─────────────────────────────────────────────────────────────
+_ENV_PATH_RE = re.compile(r"(^|[/\\])\.env(\.[a-z]+)?$", re.IGNORECASE)
+
+_SECRET_PATTERNS: list[re.Pattern] = [
+    re.compile(r"ghp_[A-Za-z0-9]{36}"),                                # GitHub PAT
+    re.compile(r"sk-ant-[A-Za-z0-9\-]{90,}"),                          # Anthropic key
+    re.compile(r"xoxb-[0-9]+-[A-Za-z0-9]+"),                           # Slack bot token
+    re.compile(r"xapp-[0-9]+-[A-Za-z0-9]+"),                           # Slack app token
+    re.compile(r"AKIA[A-Z0-9]{16}"),                                    # AWS key
+    re.compile(r"sntryu_[A-Za-z0-9]{64}"),                              # Sentry token
+    re.compile(r"(?i)(password|secret|token)\s*=\s*[^\s]{8,}"),         # generic
+]
+
+
+def _scan_secrets(diff: str) -> list[str]:
+    """Return a list of matched secret patterns found in *diff*, or empty list."""
+    if not diff:
+        return []
+    matches: list[str] = []
+    for pat in _SECRET_PATTERNS:
+        if pat.search(diff):
+            matches.append(pat.pattern[:40])
+    return matches
+
+
+def _dm_secret_leak(patterns: list[str]) -> None:
+    """DM the owner and post an alert when a potential secret leak is detected."""
+    try:
+        from app.integrations.slack_notifier import post_dm_sync, post_alert_sync
+        msg = (
+            "🚨 *Secret leak prevented*\n"
+            "A git push was aborted because the diff contained potential secrets:\n"
+            + "\n".join(f"  • `{p}`" for p in patterns[:5])
+        )
+        post_dm_sync(msg)
+        post_alert_sync(msg)
+    except Exception as exc:
+        logger.warning("Could not send secret-leak DM: %s", exc)
+
 
 def _assert_not_protected(path: Path) -> None:
-    """Raise PermissionError if *path* is inside /root/sentinel."""
+    """Raise PermissionError if *path* is inside /root/sentinel or is a .env file."""
     try:
         resolved = path.resolve()
     except Exception:
@@ -44,6 +84,12 @@ def _assert_not_protected(path: Path) -> None:
         raise PermissionError(
             f"Access denied: /root/sentinel is a protected path. "
             f"All file operations must target /root/sentinel-workspace."
+        )
+    # Block writes to .env and .env.* files — they contain secrets
+    if _ENV_PATH_RE.search(str(resolved)):
+        raise PermissionError(
+            "Modifying .env files requires explicit user approval. "
+            "Use the approval flow instead of writing directly."
         )
 
 
@@ -243,6 +289,30 @@ class RepoClient:
         return out
 
     def _push_sync(self) -> str:
+        # ── Secret scan before push ────────────────────────────────────────────
+        try:
+            diff = self._run(["git", "diff", "HEAD~1..HEAD"], check=False)
+        except Exception:
+            diff = self._run(["git", "diff", "--staged"], check=False)
+        leaked = _scan_secrets(diff)
+        if leaked:
+            _dm_secret_leak(leaked)
+            raise PermissionError(
+                f"Push aborted — potential secrets detected in diff: "
+                + ", ".join(leaked[:3])
+                + (f" (+{len(leaked)-3} more)" if len(leaked) > 3 else "")
+            )
+        # ── .env in staged files ───────────────────────────────────────────────
+        staged = self._run(["git", "diff", "--name-only", "--cached"], check=False)
+        if any(
+            _ENV_PATH_RE.search(ln.strip())
+            for ln in staged.splitlines()
+        ):
+            _dm_secret_leak([".env file staged for commit"])
+            raise PermissionError(
+                "Push aborted — a .env file is staged. "
+                "Remove it with: git reset HEAD .env"
+            )
         return self._run(["git", "push", "origin", "HEAD"])
 
     # ── Public async API ──────────────────────────────────────────────────────
