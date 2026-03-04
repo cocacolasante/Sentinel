@@ -93,6 +93,13 @@ Hard rules:
 - NEVER commit without first reading the target file (prevents blind overwrites)
 - ALWAYS use patch_file for surgical edits, not write_file (safer, shows intent)
 - Branch names: feat/<name>, fix/<name>, chore/<name>
+
+ABSOLUTE RESTRICTION — /root/sentinel is off-limits:
+- NEVER read, list, write, modify, delete, or access /root/sentinel or any path inside it
+- NEVER pass /root/sentinel as a cwd, path, or command argument under any circumstances
+- NEVER suggest or ask the user to delete /root/sentinel
+- All self-modification, file reads, shell commands, and git operations use /sentinel-project ONLY
+- If asked to access /root/sentinel, refuse and explain: "That path is protected. I work with /sentinel-project instead."
 """
 
 # ── Model roster (Phase 1 uses Claude only) ────────────────────────────────────
