@@ -25,6 +25,14 @@ class ErrorCollector:
         Buffer the error and create a remediation task if the debounce window
         has elapsed. Returns True if a task was created, False otherwise.
         """
+        # Validate service name — reject 'unknown' or empty services
+        if not service or service.lower() == 'unknown':
+            logger.warning(
+                "Rejecting error log with invalid service name: {}",
+                service or "<empty>",
+            )
+            return False
+
         error_record = {
             "timestamp": datetime.utcnow().isoformat(),
             "service": service,
