@@ -349,13 +349,22 @@ def _mark_task(task_id: int, status: str, error: str | None = None) -> None:
 
     When status is 'done', also auto-enqueue any tasks whose blocked_by list
     contained this task_id and are now fully unblocked.
+    When status is terminal (done/failed), clear celery_task_id so the task
+    can be re-dispatched if the user resets it to pending.
     """
     try:
         from app.db import postgres
-        postgres.execute(
-            "UPDATE tasks SET status=%s, updated_at=NOW() WHERE id=%s",
-            (status, task_id),
-        )
+        # Clear celery_task_id on terminal states so tasks can be retried
+        if status in ("done", "failed"):
+            postgres.execute(
+                "UPDATE tasks SET status=%s, celery_task_id=NULL, updated_at=NOW() WHERE id=%s",
+                (status, task_id),
+            )
+        else:
+            postgres.execute(
+                "UPDATE tasks SET status=%s, updated_at=NOW() WHERE id=%s",
+                (status, task_id),
+            )
         if error:
             logger.warning("Task #%s marked %s — %s", task_id, status, error[:200])
     except Exception as exc:
@@ -693,6 +702,23 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             channel, thread_ts,
         )
 
+    # ── Sync workspace to latest origin/main before starting ─────────────────
+    sync_output = ""
+    if os.path.isdir(os.path.join(code_root, ".git")):
+        try:
+            sync_proc = await asyncio.create_subprocess_shell(
+                f"git -C {code_root} fetch origin && "
+                f"git -C {code_root} reset --hard origin/main",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                executable="/bin/bash",
+            )
+            sync_stdout, _ = await asyncio.wait_for(sync_proc.communicate(), timeout=60)
+            sync_output = (sync_stdout or b"").decode("utf-8", errors="replace").strip()
+            logger.info("Task #%s workspace synced to origin/main: %s", task_id, sync_output[:120])
+        except Exception as sync_exc:
+            logger.warning("Task #%s workspace sync failed: %s", task_id, sync_exc)
+
     # ── Agent loop ────────────────────────────────────────────────────────────
     system_prompt = (
         "You are Sentinel, an autonomous AI agent executing server tasks via shell commands.\n"
@@ -704,9 +730,11 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
         "Rules:\n"
         f"- Use absolute paths starting with {code_root}/\n"
         "- JSON file edits: python3 -c with json.load/json.dump\n"
-        "- After any file change: git -C {code_root} add -A && "
-        f"git -C {code_root} commit -m '<msg>' && git -C {code_root} push\n"
+        f"- After any file change: git -C {code_root} add -A && "
+        f"  git -C {code_root} commit -m '<msg>' && git -C {code_root} push\n"
         "- Max one command per response\n"
+        "- Limit research to at most 4 rounds — then start implementing\n"
+        "- Once you understand the codebase, make changes immediately\n"
         "- Never ask questions — decide autonomously\n"
         "- No markdown in your response — pure JSON only"
     )
@@ -719,9 +747,12 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     all_passed          = True
     lm_said_done        = False
     workspace_lock_held = False
-    max_rounds          = 15
+    max_rounds          = 20
     round_num           = 0
     parse_errors        = 0
+    write_commands_run  = 0   # track how many write/edit commands have been issued
+
+    _READ_ONLY_PREFIXES = ("cat ", "grep ", "find ", "ls ", "head ", "tail ", "wc ", "echo ")
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
@@ -817,6 +848,11 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
         except Exception as exc:
             output, exit_code = f"[error: {exc}]", -1
 
+        # Track write activity
+        cmd_stripped = cmd.lstrip()
+        if not any(cmd_stripped.startswith(p) for p in _READ_ONLY_PREFIXES):
+            write_commands_run += 1
+
         status_icon = "✅" if exit_code == 0 else "❌"
         snippet     = f"```\n{output}\n```" if output else ""
         results.append(f"{status_icon} *Round {round_num + 1}:* `{cmd[:120]}`\n{snippet}".strip())
@@ -824,6 +860,15 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             "Task #%s round %d/%d exit=%d cmd=%s",
             task_id, round_num + 1, max_rounds, exit_code, cmd[:80],
         )
+
+        # Inject action-pressure message if still only reading after round 4
+        action_pressure = ""
+        if round_num >= 4 and write_commands_run == 0:
+            action_pressure = (
+                "\n\n⚠️ You have been researching for several rounds without making any changes. "
+                "You must now implement the task — write or edit files, then commit and push. "
+                "Do not run any more read-only commands."
+            )
 
         # Feed result back to LLM
         messages.append({"role": "assistant", "content": raw})
@@ -836,6 +881,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
                     if exit_code == 0
                     else "Command FAILED. You may retry, try an alternative, or mark done/failed."
                 )
+                + action_pressure
             ),
         })
 

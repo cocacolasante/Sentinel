@@ -165,6 +165,9 @@ async def update_task(task_id: int, body: TaskUpdate):
         fields.append("description = %s"); values.append(body.description)
     if body.status is not None:
         fields.append("status = %s");      values.append(body.status)
+        # Clear celery_task_id when resetting to pending so scan can re-dispatch
+        if body.status == "pending":
+            fields.append("celery_task_id = NULL")
     if body.priority is not None:
         pri = max(1, min(5, body.priority))
         fields.append("priority_num = %s"); values.append(pri)
