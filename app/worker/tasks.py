@@ -625,6 +625,9 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
     for fname in issue_params.get("affected_files", []):
         try:
             content = open(f"{_CODE_ROOT}/{fname}").read()
+            # Truncate large files — keep first 3000 chars to stay within token budget
+            if len(content) > 3000:
+                content = content[:3000] + "\n... [truncated]"
             file_context += f"\n\n=== {fname} ===\n{content}"
             logger.info("Read source file for LLM context | file={}", fname)
         except Exception as exc:
@@ -668,13 +671,28 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
         response = await asyncio.to_thread(
             client.messages.create,
             model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
+            max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = response.content[0].text.strip()
-        # Strip markdown code fences if the model wraps the JSON
+        # Strip markdown code fences
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        # Extract the first complete JSON object — handles trailing text or truncation
+        brace_depth = 0
+        json_start  = raw.find("{")
+        json_end    = -1
+        if json_start != -1:
+            for i, ch in enumerate(raw[json_start:], json_start):
+                if ch == "{":
+                    brace_depth += 1
+                elif ch == "}":
+                    brace_depth -= 1
+                    if brace_depth == 0:
+                        json_end = i + 1
+                        break
+        if json_end != -1:
+            raw = raw[json_start:json_end]
         fix_plan = json.loads(raw)
     except Exception as exc:
         logger.warning("LLM fix analysis failed: %s", exc)
