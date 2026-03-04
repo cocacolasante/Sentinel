@@ -49,8 +49,7 @@ class LogMonitor:
                     since_time = self.last_log_time.get(container_name, datetime.utcnow() - timedelta(seconds=10))
                     logs = container.logs(stdout=True, stderr=True, follow=False, timestamps=True)
                     
-                    for line in logs.decode("utf-8", errors="ignore").split("
-"):
+                    for line in logs.decode("utf-8", errors="ignore").split("\n"):
                         if line.strip():
                             await self._process_log_line(container_name, line)
                     

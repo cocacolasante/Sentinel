@@ -42,8 +42,7 @@ class ErrorCollectionMiddleware(BaseHTTPMiddleware):
                     "client": str(request.client)
                 }
             )
-            logger.error(f"Unhandled exception: {e}
-{tb}")
+            logger.error(f"Unhandled exception: {e}\n{tb}")
             return JSONResponse(
                 status_code=500,
                 content={"detail": "Internal server error", "error_id": id(e)}

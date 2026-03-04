@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from app.services.error_logger import error_collector
 from app.services.log_monitor import log_monitor
 
-router = APIRouter(prefix="/api/v1/errors", tags=["errors"])
+router = APIRouter(prefix="/errors", tags=["errors"])
 
 @router.get("/recent")
 async def get_recent_errors(limit: int = 50) -> List[Dict[str, Any]]:

@@ -142,6 +142,7 @@ from app.router.whatsapp        import router as whatsapp_router          # noqa
 from app.router.sentry_webhook  import router as sentry_webhook_router    # noqa: E402
 from app.router.task_board      import router as task_board_router         # noqa: E402
 from app.router.milestones      import router as milestones_router          # noqa: E402
+from app.services.error_api    import router as error_api_router            # noqa: E402
 from app.router.slack          import start_socket_mode                  # noqa: E402
 from app.observability.event_bus import event_bus                    # noqa: E402
 from prometheus_fastapi_instrumentator import Instrumentator          # noqa: E402
@@ -191,14 +192,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AI Brain",
-from app.services.error_middleware import ErrorCollectionMiddleware
-app.add_middleware(ErrorCollectionMiddleware)
     description="Personalized AI Assistant — CSuite Code",
     version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs" if settings.environment != "production" else None,
     redoc_url=None,
 )
+
+from app.services.error_middleware import ErrorCollectionMiddleware  # noqa: E402
+app.add_middleware(ErrorCollectionMiddleware)
 
 # Prometheus HTTP instrumentation — exposes /metrics for Prometheus scraping.
 # Scraped internally by Prometheus (brain:8000/metrics); not proxied publicly.
@@ -229,6 +231,7 @@ app.include_router(whatsapp_router,        prefix="/api/v1", tags=["whatsapp"])
 app.include_router(sentry_webhook_router,  prefix="/api/v1", tags=["sentry"])
 app.include_router(task_board_router,      prefix="/api/v1", tags=["tasks-board"])
 app.include_router(milestones_router,      prefix="/api/v1", tags=["milestones"])
+app.include_router(error_api_router,       prefix="/api/v1", tags=["errors"])
 
 
 @app.get("/", tags=["root"])

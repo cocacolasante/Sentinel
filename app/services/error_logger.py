@@ -52,23 +52,28 @@ class ErrorCollector:
     async def _create_remediation_task(self, error_record: Dict[str, Any]) -> None:
         """Create auto-investigation task for error."""
         try:
-            task_title = f"[AUTO] Fix {error_record["service"]} - {error_record["error_type"]}"
-            task_description = f"Service: {error_record["service"]}
-Error Type: {error_record["error_type"]}
-Message: {error_record["message"]}
-Time: {error_record["timestamp"]}
-Context: {json.dumps(error_record["context"], indent=2)}
-Stacktrace:
-{error_record["stacktrace"] or "N/A"}"
-            
-            from app.worker.tasks import create_investigation_task
-            await create_investigation_task(
-                title=task_title,
-                description=task_description,
-                priority="high",
-                tags=["auto-generated", "error-handling", error_record["service"]]
+            task_title = f"[AUTO] Fix {error_record['service']} - {error_record['error_type']}"
+            task_description = (
+                f"Service: {error_record['service']}\n"
+                f"Error Type: {error_record['error_type']}\n"
+                f"Message: {error_record['message']}\n"
+                f"Time: {error_record['timestamp']}\n"
+                f"Context: {json.dumps(error_record['context'], indent=2)}\n"
+                f"Stacktrace:\n{error_record['stacktrace'] or 'N/A'}"
             )
-            logger.info(f"Created remediation task for {error_record["service"]}") 
+            
+            import json as _json
+            from app.db import postgres
+            tags = _json.dumps(["auto-generated", "error-handling", error_record["service"]])
+            postgres.execute(
+                """
+                INSERT INTO tasks (title, description, status, priority, priority_num,
+                                   approval_level, source, tags)
+                VALUES (%s, %s, 'pending', 'high', 4, 1, 'error-collector', %s::jsonb)
+                """,
+                (task_title, task_description, tags),
+            )
+            logger.info(f"Created remediation task for {error_record['service']}")
         except Exception as e:
             logger.error(f"Failed to create remediation task: {e}")
     

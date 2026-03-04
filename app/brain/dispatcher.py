@@ -81,6 +81,7 @@ def _build_skill_registry():
     from app.skills.contacts_skill  import ContactsReadSkill, ContactsWriteSkill
     from app.skills.ionos_skill     import IONOSCloudSkill, IONOSDNSSkill
     from app.skills.cicd_skill      import CICDReadSkill, CICDTriggerSkill
+    from app.skills.cicd_debug      import CicdDebugSkill
     from app.skills.n8n_skill       import N8nManageSkill
     from app.skills.whatsapp_skill  import WhatsAppReadSkill, WhatsAppSendSkill
     from app.skills.skill_discovery    import SkillDiscoverySkill
@@ -110,6 +111,7 @@ def _build_skill_registry():
     # CI/CD
     reg.register(CICDReadSkill())
     reg.register(CICDTriggerSkill())
+    reg.register(CicdDebugSkill())
     # Contacts / address book
     reg.register(ContactsReadSkill())
     reg.register(ContactsWriteSkill())

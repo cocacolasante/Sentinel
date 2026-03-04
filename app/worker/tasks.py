@@ -893,9 +893,30 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     if workspace_lock_held:
         redis.release_workspace_lock(celery_task_id)
 
+    # ── Ruff lint gate: block push if Python syntax/style errors exist ─────────
+    if write_commands_run > 0 and os.path.isdir(os.path.join(code_root, ".git")):
+        try:
+            ruff_proc = await asyncio.create_subprocess_shell(
+                f"cd {code_root} && python3 -m ruff check . 2>&1",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                executable="/bin/bash",
+            )
+            ruff_out, _ = await asyncio.wait_for(ruff_proc.communicate(), timeout=30)
+            ruff_log = (ruff_out or b"").decode("utf-8", errors="replace").strip()
+            if ruff_proc.returncode != 0:
+                logger.warning("Task #%s ruff errors — skipping push:\n%s", task_id, ruff_log[:500])
+                results.append(
+                    f"⚠️ *Ruff lint failed — push blocked to prevent CI breakage.*\n```{ruff_log[:400]}```\n"
+                    "Fix the syntax errors and re-run the task."
+                )
+                all_passed = False
+        except Exception as ruff_exc:
+            logger.warning("Task #%s ruff check failed: %s", task_id, ruff_exc)
+
     # ── Safety push: ensure any file changes reach GitHub to trigger CI/CD ───
     # Runs after the agent loop regardless of whether the LLM remembered to push.
-    if write_commands_run > 0 and os.path.isdir(os.path.join(code_root, ".git")):
+    if write_commands_run > 0 and all_passed and os.path.isdir(os.path.join(code_root, ".git")):
         try:
             push_proc = await asyncio.create_subprocess_shell(
                 # Commit any stragglers, then push (no-op if already up to date)
