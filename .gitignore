@@ -3,6 +3,13 @@
 *.pem
 *.key
 *.crt
+*.json.key
+
+# Let's Encrypt / certbot (contains ACME account private keys)
+certbot/
+
+# Claude Code local settings (contains approved bash commands)
+.claude/settings.local.json
 
 # Python
 __pycache__/

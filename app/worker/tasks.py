@@ -436,7 +436,10 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
                         logger.warning("Patch failed for %s: %s", patch["file"], exc)
                 if patches_applied:
                     commit_msg = fix_plan.get("commit_message", f"fix: sentry issue {issue_id}")
-                    await repo.commit(f"{commit_msg}\n\nSentry issue: {issue_id}\nAuto-fixed by Brain")
+                    await repo.commit(
+                        f"{commit_msg}\n\nSentry issue: {issue_id}\nAuto-fixed by Sentinel",
+                        files=patches_applied,
+                    )
                     await repo.push()
             else:
                 patch_errors.append("Repo not configured (GITHUB_BRAIN_REPO_URL not set)")

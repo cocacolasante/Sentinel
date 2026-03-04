@@ -209,8 +209,13 @@ class RepoClient:
         full.write_text(patched)
         return f"Patched: {path}"
 
-    def _commit_sync(self, message: str) -> str:
-        self._run(["git", "add", "-A"])
+    def _commit_sync(self, message: str, files: list[str] | None = None) -> str:
+        if files:
+            # Stage only the specific files that were patched — never git add -A
+            for f in files:
+                self._run(["git", "add", "--", f])
+        else:
+            self._run(["git", "add", "-A"])
         status = self._run(["git", "status", "--short"])
         if not status:
             return "Nothing to commit — working tree clean"
@@ -243,8 +248,8 @@ class RepoClient:
     async def patch_file(self, path: str, old: str, new: str) -> str:
         return await asyncio.to_thread(self._patch_file_sync, path, old, new)
 
-    async def commit(self, message: str) -> str:
-        return await asyncio.to_thread(self._commit_sync, message)
+    async def commit(self, message: str, files: list[str] | None = None) -> str:
+        return await asyncio.to_thread(self._commit_sync, message, files)
 
     async def push(self) -> str:
         return await asyncio.to_thread(self._push_sync)
