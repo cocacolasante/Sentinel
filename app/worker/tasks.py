@@ -716,14 +716,27 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     ]
 
     results: list[str] = []
-    all_passed    = True
+    all_passed          = True
+    lm_said_done        = False
     workspace_lock_held = False
-    max_rounds    = 8
-    round_num     = 0
+    max_rounds          = 15
+    round_num           = 0
+    parse_errors        = 0
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     for round_num in range(max_rounds):
+        # Warn LLM when nearing the round limit
+        if round_num == max_rounds - 3:
+            messages.append({
+                "role": "user",
+                "content": (
+                    f"⚠️ You have {max_rounds - round_num} rounds remaining. "
+                    "If the task is complete or cannot be completed, return "
+                    '{"done": true, "summary": "..."} now.'
+                ),
+            })
+
         # Ask LLM for the next action
         try:
             resp = await asyncio.to_thread(
@@ -736,14 +749,29 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             raw = resp.content[0].text.strip()
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            if not raw:
+                raise ValueError("LLM returned empty response")
             action = json.loads(raw)
+            parse_errors = 0  # reset on success
         except Exception as exc:
+            parse_errors += 1
             logger.error("LLM round %d failed for task #%s: %s", round_num, task_id, exc)
-            all_passed = False
-            results.append(f"❌ *LLM error (round {round_num + 1}):* {exc}")
-            break
+            if parse_errors >= 3:
+                all_passed = False
+                results.append(f"❌ *LLM parse error (round {round_num + 1}):* {exc} — aborting after 3 consecutive errors")
+                break
+            # inject a correction hint and retry
+            messages.append({
+                "role": "user",
+                "content": (
+                    f"Your last response could not be parsed as JSON (error: {exc}). "
+                    "Reply with ONLY a valid JSON object — no markdown, no explanation."
+                ),
+            })
+            continue
 
         if action.get("done"):
+            lm_said_done = True
             summary = action.get("summary", "Task completed")
             icon = "❌" if action.get("failed") else "✅"
             results.append(f"{icon} *Summary:* {summary}")
@@ -753,6 +781,9 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
 
         cmd = (action.get("command") or "").strip()
         if not cmd:
+            # LLM returned neither done nor a command — treat as done-with-failure
+            results.append("❌ *LLM returned no command and did not mark done — aborting*")
+            all_passed = False
             break
 
         # Acquire workspace lock on first workspace-touching command
@@ -815,6 +846,14 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     # ── Cleanup ───────────────────────────────────────────────────────────────
     if workspace_lock_held:
         redis.release_workspace_lock(celery_task_id)
+
+    # Only mark done if LLM explicitly said done AND all commands passed.
+    # If we exhausted max_rounds without the LLM saying done, mark failed.
+    if not lm_said_done and all_passed:
+        all_passed = False
+        results.append(
+            f"❌ *Agent exhausted {max_rounds} rounds without explicitly completing the task*"
+        )
 
     _mark_task(task_id, "done" if all_passed else "failed")
 
