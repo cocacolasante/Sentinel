@@ -101,6 +101,39 @@ def deploy_brain(self, reason: str = "") -> dict:
 
 @celery_app.task(
     bind=True,
+    name="app.worker.tasks.run_shell_and_report_back",
+    queue="celery",
+    max_retries=0,
+    soft_time_limit=180,
+    time_limit=210,
+)
+def run_shell_and_report_back(
+    self,
+    commands: list[str],
+    channel: str,
+    thread_ts: str,
+    cwd: str = "/root/sentinel-workspace",
+    label: str = "",
+) -> dict:
+    """
+    Run a list of shell commands and post the result back to the originating
+    Slack thread. Called when server_shell is invoked with background=true.
+    """
+    try:
+        return asyncio.run(_shell_and_report(commands, channel, thread_ts, cwd, label))
+    except Exception as exc:
+        logger.error("run_shell_and_report_back failed: %s", exc, exc_info=True)
+        from app.integrations.slack_notifier import post_thread_reply_sync
+        post_thread_reply_sync(
+            f"❌ *Background task crashed*\n`{type(exc).__name__}: {exc}`",
+            channel,
+            thread_ts,
+        )
+        return {"error": str(exc)}
+
+
+@celery_app.task(
+    bind=True,
     name="app.worker.tasks.investigate_and_fix_sentry_issue",
     queue="celery",
     max_retries=1,
@@ -182,6 +215,58 @@ async def _health_check() -> dict:
         logger.debug("Health check passed — all systems nominal")
 
     return {"issues": issues}
+
+
+async def _shell_and_report(
+    commands: list[str],
+    channel: str,
+    thread_ts: str,
+    cwd: str,
+    label: str,
+) -> dict:
+    """Execute commands sequentially and post a formatted result to Slack."""
+    from app.integrations.slack_notifier import post_thread_reply_sync
+
+    results: list[str] = []
+    all_passed = True
+
+    for i, cmd in enumerate(commands):
+        cmd = cmd.strip()
+        if not cmd:
+            continue
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=cwd,
+                executable="/bin/bash",
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+            output = (stdout or b"").decode("utf-8", errors="replace")[:1200].strip()
+            code   = proc.returncode or 0
+        except asyncio.TimeoutError:
+            output, code = "[timed out after 120s]", -1
+        except Exception as exc:
+            output, code = f"[error: {exc}]", -1
+
+        status = "✅" if code == 0 else "❌"
+        snippet = f"```\n{output}\n```" if output else ""
+        results.append(f"{status} *Step {i + 1}:* `{cmd}`\n{snippet}".strip())
+        if code != 0:
+            all_passed = False
+            break
+
+    header = (
+        f"✅ *{label or 'Background task'} — complete*"
+        if all_passed
+        else f"❌ *{label or 'Background task'} — failed at step {len(results)}*"
+    )
+    divider = "─" * 36
+    body = f"\n{divider}\n".join(results)
+    post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
+
+    return {"passed": all_passed, "steps": len(results)}
 
 
 def post_alert_sync(text: str) -> None:

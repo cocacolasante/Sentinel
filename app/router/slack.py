@@ -179,6 +179,14 @@ async def _handle(event: dict, say, client) -> None:
     except Exception as exc:
         logger.warning("Could not send Slack ACK: %s", exc)
 
+    # 1b. Store Slack context so background tasks can post back to this thread
+    if channel and ack_ts:
+        try:
+            from app.memory.redis_client import RedisMemory
+            RedisMemory().set_slack_context(session_id, channel, ack_ts)
+        except Exception:
+            pass
+
     # 2. Dispatch through the Brain
     try:
         result = await dispatch.process(text, session_id)

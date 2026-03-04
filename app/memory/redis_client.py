@@ -119,3 +119,15 @@ class RedisMemory:
     def set_approval_level(self, level: int) -> None:
         """Persist global approval level (1-3, no TTL — permanent until changed)."""
         self.client.set(self._APPROVAL_KEY, str(max(1, min(3, level))))
+
+    # ── Slack context (channel + thread for report-back) ──────────────────────
+
+    def set_slack_context(self, session_id: str, channel: str, thread_ts: str) -> None:
+        """Store the Slack channel + thread_ts for the current turn (5-min TTL)."""
+        key = f"slack_ctx:{session_id}"
+        self.client.setex(key, 300, json.dumps({"channel": channel, "thread_ts": thread_ts}))
+
+    def get_slack_context(self, session_id: str) -> dict | None:
+        """Return {channel, thread_ts} for the session, or None if not set."""
+        raw = self.client.get(f"slack_ctx:{session_id}")
+        return json.loads(raw) if raw else None

@@ -39,6 +39,25 @@ async def post_alert(text: str, channel: str | None = None) -> bool:
         return False
 
 
+def post_thread_reply_sync(text: str, channel: str, thread_ts: str) -> bool:
+    """Post a threaded reply synchronously — used by background Celery tasks to report back."""
+    settings = get_settings()
+    if not settings.slack_bot_token:
+        return False
+    try:
+        from slack_sdk import WebClient
+        resp = WebClient(token=settings.slack_bot_token).chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=text,
+            mrkdwn=True,
+        )
+        return bool(resp.get("ok"))
+    except Exception as exc:
+        logger.error("Slack thread reply (sync) exception: %s", exc)
+        return False
+
+
 def post_alert_sync(text: str, channel: str | None = None) -> bool:
     """Post a message to Slack synchronously (safe inside Celery tasks)."""
     settings = get_settings()
