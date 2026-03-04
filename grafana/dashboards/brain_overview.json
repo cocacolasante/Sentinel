@@ -3,7 +3,7 @@
   "uid": "brain-overview",
   "description": "Unified observability: Brain health, LLM cost, task queue, errors, infrastructure, live logs",
   "timezone": "browser",
-  "refresh": "30s",
+  "refresh": "10s",
   "time": {
     "from": "now-3h",
     "to": "now"
@@ -70,7 +70,8 @@
         {
           "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))",
           "legendFormat": "req/s",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -121,9 +122,10 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{job=\"brain\"}[5m]))) * 1000",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{job=\"brain\"}[1m]))) * 1000",
           "legendFormat": "p95 ms",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -176,7 +178,8 @@
         {
           "expr": "100 * sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m])) / (sum(rate(http_requests_total{job=\"brain\"}[1m])) > 0 or vector(0))",
           "legendFormat": "error %",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
@@ -229,7 +232,8 @@
         {
           "expr": "brain_active_sessions",
           "legendFormat": "sessions",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "options": {
