@@ -96,4 +96,9 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute="*/3"),
         "options":  {"queue": "celery"},
     },
+    # Every hour — aggregate error metrics from the in-memory error buffer
+    "aggregate-error-metrics": {
+        "task":     "app.worker.error_tasks.aggregate_error_metrics",
+        "schedule": crontab(minute=0),
+    },
 }

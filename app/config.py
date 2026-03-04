@@ -182,6 +182,14 @@ class Settings(BaseSettings):
     # ── n8n API key (for workflow management) ──────────────────
     n8n_api_key: str = ""
 
+    # ── Error Collection & Auto-Remediation ────────────────────
+    error_collection_enabled: bool = True
+    log_monitor_enabled: bool = True
+    error_debounce_window: int = 300  # seconds
+    error_buffer_size: int = 100
+    auto_create_remediation_tasks: bool = True
+    error_log_path: str = "/tmp/sentinel_errors.json"
+
     # ── Memory ─────────────────────────────────────────────────
     openai_embedding_model: str = "text-embedding-3-small"
     qdrant_collection: str = "brain_memories"
