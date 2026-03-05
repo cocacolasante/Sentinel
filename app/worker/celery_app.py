@@ -85,10 +85,10 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute="*/30"),
         "options": {"queue": "celery"},
     },
-    # Every 3 min — scan for pending tasks and dispatch them to workers
+    # Every 1 min — scan for pending tasks and dispatch them to workers
     "scan-pending-tasks": {
         "task": "app.worker.tasks.scan_pending_tasks",
-        "schedule": crontab(minute="*/3"),
+        "schedule": crontab(minute="*/1"),
         "options": {"queue": "celery"},
     },
     # Every hour — aggregate error metrics from the in-memory error buffer
