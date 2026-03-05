@@ -1,4 +1,5 @@
 """Unit tests for IntentClassifier — mocked Anthropic client, no live API calls."""
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -6,6 +7,7 @@ from app.brain.intent import IntentClassifier
 
 
 # ── _fmt_history (pure string formatting) ────────────────────────────────────
+
 
 def test_fmt_history_empty_list():
     assert IntentClassifier._fmt_history([]) == ""
@@ -38,11 +40,11 @@ def test_fmt_history_truncates_long_content():
 def test_fmt_history_respects_max_turns():
     """Only the last max_turns pairs should appear in the output."""
     history = [
-        {"role": "user",      "content": "msg1"},
+        {"role": "user", "content": "msg1"},
         {"role": "assistant", "content": "resp1"},
-        {"role": "user",      "content": "msg2"},
+        {"role": "user", "content": "msg2"},
         {"role": "assistant", "content": "resp2"},
-        {"role": "user",      "content": "msg3"},
+        {"role": "user", "content": "msg3"},
         {"role": "assistant", "content": "resp3"},
     ]
     result = IntentClassifier._fmt_history(history, max_turns=2)
@@ -60,6 +62,7 @@ def test_fmt_history_contains_header():
 
 # ── classify() — happy path ───────────────────────────────────────────────────
 
+
 def _make_classifier(response_text: str) -> IntentClassifier:
     """Return a classifier whose Anthropic client is mocked to return response_text."""
     classifier = IntentClassifier()
@@ -72,9 +75,7 @@ def _make_classifier(response_text: str) -> IntentClassifier:
 
 
 def test_classify_returns_parsed_intent():
-    classifier = _make_classifier(
-        '{"intent": "gmail_read", "confidence": 0.95, "params": {"action": "list"}}'
-    )
+    classifier = _make_classifier('{"intent": "gmail_read", "confidence": 0.95, "params": {"action": "list"}}')
     result = classifier.classify("Check my email")
     assert result["intent"] == "gmail_read"
     assert result["confidence"] == 0.95
@@ -82,9 +83,7 @@ def test_classify_returns_parsed_intent():
 
 
 def test_classify_chat_intent():
-    classifier = _make_classifier(
-        '{"intent": "chat", "confidence": 0.9, "params": {}}'
-    )
+    classifier = _make_classifier('{"intent": "chat", "confidence": 0.9, "params": {}}')
     result = classifier.classify("Hello there")
     assert result["intent"] == "chat"
     assert result["params"] == {}
@@ -101,7 +100,7 @@ def test_classify_passes_history_to_client():
     """Verify that conversation history is forwarded when provided."""
     classifier = _make_classifier('{"intent": "chat", "confidence": 0.8, "params": {}}')
     history = [
-        {"role": "user",      "content": "Earlier message"},
+        {"role": "user", "content": "Earlier message"},
         {"role": "assistant", "content": "Earlier reply"},
     ]
     classifier.classify("yes", history=history)
@@ -111,6 +110,7 @@ def test_classify_passes_history_to_client():
 
 
 # ── classify() — error / fallback paths ──────────────────────────────────────
+
 
 def test_classify_falls_back_on_api_error():
     classifier = IntentClassifier()

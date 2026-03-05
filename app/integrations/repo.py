@@ -38,13 +38,13 @@ _PROTECTED_DIR = Path("/root/sentinel")
 _ENV_PATH_RE = re.compile(r"(^|[/\\])\.env(\.[a-z]+)?$", re.IGNORECASE)
 
 _SECRET_PATTERNS: list[re.Pattern] = [
-    re.compile(r"ghp_[A-Za-z0-9]{36}"),                                # GitHub PAT
-    re.compile(r"sk-ant-[A-Za-z0-9\-]{90,}"),                          # Anthropic key
-    re.compile(r"xoxb-[0-9]+-[A-Za-z0-9]+"),                           # Slack bot token
-    re.compile(r"xapp-[0-9]+-[A-Za-z0-9]+"),                           # Slack app token
-    re.compile(r"AKIA[A-Z0-9]{16}"),                                    # AWS key
-    re.compile(r"sntryu_[A-Za-z0-9]{64}"),                              # Sentry token
-    re.compile(r"(?i)(password|secret|token)\s*=\s*[^\s]{8,}"),         # generic
+    re.compile(r"ghp_[A-Za-z0-9]{36}"),  # GitHub PAT
+    re.compile(r"sk-ant-[A-Za-z0-9\-]{90,}"),  # Anthropic key
+    re.compile(r"xoxb-[0-9]+-[A-Za-z0-9]+"),  # Slack bot token
+    re.compile(r"xapp-[0-9]+-[A-Za-z0-9]+"),  # Slack app token
+    re.compile(r"AKIA[A-Z0-9]{16}"),  # AWS key
+    re.compile(r"sntryu_[A-Za-z0-9]{64}"),  # Sentry token
+    re.compile(r"(?i)(password|secret|token)\s*=\s*[^\s]{8,}"),  # generic
 ]
 
 
@@ -63,6 +63,7 @@ def _dm_secret_leak(patterns: list[str]) -> None:
     """DM the owner and post an alert when a potential secret leak is detected."""
     try:
         from app.integrations.slack_notifier import post_dm_sync, post_alert_sync
+
         msg = (
             "🚨 *Secret leak prevented*\n"
             "A git push was aborted because the diff contained potential secrets:\n"
@@ -88,8 +89,7 @@ def _assert_not_protected(path: Path) -> None:
     # Block writes to .env and .env.* files — they contain secrets
     if _ENV_PATH_RE.search(str(resolved)):
         raise PermissionError(
-            "Modifying .env files requires explicit user approval. "
-            "Use the approval flow instead of writing directly."
+            "Modifying .env files requires explicit user approval. Use the approval flow instead of writing directly."
         )
 
 
@@ -116,9 +116,7 @@ def _resolve_workspace() -> Path:
 def _git_env() -> dict:
     env = os.environ.copy()
     if SSH_KEY.exists():
-        env["GIT_SSH_COMMAND"] = (
-            f"ssh -i {SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        )
+        env["GIT_SSH_COMMAND"] = f"ssh -i {SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     return env
 
 
@@ -187,10 +185,12 @@ class RepoClient:
                 subprocess.run(
                     ["git", "clone", remote_url, str(self._workspace)],
                     cwd=str(self._workspace.parent),
-                    capture_output=True, text=True, env=_git_env(),
+                    capture_output=True,
+                    text=True,
+                    env=_git_env(),
                 )
                 self._run(["git", "config", "user.email", "brain@csuitecode.com"])
-                self._run(["git", "config", "user.name",  "AI Brain"])
+                self._run(["git", "config", "user.name", "AI Brain"])
                 return f"Cloned {remote_url} to {self._workspace}"
             out = self._run(["git", "pull", "--ff-only"])
             return out or "Already up to date"
@@ -198,13 +198,12 @@ class RepoClient:
         # Local mode: just verify the directory exists
         if not self._workspace.exists():
             raise RuntimeError(
-                f"Repo directory not found: {self._workspace}. "
-                "Set GITHUB_BRAIN_REPO_URL or REPO_LOCAL_PATH in .env."
+                f"Repo directory not found: {self._workspace}. Set GITHUB_BRAIN_REPO_URL or REPO_LOCAL_PATH in .env."
             )
         # Ensure git identity is set (needed for commits)
         try:
             self._run(["git", "config", "user.email", "brain@csuitecode.com"], check=False)
-            self._run(["git", "config", "user.name",  "AI Brain"],             check=False)
+            self._run(["git", "config", "user.name", "AI Brain"], check=False)
         except Exception:
             pass
         return f"Using local repo at {self._workspace}"
@@ -213,8 +212,8 @@ class RepoClient:
         return self._run(["git", "status", "--short"])
 
     def _diff_sync(self) -> str:
-        staged   = self._run(["git", "diff", "--staged"], check=False)
-        unstaged = self._run(["git", "diff"],             check=False)
+        staged = self._run(["git", "diff", "--staged"], check=False)
+        unstaged = self._run(["git", "diff"], check=False)
         parts = []
         if staged:
             parts.append(f"=== Staged ===\n{staged}")
@@ -235,10 +234,7 @@ class RepoClient:
             lines = [l.replace(str(self._workspace) + "/", "") for l in out.splitlines()]
             return "\n".join(lines) if lines else "(empty)"
         except Exception:
-            files = sorted(
-                str(p.relative_to(self._workspace))
-                for p in target.rglob("*") if p.is_file()
-            )
+            files = sorted(str(p.relative_to(self._workspace)) for p in target.rglob("*") if p.is_file())
             return "\n".join(files) or "(empty)"
 
     def _read_file_sync(self, path: str) -> str:
@@ -253,7 +249,7 @@ class RepoClient:
             raise FileNotFoundError(f"File not found: {path}")
         content = full.read_text(errors="replace")
         lines = content.splitlines()
-        numbered = "\n".join(f"{i+1:4} | {l}" for i, l in enumerate(lines))
+        numbered = "\n".join(f"{i + 1:4} | {l}" for i, l in enumerate(lines))
         return f"=== {path} ({len(lines)} lines) ===\n{numbered}"
 
     def _write_file_sync(self, path: str, content: str) -> str:
@@ -300,19 +296,13 @@ class RepoClient:
             raise PermissionError(
                 f"Push aborted — potential secrets detected in diff: "
                 + ", ".join(leaked[:3])
-                + (f" (+{len(leaked)-3} more)" if len(leaked) > 3 else "")
+                + (f" (+{len(leaked) - 3} more)" if len(leaked) > 3 else "")
             )
         # ── .env in staged files ───────────────────────────────────────────────
         staged = self._run(["git", "diff", "--name-only", "--cached"], check=False)
-        if any(
-            _ENV_PATH_RE.search(ln.strip())
-            for ln in staged.splitlines()
-        ):
+        if any(_ENV_PATH_RE.search(ln.strip()) for ln in staged.splitlines()):
             _dm_secret_leak([".env file staged for commit"])
-            raise PermissionError(
-                "Push aborted — a .env file is staged. "
-                "Remove it with: git reset HEAD .env"
-            )
+            raise PermissionError("Push aborted — a .env file is staged. Remove it with: git reset HEAD .env")
         return self._run(["git", "push", "origin", "HEAD"])
 
     # ── Public async API ──────────────────────────────────────────────────────

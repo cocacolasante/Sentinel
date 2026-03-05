@@ -19,7 +19,7 @@ import psycopg2.extras
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 

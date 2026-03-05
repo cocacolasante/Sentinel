@@ -22,14 +22,15 @@ _scheduler: AsyncIOScheduler | None = None
 
 # ── Job functions ─────────────────────────────────────────────────────────────
 
+
 async def _run_weekly_agent_evals() -> None:
     """Weekly job: run all agent evals and post Slack scorecard."""
     logger.info("Scheduled job: weekly agent evals starting")
     try:
-        from app.evals.runner   import EvalRunner
+        from app.evals.runner import EvalRunner
         from app.evals.reporter import post_scorecard_to_slack
 
-        runner    = EvalRunner()
+        runner = EvalRunner()
         summaries = await runner.run_all_agents()
 
         # Collect previous scores for delta display
@@ -49,6 +50,7 @@ async def _run_weekly_agent_evals() -> None:
         logger.error("Weekly agent eval job failed: %s", exc)
         try:
             import sentry_sdk
+
             sentry_sdk.capture_exception(exc)
         except Exception:
             pass
@@ -59,14 +61,16 @@ async def _run_nightly_integration_evals() -> None:
     logger.info("Scheduled job: nightly integration evals starting")
     try:
         from app.evals.integrations import run_all_integration_evals
+
         results = await run_all_integration_evals()
-        passed  = sum(1 for r in results if r.passed)
+        passed = sum(1 for r in results if r.passed)
         logger.info("Nightly integration evals: %d/%d passed", passed, len(results))
     except Exception as exc:
         logger.error("Nightly integration eval job failed: %s", exc)
 
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
+
 
 def start_scheduler() -> AsyncIOScheduler:
     """Create, configure, and start the APScheduler instance."""

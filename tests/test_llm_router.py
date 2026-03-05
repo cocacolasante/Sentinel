@@ -1,4 +1,5 @@
 """Unit tests for LLMRouter — model selection and prompt building."""
+
 import pytest
 from unittest.mock import patch
 
@@ -7,6 +8,7 @@ from app.brain.llm_router import DEFAULT_AGENT_PROMPT, MODEL_MAP, LLMRouter
 
 # ── MODEL_MAP structure ───────────────────────────────────────────────────────
 
+
 def test_model_map_contains_all_required_task_types():
     required = {"code", "reasoning", "writing", "research", "classify", "default"}
     assert required.issubset(set(MODEL_MAP.keys()))
@@ -14,10 +16,8 @@ def test_model_map_contains_all_required_task_types():
 
 def test_model_map_values_are_valid_tuples():
     for task_type, (model_id, max_tokens) in MODEL_MAP.items():
-        assert isinstance(model_id, str) and len(model_id) > 0, \
-            f"{task_type}: model_id must be a non-empty string"
-        assert isinstance(max_tokens, int) and max_tokens > 0, \
-            f"{task_type}: max_tokens must be a positive int"
+        assert isinstance(model_id, str) and len(model_id) > 0, f"{task_type}: model_id must be a non-empty string"
+        assert isinstance(max_tokens, int) and max_tokens > 0, f"{task_type}: max_tokens must be a positive int"
 
 
 def test_model_map_classify_uses_haiku():
@@ -34,6 +34,7 @@ def test_model_map_code_has_large_token_budget():
 
 
 # ── _select_model ─────────────────────────────────────────────────────────────
+
 
 def test_select_model_returns_correct_entry_for_each_type():
     router = LLMRouter()
@@ -54,6 +55,7 @@ def test_select_model_classify_returns_haiku():
 
 
 # ── DEFAULT_AGENT_PROMPT content ─────────────────────────────────────────────
+
 
 def test_default_prompt_contains_shell_command_restriction():
     assert "NEVER output shell commands" in DEFAULT_AGENT_PROMPT
@@ -78,8 +80,10 @@ def test_default_prompt_contains_env_protection():
 
 # ── _build_system_prompt ──────────────────────────────────────────────────────
 
+
 def test_build_system_prompt_no_agent_no_telos():
     from app.brain.llm_router import _telos_loader
+
     router = LLMRouter()
     with patch.object(_telos_loader, "get_block", return_value=""):
         prompt = router._build_system_prompt(agent=None)
@@ -88,6 +92,7 @@ def test_build_system_prompt_no_agent_no_telos():
 
 def test_build_system_prompt_appends_telos_block():
     from app.brain.llm_router import _telos_loader
+
     router = LLMRouter()
     telos_content = "## Anthony's Goals\n- Ship great software"
     with patch.object(_telos_loader, "get_block", return_value=telos_content):
@@ -98,6 +103,7 @@ def test_build_system_prompt_appends_telos_block():
 
 def test_build_system_prompt_telos_comes_after_agent_prompt():
     from app.brain.llm_router import _telos_loader
+
     router = LLMRouter()
     telos_content = "## TELOS_MARKER"
     with patch.object(_telos_loader, "get_block", return_value=telos_content):

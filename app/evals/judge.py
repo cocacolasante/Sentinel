@@ -16,7 +16,7 @@ import anthropic
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _JUDGE_SYSTEM = (
@@ -58,11 +58,11 @@ def judge_response(
     """
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-    criteria_list = "\n".join(f"  {i+1}. {c}" for i, c in enumerate(criteria))
+    criteria_list = "\n".join(f"  {i + 1}. {c}" for i, c in enumerate(criteria))
     prompt = _JUDGE_TEMPLATE.format(
         judge_prompt=judge_prompt,
         criteria_list=criteria_list,
-        response=response[:6000],   # guard against very long responses
+        response=response[:6000],  # guard against very long responses
         threshold=threshold,
     )
 
@@ -85,8 +85,8 @@ def judge_response(
         data = json.loads(raw)
         score = max(0, min(10, int(data.get("score", 0))))
         return {
-            "score":     score,
-            "passed":    score >= threshold,
+            "score": score,
+            "passed": score >= threshold,
             "reasoning": str(data.get("reasoning", "")),
         }
 

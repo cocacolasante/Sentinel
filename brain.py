@@ -86,26 +86,28 @@ def _load_env_file() -> Path | None:
 _ENV_FILE = _load_env_file()
 
 # ── Config ────────────────────────────────────────────────────────────────────
-BRAIN_URL       = os.environ.get("BRAIN_URL", "http://localhost:8000").rstrip("/")
+BRAIN_URL = os.environ.get("BRAIN_URL", "http://localhost:8000").rstrip("/")
 # Shared primary session — all interfaces (Slack, CLI, REST) share this session.
 # Override with BRAIN_SESSION env var or --session flag for a private session.
 PRIMARY_SESSION = os.environ.get("BRAIN_SESSION", "brain")
-HISTORY_FILE    = os.path.expanduser("~/.brain_history")
-SESSIONS_FILE   = os.path.expanduser("~/.brain_sessions.json")
-MAX_SESSIONS    = 3   # number of sessions shown in picker + stored
-_REPO_ROOT      = Path(_ENV_FILE).parent if _ENV_FILE else None
+HISTORY_FILE = os.path.expanduser("~/.brain_history")
+SESSIONS_FILE = os.path.expanduser("~/.brain_sessions.json")
+MAX_SESSIONS = 3  # number of sessions shown in picker + stored
+_REPO_ROOT = Path(_ENV_FILE).parent if _ENV_FILE else None
+
 
 # ── ANSI colours ──────────────────────────────────────────────────────────────
 class C:
-    RESET  = "\033[0m"
-    BOLD   = "\033[1m"
-    DIM    = "\033[2m"
-    RED    = "\033[31m"
-    GREEN  = "\033[32m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
     YELLOW = "\033[33m"
-    BLUE   = "\033[34m"
-    CYAN   = "\033[36m"
-    WHITE  = "\033[37m"
+    BLUE = "\033[34m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+
 
 if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
     for _a in list(vars(C)):
@@ -135,25 +137,26 @@ _DEFERRED_RE = re.compile(
 # The brain showed shell commands as literal text instead of executing them
 _BASH_BLOCK_RE = re.compile(r"```\s*(bash|sh|shell|zsh)\s*\n", re.IGNORECASE)
 
-_MAX_FOLLOWUPS   = 3
-_FOLLOWUP_MSG    = "execute all the commands above and show me the exact output"
+_MAX_FOLLOWUPS = 3
+_FOLLOWUP_MSG = "execute all the commands above and show me the exact output"
+
 
 class _Spinner:
     """Animated terminal spinner with phase labels, runs in a background thread."""
 
     _FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
     _PHASES = [
-        ( 0.0, "Thinking"),
-        ( 2.5, "Routing intent"),
-        ( 5.0, "Running skill"),
+        (0.0, "Thinking"),
+        (2.5, "Routing intent"),
+        (5.0, "Running skill"),
         (10.0, "Composing response"),
         (22.0, "Still working"),
     ]
-    _WIDTH = 55   # width of the spinner line (used to blank it on exit)
+    _WIDTH = 55  # width of the spinner line (used to blank it on exit)
 
     def __init__(self) -> None:
-        self._stop    = threading.Event()
-        self._thread  = threading.Thread(target=self._run, daemon=True)
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
         self._t0: float = 0.0
 
     def _phase_label(self, elapsed: float) -> str:
@@ -167,13 +170,9 @@ class _Spinner:
         i = 0
         while not self._stop.is_set():
             elapsed = time.time() - self._t0
-            frame   = self._FRAMES[i % len(self._FRAMES)]
-            label   = self._phase_label(elapsed)
-            line    = (
-                f"\r{C.CYAN}{frame}{C.RESET} "
-                f"{C.DIM}{label}...{C.RESET}  "
-                f"{C.DIM}{elapsed:.1f}s{C.RESET}"
-            )
+            frame = self._FRAMES[i % len(self._FRAMES)]
+            label = self._phase_label(elapsed)
+            line = f"\r{C.CYAN}{frame}{C.RESET} {C.DIM}{label}...{C.RESET}  {C.DIM}{elapsed:.1f}s{C.RESET}"
             sys.stdout.write(line)
             sys.stdout.flush()
             i += 1
@@ -195,6 +194,7 @@ class _Spinner:
 
 # ── Terminal & Markdown utilities ─────────────────────────────────────────────
 
+
 def _term_width() -> int:
     """Return current terminal column count (fallback 80)."""
     try:
@@ -206,13 +206,13 @@ def _term_width() -> int:
 def _inline_md(text: str) -> str:
     """Apply inline markdown: **bold**, `code`, *italic*."""
     # Bold+italic ***text***
-    text = re.sub(r'\*\*\*(.+?)\*\*\*', lambda m: C.BOLD + C.YELLOW + m.group(1) + C.RESET, text)
+    text = re.sub(r"\*\*\*(.+?)\*\*\*", lambda m: C.BOLD + C.YELLOW + m.group(1) + C.RESET, text)
     # Bold **text**
-    text = re.sub(r'\*\*(.+?)\*\*', lambda m: C.BOLD + m.group(1) + C.RESET, text)
+    text = re.sub(r"\*\*(.+?)\*\*", lambda m: C.BOLD + m.group(1) + C.RESET, text)
     # Italic *text* (avoid lone *s between words/numbers)
-    text = re.sub(r'(?<!\w)\*([^*\s][^*]*?)\*(?!\w)', lambda m: C.DIM + m.group(1) + C.RESET, text)
+    text = re.sub(r"(?<!\w)\*([^*\s][^*]*?)\*(?!\w)", lambda m: C.DIM + m.group(1) + C.RESET, text)
     # Inline code `code`
-    text = re.sub(r'`([^`\n]+)`', lambda m: C.CYAN + m.group(1) + C.RESET, text)
+    text = re.sub(r"`([^`\n]+)`", lambda m: C.CYAN + m.group(1) + C.RESET, text)
     return text
 
 
@@ -253,12 +253,12 @@ def _render_md(text: str, width: int | None = None) -> str:
             continue
 
         # Horizontal rule (--- / ___ / ***)
-        if re.match(r'^[-_*]{3,}\s*$', raw):
+        if re.match(r"^[-_*]{3,}\s*$", raw):
             out.append(f"{C.DIM}{'─' * min(width, 60)}{C.RESET}")
             continue
 
         # ATX headers  # / ## / ###
-        m = re.match(r'^(#{1,3})\s+(.*)', raw)
+        m = re.match(r"^(#{1,3})\s+(.*)", raw)
         if m:
             lvl, title = len(m.group(1)), m.group(2).strip()
             if lvl == 1:
@@ -270,7 +270,7 @@ def _render_md(text: str, width: int | None = None) -> str:
             continue
 
         # Bullet list  - / * / •
-        m = re.match(r'^(\s{0,6})[-*•]\s+(.*)', raw)
+        m = re.match(r"^(\s{0,6})[-*•]\s+(.*)", raw)
         if m:
             pad = len(m.group(1))
             indent = "  " + " " * pad
@@ -282,7 +282,7 @@ def _render_md(text: str, width: int | None = None) -> str:
             continue
 
         # Numbered list  1. / 2. etc.
-        m = re.match(r'^(\s{0,6})(\d+)[.)]\s+(.*)', raw)
+        m = re.match(r"^(\s{0,6})(\d+)[.)]\s+(.*)", raw)
         if m:
             pad = len(m.group(1))
             indent = "  " + " " * pad
@@ -311,6 +311,7 @@ def _render_md(text: str, width: int | None = None) -> str:
 
 # ── Session storage ───────────────────────────────────────────────────────────
 
+
 def _load_sessions() -> list[dict]:
     """Load saved sessions from disk. Returns list sorted newest-first."""
     try:
@@ -329,13 +330,16 @@ def _save_session(session_id: str, last_user: str, last_reply: str) -> None:
     sessions = [s for s in sessions if s.get("id") != session_id]
 
     # Prepend updated entry
-    sessions.insert(0, {
-        "id":         session_id,
-        "name":       session_id.replace("cli-", ""),
-        "last_user":  last_user[:120],
-        "last_reply": last_reply[:120],
-        "updated_at": datetime.now().isoformat(timespec="seconds"),
-    })
+    sessions.insert(
+        0,
+        {
+            "id": session_id,
+            "name": session_id.replace("cli-", ""),
+            "last_user": last_user[:120],
+            "last_reply": last_reply[:120],
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+        },
+    )
 
     # Trim to MAX_SESSIONS
     sessions = sessions[:MAX_SESSIONS]
@@ -371,9 +375,9 @@ def _pick_session() -> str:
     print(f"\n{C.BOLD}Recent sessions:{C.RESET}")
     _sep()
     for i, s in enumerate(sessions, 1):
-        ts      = s.get("updated_at", "")[:16].replace("T", " ")
+        ts = s.get("updated_at", "")[:16].replace("T", " ")
         snippet = s.get("last_user", "")[:55]
-        name    = s.get("name", s.get("id", "?"))
+        name = s.get("name", s.get("id", "?"))
         print(
             f"  {C.CYAN}{C.BOLD}[{i}]{C.RESET} "
             f"{C.DIM}{ts}{C.RESET}  "
@@ -385,7 +389,11 @@ def _pick_session() -> str:
     print()
 
     try:
-        choice = input(f"\001{C.CYAN}\002Pick a session (1–{len(sessions)}, or n for new):\001{C.RESET}\002 ").strip().lower()
+        choice = (
+            input(f"\001{C.CYAN}\002Pick a session (1–{len(sessions)}, or n for new):\001{C.RESET}\002 ")
+            .strip()
+            .lower()
+        )
     except (EOFError, KeyboardInterrupt):
         print()
         sys.exit(0)
@@ -412,11 +420,13 @@ def _pick_session() -> str:
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
 
+
 def _api(method: str, path: str, body=None) -> dict:
-    url  = f"{BRAIN_URL}{path}"
+    url = f"{BRAIN_URL}{path}"
     data = json.dumps(body).encode() if body is not None else None
-    req  = urllib.request.Request(
-        url, data=data,
+    req = urllib.request.Request(
+        url,
+        data=data,
         headers={"Content-Type": "application/json"},
         method=method,
     )
@@ -447,7 +457,9 @@ def _err(msg: str) -> None:
 def _sep() -> None:
     print(f"{C.DIM}{'─' * min(_term_width() - 1, 60)}{C.RESET}")
 
+
 # ── Commands ──────────────────────────────────────────────────────────────────
+
 
 def _is_deferred(reply: str, intent: str) -> bool:
     """
@@ -502,9 +514,9 @@ def cmd_chat(message: str, session_id: str) -> None:
     if not _ok(result):
         return
 
-    reply  = result.get("reply", "")
+    reply = result.get("reply", "")
     intent = result.get("intent", "chat")
-    agent  = result.get("agent", "default")
+    agent = result.get("agent", "default")
 
     # ── Auto-follow-up loop ───────────────────────────────────────────────────
     # If the brain returned a "will do it" response instead of actual results,
@@ -522,22 +534,14 @@ def cmd_chat(message: str, session_id: str) -> None:
         if not _ok(followup_result):
             break
         elapsed += followup_elapsed
-        reply   = followup_result.get("reply", reply)
-        intent  = followup_result.get("intent", intent)
-        agent   = followup_result.get("agent", agent)
-        result  = followup_result
+        reply = followup_result.get("reply", reply)
+        intent = followup_result.get("intent", intent)
+        agent = followup_result.get("agent", agent)
+        result = followup_result
 
     sep = f"{C.DIM}{'─' * min(width - 1, 72)}{C.RESET}"
-    agent_tag = (
-        f"  {C.DIM}via {agent}{C.RESET}"
-        if agent and agent not in ("default", "")
-        else ""
-    )
-    followup_tag = (
-        f"  {C.DIM}+{followups} follow-up{'s' if followups > 1 else ''}{C.RESET}"
-        if followups
-        else ""
-    )
+    agent_tag = f"  {C.DIM}via {agent}{C.RESET}" if agent and agent not in ("default", "") else ""
+    followup_tag = f"  {C.DIM}+{followups} follow-up{'s' if followups > 1 else ''}{C.RESET}" if followups else ""
     print(
         f"\n{C.GREEN}{C.BOLD}◆{C.RESET} {C.BOLD}Brain{C.RESET}  "
         f"{C.DIM}[{intent}]{C.RESET}"
@@ -588,10 +592,10 @@ def cmd_pending() -> None:
     _sep()
     cat_c = {"standard": C.CYAN, "critical": C.YELLOW, "breaking": C.RED}
     for t in tasks:
-        cc    = cat_c.get(t.get("category", ""), C.WHITE)
-        sid   = t["task_id"][:8]
+        cc = cat_c.get(t.get("category", ""), C.WHITE)
+        sid = t["task_id"][:8]
         title = (t.get("title") or t.get("action", "?"))[:52]
-        print(f"  {C.DIM}{sid}{C.RESET}  {cc}{t.get('category','?'):<10}{C.RESET}  {title}")
+        print(f"  {C.DIM}{sid}{C.RESET}  {cc}{t.get('category', '?'):<10}{C.RESET}  {title}")
     _sep()
     print(f"{C.DIM}Use /approve <id> or /cancel <id> (first 8 chars OK){C.RESET}\n")
 
@@ -661,7 +665,7 @@ def cmd_tasks() -> None:
         if not isinstance(workers, dict):
             continue
         for worker, tasks in workers.items():
-            for t in (tasks or []):
+            for t in tasks or []:
                 rows.append((state, t.get("name", "?").split(".")[-1], (t.get("id") or "")[:8]))
     if not rows:
         print(f"\n{C.DIM}Queue is idle.{C.RESET}\n")
@@ -685,9 +689,9 @@ def cmd_history() -> None:
     print(f"\n{C.BOLD}Write History ({len(tasks)}){C.RESET}")
     _sep()
     for t in tasks:
-        sc    = status_c.get(t.get("status", ""), C.WHITE)
+        sc = status_c.get(t.get("status", ""), C.WHITE)
         title = (t.get("title") or t.get("action", "?"))[:40]
-        print(f"  {sc}{t.get('status','?'):<11}{C.RESET}  {t.get('action','?'):<22}  {title}")
+        print(f"  {sc}{t.get('status', '?'):<11}{C.RESET}  {t.get('action', '?'):<22}  {title}")
     _sep()
     print()
 
@@ -701,10 +705,10 @@ def cmd_sessions() -> None:
     print(f"\n{C.BOLD}Saved Sessions ({len(sessions)}){C.RESET}")
     _sep()
     for i, s in enumerate(sessions, 1):
-        ts      = s.get("updated_at", "")[:16].replace("T", " ")
+        ts = s.get("updated_at", "")[:16].replace("T", " ")
         snippet = s.get("last_user", "")[:55]
-        name    = s.get("name", s.get("id", "?"))
-        sid     = s.get("id", "")
+        name = s.get("name", s.get("id", "?"))
+        sid = s.get("id", "")
         print(
             f"  {C.CYAN}{C.BOLD}[{i}]{C.RESET} "
             f"{C.DIM}{ts}{C.RESET}  "
@@ -722,7 +726,7 @@ def cmd_mytasks(
 ) -> None:
     """Show task board — tasks created by the AI brain."""
     path = "/api/v1/board/tasks"
-    qs   = []
+    qs = []
     if status:
         qs.append(f"status={status}")
     if priority:
@@ -748,12 +752,12 @@ def cmd_mytasks(
     print(f"\n{C.BOLD}Task Board{C.RESET}  {C.DIM}({count} tasks){C.RESET}")
     _sep()
     for t in tasks:
-        pri  = t.get("priority_num") or 3
-        alv  = t.get("approval_level") or 2
+        pri = t.get("priority_num") or 3
+        alv = t.get("approval_level") or 2
         stat = t.get("status", "pending")
-        pc   = pri_c.get(pri, C.WHITE)
+        pc = pri_c.get(pri, C.WHITE)
         emoji = sta_e.get(stat, "?")
-        tid  = str(t.get("id", "?"))
+        tid = str(t.get("id", "?"))
         title = (t.get("title") or "?")[:48]
         plabel = t.get("priority_label", str(pri))
         alvlabel = apv_l.get(alv, str(alv))
@@ -771,12 +775,17 @@ def cmd_mytasks(
 
 # ── Server context ─────────────────────────────────────────────────────────────
 
+
 def _run_cmd(cmd: str, cwd: str | None = None, timeout: int = 5) -> str:
     """Run a shell command and return combined output (stdout + stderr)."""
     try:
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True,
-            timeout=timeout, cwd=cwd,
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=cwd,
         )
         out = (result.stdout + result.stderr).strip()
         return out[:2000] if out else "(no output)"
@@ -792,44 +801,43 @@ def _gather_server_context() -> dict:
 
     # Repo context
     if _REPO_ROOT and (_REPO_ROOT / ".git").exists():
-        ctx["repo_root"]   = str(_REPO_ROOT)
-        ctx["git_branch"]  = _run_cmd("git rev-parse --abbrev-ref HEAD",    cwd=str(_REPO_ROOT))
-        ctx["git_status"]  = _run_cmd("git status --short",                  cwd=str(_REPO_ROOT))
-        ctx["git_log"]     = _run_cmd("git log --oneline -5",                cwd=str(_REPO_ROOT))
+        ctx["repo_root"] = str(_REPO_ROOT)
+        ctx["git_branch"] = _run_cmd("git rev-parse --abbrev-ref HEAD", cwd=str(_REPO_ROOT))
+        ctx["git_status"] = _run_cmd("git status --short", cwd=str(_REPO_ROOT))
+        ctx["git_log"] = _run_cmd("git log --oneline -5", cwd=str(_REPO_ROOT))
     else:
         ctx["repo_root"] = "(not a git repo or .env not found)"
 
     # Docker containers
     ctx["docker_ps"] = _run_cmd(
-        "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null "
-        "|| echo '(docker not available)'"
+        "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null || echo '(docker not available)'"
     )
 
     # Env config summary — show which key groups are configured (not values)
     _KEY_GROUPS = {
-        "Anthropic":   ["ANTHROPIC_API_KEY"],
-        "OpenAI":      ["OPENAI_API_KEY"],
-        "Slack":       ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"],
-        "GitHub":      ["GITHUB_TOKEN"],
-        "Google":      ["GOOGLE_CLIENT_ID_1"],
-        "Sentry":      ["SENTRY_DSN"],
-        "IONOS":       ["IONOS_TOKEN"],
-        "WhatsApp":    ["TWILIO_ACCOUNT_SID"],
-        "n8n":         ["N8N_API_KEY"],
-        "Postgres":    ["POSTGRES_HOST"],
-        "Redis":       ["REDIS_HOST"],
-        "Qdrant":      ["QDRANT_HOST"],
+        "Anthropic": ["ANTHROPIC_API_KEY"],
+        "OpenAI": ["OPENAI_API_KEY"],
+        "Slack": ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"],
+        "GitHub": ["GITHUB_TOKEN"],
+        "Google": ["GOOGLE_CLIENT_ID_1"],
+        "Sentry": ["SENTRY_DSN"],
+        "IONOS": ["IONOS_TOKEN"],
+        "WhatsApp": ["TWILIO_ACCOUNT_SID"],
+        "n8n": ["N8N_API_KEY"],
+        "Postgres": ["POSTGRES_HOST"],
+        "Redis": ["REDIS_HOST"],
+        "Qdrant": ["QDRANT_HOST"],
     }
     configured = []
-    missing    = []
+    missing = []
     for group, keys in _KEY_GROUPS.items():
         if any(os.environ.get(k) for k in keys):
             configured.append(group)
         else:
             missing.append(group)
     ctx["env_configured"] = configured
-    ctx["env_missing"]    = missing
-    ctx["env_file"]       = str(_ENV_FILE) if _ENV_FILE else "(not found)"
+    ctx["env_missing"] = missing
+    ctx["env_file"] = str(_ENV_FILE) if _ENV_FILE else "(not found)"
 
     return ctx
 
@@ -869,7 +877,7 @@ def cmd_context() -> None:
 
     # Integrations
     configured = ctx.get("env_configured", [])
-    missing    = ctx.get("env_missing", [])
+    missing = ctx.get("env_missing", [])
     print(f"\n{C.BOLD}Integrations:{C.RESET}")
     if configured:
         print(f"  {C.GREEN}Configured:{C.RESET}  {', '.join(configured)}")
@@ -922,7 +930,7 @@ def cmd_clear(session_id: str) -> None:
 
 _HELP = f"""
 {C.BOLD}Commands{C.RESET}
-{C.DIM}{'─' * 56}{C.RESET}
+{C.DIM}{"─" * 56}{C.RESET}
   {C.CYAN}/help{C.RESET}              Show this help
   {C.CYAN}/health{C.RESET}            System health check
   {C.CYAN}/costs{C.RESET}             Today's LLM spend
@@ -941,13 +949,13 @@ _HELP = f"""
   {C.CYAN}/history{C.RESET}           Recent write action history
   {C.CYAN}/clear{C.RESET}             Clear this session's memory
   {C.CYAN}/exit{C.RESET}              Quit {C.DIM}(also Ctrl+D){C.RESET}
-{C.DIM}{'─' * 56}{C.RESET}
+{C.DIM}{"─" * 56}{C.RESET}
 {C.BOLD}Self-modification{C.RESET}
   {C.DIM}read brain.py{C.RESET}             → reads the CLI source file
   {C.DIM}update brain.py to add X{C.RESET}  → patches file + commits
   {C.DIM}deploy{C.RESET}                    → rebuilds + restarts brain container
   {C.DIM}read app/brain/intent.py{C.RESET}  → reads intent classifier
-{C.DIM}{'─' * 56}{C.RESET}
+{C.DIM}{"─" * 56}{C.RESET}
   {C.DIM}Any other input is sent to Brain as a chat message.
   Default session is shared with Slack and REST API ({C.RESET}{C.GREEN}[shared ✦]{C.DIM}).
   Use --session NAME for a private isolated session.{C.RESET}
@@ -957,7 +965,7 @@ _HELP = f"""
 def _handle_slash(line: str, session_id: str) -> bool:
     """Handle /command. Returns False to exit."""
     parts = line[1:].split(maxsplit=2)
-    cmd   = parts[0].lower() if parts else ""
+    cmd = parts[0].lower() if parts else ""
 
     if cmd in ("exit", "quit", "q"):
         return False
@@ -1010,6 +1018,7 @@ def repl(session_id: str) -> None:
     # Readline history
     try:
         import readline
+
         try:
             readline.read_history_file(HISTORY_FILE)
         except FileNotFoundError:
@@ -1020,14 +1029,14 @@ def repl(session_id: str) -> None:
         _rl = None
 
     # Startup banner
-    d   = _api("GET", "/api/v1/approval/level")
+    d = _api("GET", "/api/v1/approval/level")
     lvl = d.get("level", "?") if "_error" not in d else "?"
     lbl = d.get("label", d.get("_error", "")) if "_error" not in d else d.get("_error", "")
-    lc  = {1: C.RED, 2: C.YELLOW, 3: C.GREEN}.get(lvl, C.WHITE)
+    lc = {1: C.RED, 2: C.YELLOW, 3: C.GREEN}.get(lvl, C.WHITE)
 
     width = _term_width()
     name = session_id.replace("cli-", "")
-    is_shared = (session_id == PRIMARY_SESSION)
+    is_shared = session_id == PRIMARY_SESSION
 
     # Gather branch if available
     branch = ""
@@ -1035,7 +1044,10 @@ def repl(session_id: str) -> None:
         try:
             branch_out = subprocess.run(
                 "git rev-parse --abbrev-ref HEAD",
-                shell=True, capture_output=True, text=True, timeout=3,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=3,
                 cwd=str(_REPO_ROOT),
             )
             branch = branch_out.stdout.strip()
@@ -1091,6 +1103,7 @@ def repl(session_id: str) -> None:
 
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
+
 def main() -> None:
     args = sys.argv[1:]
 
@@ -1126,7 +1139,7 @@ def main() -> None:
         return
 
     # ── Subcommands ───────────────────────────────────────────────────────────
-    cmd  = args[0].lower()
+    cmd = args[0].lower()
     rest = args[1:]
 
     # For one-shot chat, use the shared primary session if not specified
@@ -1166,7 +1179,7 @@ def main() -> None:
     elif cmd == "sessions":
         cmd_sessions()
     elif cmd == "mytasks":
-        status   = rest[0] if rest else None
+        status = rest[0] if rest else None
         priority = rest[1] if len(rest) > 1 else None
         cmd_mytasks(status=status, priority=priority)
     elif cmd == "context":

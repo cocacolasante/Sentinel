@@ -25,12 +25,14 @@ class GmailReadSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.gmail import GmailClient
+
         return GmailClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.gmail import get_gmail_client
+
         account = params.get("account")
-        client  = get_gmail_client(account_name=account)
+        client = get_gmail_client(account_name=account)
 
         if not client.is_configured():
             return SkillResult(
@@ -38,7 +40,7 @@ class GmailReadSkill(BaseSkill):
                 skill_name=self.name,
             )
 
-        label  = _account_label(client.account_name)
+        label = _account_label(client.account_name)
         action = params.get("action", "list")
         msg_id = params.get("msg_id", "")
 
@@ -65,7 +67,7 @@ class GmailReadSkill(BaseSkill):
             )
 
         # Default: list emails
-        query       = params.get("query", "is:unread")
+        query = params.get("query", "is:unread")
         max_results = int(params.get("max_results", 10))
         emails = await client.list_emails(query=query, max_results=max_results)
         return SkillResult(
@@ -86,23 +88,25 @@ class GmailSendSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.gmail import GmailClient
+
         return GmailClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.gmail import get_gmail_client
+
         account = params.get("account")
-        client  = get_gmail_client(account_name=account)
+        client = get_gmail_client(account_name=account)
 
         if not client.is_configured():
             return SkillResult(context_data="[Gmail not configured]", skill_name=self.name)
 
         pending = {
-            "intent":   "gmail_send",
-            "action":   "send_email",
-            "params":   params,
+            "intent": "gmail_send",
+            "action": "send_email",
+            "params": params,
             "original": original_message,
         }
-        to      = params.get("to", "unknown")
+        to = params.get("to", "unknown")
         subject = params.get("subject", "")
         context = (
             f"Draft an email based on the user's request. "
@@ -132,12 +136,14 @@ class GmailReplySkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.gmail import GmailClient
+
         return GmailClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.gmail import get_gmail_client
+
         account = params.get("account")
-        client  = get_gmail_client(account_name=account)
+        client = get_gmail_client(account_name=account)
 
         if not client.is_configured():
             return SkillResult(context_data="[Gmail not configured]", skill_name=self.name)
@@ -150,17 +156,17 @@ class GmailReplySkill(BaseSkill):
             )
 
         try:
-            email     = await client.get_email(msg_id)
+            email = await client.get_email(msg_id)
             from_addr = email.get("from", "?")
-            subject   = email.get("subject", "?")
+            subject = email.get("subject", "?")
         except Exception:
             from_addr = "?"
-            subject   = "?"
+            subject = "?"
 
         pending = {
-            "intent":   "gmail_reply",
-            "action":   "reply_email",
-            "params":   params,
+            "intent": "gmail_reply",
+            "action": "reply_email",
+            "params": params,
             "original": original_message,
         }
         context = (

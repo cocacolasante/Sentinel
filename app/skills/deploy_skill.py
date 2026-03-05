@@ -24,19 +24,19 @@ class DeploySkill(BaseSkill):
         "Rebuild the Brain's Docker image with the latest committed code and restart "
         "the brain container — use this after repo_commit to apply code changes live"
     )
-    trigger_intents   = ["deploy"]
+    trigger_intents = ["deploy"]
     requires_confirmation = True
-    approval_category = ApprovalCategory.BREAKING   # always requires confirmation
+    approval_category = ApprovalCategory.BREAKING  # always requires confirmation
 
     def is_available(self) -> bool:
-        return True   # Celery worker handles the actual Docker calls
+        return True  # Celery worker handles the actual Docker calls
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         reason = params.get("reason", "")
         pending = {
-            "intent":   "deploy",
-            "action":   "deploy_brain",
-            "params":   {"reason": reason or original_message[:120]},
+            "intent": "deploy",
+            "action": "deploy_brain",
+            "params": {"reason": reason or original_message[:120]},
             "original": original_message,
         }
         context = (

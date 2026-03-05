@@ -26,13 +26,16 @@ class SkillRegistry:
             if intent in self._skills:
                 logger.warning(
                     "Intent '%s' already registered by %s — overwriting with %s",
-                    intent, self._skills[intent].name, skill.name,
+                    intent,
+                    self._skills[intent].name,
+                    skill.name,
                 )
             self._skills[intent] = skill
 
     def get(self, intent: str) -> BaseSkill:
         """Return the skill for the given intent, or ChatSkill as fallback."""
         from app.skills.chat_skill import ChatSkill
+
         return self._skills.get(intent, ChatSkill())
 
     def list_available(self) -> list[BaseSkill]:

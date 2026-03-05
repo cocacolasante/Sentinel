@@ -4,6 +4,7 @@ Shared pytest fixtures.
 All external service connections (PostgreSQL, Redis, Qdrant, Slack) are mocked
 so the test suite runs without any live infrastructure.
 """
+
 import os
 from unittest.mock import AsyncMock, patch
 
@@ -52,6 +53,7 @@ def client():
     ):
         # Clear the lru_cache so the test env vars above take effect
         from app.config import get_settings
+
         get_settings.cache_clear()
 
         from app.main import app  # import after env vars + patches are set

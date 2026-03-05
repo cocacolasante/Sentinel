@@ -20,7 +20,7 @@ from app.config import get_settings
 settings = get_settings()
 
 # Use Redis DB 1 (broker) and DB 2 (backend) — app memory uses DB 0
-_broker  = f"redis://:{settings.redis_password}@{settings.redis_host}:{settings.redis_port}/1"
+_broker = f"redis://:{settings.redis_password}@{settings.redis_host}:{settings.redis_port}/1"
 _backend = f"redis://:{settings.redis_password}@{settings.redis_host}:{settings.redis_port}/2"
 
 celery_app = Celery(
@@ -32,31 +32,26 @@ celery_app = Celery(
 
 celery_app.conf.update(
     # Serialisation
-    task_serializer         = "json",
-    result_serializer       = "json",
-    accept_content          = ["json"],
-
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
     # Time
-    timezone                = "UTC",
-    enable_utc              = True,
-
+    timezone="UTC",
+    enable_utc=True,
     # Visibility — required for Flower and celery-exporter
-    worker_send_task_events = True,
-    task_send_sent_event    = True,
-    task_track_started      = True,
-
+    worker_send_task_events=True,
+    task_send_sent_event=True,
+    task_track_started=True,
     # Reliability
-    task_acks_late          = True,   # ack only after task completes
-    result_expires          = 86_400, # keep results 24 hr
-    task_reject_on_worker_lost = True,
-
+    task_acks_late=True,  # ack only after task completes
+    result_expires=86_400,  # keep results 24 hr
+    task_reject_on_worker_lost=True,
     # Queues
-    task_default_queue      = "celery",
-
+    task_default_queue="celery",
     # Task routing — workspace tasks go to a dedicated single-concurrency queue
     # to prevent simultaneous writes to /root/sentinel-workspace (merge conflicts).
     # Non-workspace tasks go to tasks_general (concurrency=3).
-    task_routes = {
+    task_routes={
         "app.worker.tasks.execute_board_task": {
             # Routing happens dynamically at call-time via .apply_async(queue=...)
             # This entry is a fallback; the skill chooses the queue based on commands.
@@ -74,31 +69,31 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     # Weekly Sunday 09:00 UTC — agent quality evals + Slack scorecard
     "weekly-agent-evals": {
-        "task":     "app.worker.tasks.run_weekly_agent_evals",
+        "task": "app.worker.tasks.run_weekly_agent_evals",
         "schedule": crontab(day_of_week="sun", hour=9, minute=0),
-        "options":  {"queue": "evals"},
+        "options": {"queue": "evals"},
     },
     # Nightly 02:00 UTC — integration reliability checks + Slack health post
     "nightly-integration-evals": {
-        "task":     "app.worker.tasks.run_nightly_integration_evals",
+        "task": "app.worker.tasks.run_nightly_integration_evals",
         "schedule": crontab(hour=2, minute=0),
-        "options":  {"queue": "evals"},
+        "options": {"queue": "evals"},
     },
     # Every 30 min — Brain/Redis/Postgres health check; alerts Slack on failure
     "health-check": {
-        "task":     "app.worker.tasks.run_health_check",
+        "task": "app.worker.tasks.run_health_check",
         "schedule": crontab(minute="*/30"),
-        "options":  {"queue": "celery"},
+        "options": {"queue": "celery"},
     },
     # Every 3 min — scan for pending tasks and dispatch them to workers
     "scan-pending-tasks": {
-        "task":     "app.worker.tasks.scan_pending_tasks",
+        "task": "app.worker.tasks.scan_pending_tasks",
         "schedule": crontab(minute="*/3"),
-        "options":  {"queue": "celery"},
+        "options": {"queue": "celery"},
     },
     # Every hour — aggregate error metrics from the in-memory error buffer
     "aggregate-error-metrics": {
-        "task":     "app.worker.error_tasks.aggregate_error_metrics",
+        "task": "app.worker.error_tasks.aggregate_error_metrics",
         "schedule": crontab(minute=0),
     },
 }

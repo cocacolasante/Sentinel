@@ -24,10 +24,12 @@ class CICDReadSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.config import get_settings
+
         return bool(get_settings().github_token)
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.github import GitHubClient
+
         client = GitHubClient()
         if not client.is_configured():
             return SkillResult(
@@ -36,8 +38,9 @@ class CICDReadSkill(BaseSkill):
             )
 
         from app.config import get_settings
+
         settings = get_settings()
-        repo   = params.get("repo", settings.github_default_repo)
+        repo = params.get("repo", settings.github_default_repo)
         action = params.get("action", "list_workflows")
 
         if not repo:
@@ -50,10 +53,10 @@ class CICDReadSkill(BaseSkill):
             data = await client._get(f"/repos/{repo}/actions/workflows")
             workflows = [
                 {
-                    "id":    w["id"],
-                    "name":  w["name"],
+                    "id": w["id"],
+                    "name": w["name"],
                     "state": w["state"],
-                    "path":  w["path"],
+                    "path": w["path"],
                 }
                 for w in data.get("workflows", [])
             ]
@@ -61,20 +64,20 @@ class CICDReadSkill(BaseSkill):
 
         if action == "list_runs":
             workflow_id = params.get("workflow_id", "")
-            path        = f"/repos/{repo}/actions/runs"
+            path = f"/repos/{repo}/actions/runs"
             extra_params: dict = {"per_page": int(params.get("limit", 10))}
             if workflow_id:
                 path = f"/repos/{repo}/actions/workflows/{workflow_id}/runs"
-            data  = await client._get(path, params=extra_params)
-            runs  = [
+            data = await client._get(path, params=extra_params)
+            runs = [
                 {
-                    "id":         r["id"],
-                    "name":       r["name"],
-                    "status":     r["status"],
+                    "id": r["id"],
+                    "name": r["name"],
+                    "status": r["status"],
                     "conclusion": r.get("conclusion"),
-                    "branch":     r["head_branch"],
+                    "branch": r["head_branch"],
                     "created_at": r["created_at"],
-                    "html_url":   r["html_url"],
+                    "html_url": r["html_url"],
                 }
                 for r in data.get("workflow_runs", [])
             ]
@@ -86,15 +89,15 @@ class CICDReadSkill(BaseSkill):
                 return SkillResult(context_data="[get_run requires run_id]", skill_name=self.name)
             data = await client._get(f"/repos/{repo}/actions/runs/{run_id}")
             summary = {
-                "id":         data.get("id"),
-                "name":       data.get("name"),
-                "status":     data.get("status"),
+                "id": data.get("id"),
+                "name": data.get("name"),
+                "status": data.get("status"),
                 "conclusion": data.get("conclusion"),
-                "branch":     data.get("head_branch"),
-                "commit":     data.get("head_sha", "")[:8],
+                "branch": data.get("head_branch"),
+                "commit": data.get("head_sha", "")[:8],
                 "created_at": data.get("created_at"),
                 "updated_at": data.get("updated_at"),
-                "url":        data.get("html_url"),
+                "url": data.get("html_url"),
             }
             return SkillResult(context_data=json.dumps(summary, indent=2), skill_name=self.name)
 
@@ -113,15 +116,17 @@ class CICDTriggerSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.config import get_settings
+
         return bool(get_settings().github_token)
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.config import get_settings
+
         settings = get_settings()
-        repo          = params.get("repo", settings.github_default_repo)
-        workflow_id   = params.get("workflow_id", params.get("workflow_name", ""))
-        ref           = params.get("ref", "main")
-        inputs        = params.get("inputs", {})
+        repo = params.get("repo", settings.github_default_repo)
+        workflow_id = params.get("workflow_id", params.get("workflow_name", ""))
+        ref = params.get("ref", "main")
+        inputs = params.get("inputs", {})
 
         if not repo or not workflow_id:
             return SkillResult(
@@ -130,9 +135,9 @@ class CICDTriggerSkill(BaseSkill):
             )
 
         pending = {
-            "intent":   "cicd_trigger",
-            "action":   "trigger_workflow",
-            "params":   params,
+            "intent": "cicd_trigger",
+            "action": "trigger_workflow",
+            "params": params,
             "original": original_message,
         }
         context = (

@@ -33,4 +33,5 @@ async def get_costs() -> dict:
     }
     """
     from app.brain.cost_tracker import cost_tracker
+
     return cost_tracker.get_daily_summary()

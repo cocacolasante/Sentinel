@@ -21,63 +21,71 @@ from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from app.brain.dispatcher import Dispatcher, DispatchResult
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 dispatch = Dispatcher()
 
 # Phrases that trigger the built-in skills/help listing (no LLM call)
 _HELP_PHRASES = {
-    "help", "skills", "list skills", "what can you do",
-    "capabilities", "what skills do you have", "show skills",
-    "available skills", "what can you do?", "help me",
+    "help",
+    "skills",
+    "list skills",
+    "what can you do",
+    "capabilities",
+    "what skills do you have",
+    "show skills",
+    "available skills",
+    "what can you do?",
+    "help me",
 }
 
 # Intent → friendly label for the response header
 _INTENT_LABELS: dict[str, str] = {
-    "gmail_read":       "📧 Gmail read",
-    "gmail_send":       "📧 Gmail send",
-    "gmail_reply":      "📧 Gmail reply",
-    "calendar_read":    "📅 Calendar read",
-    "calendar_write":   "📅 Calendar event",
-    "github_read":      "🐙 GitHub read",
-    "github_write":     "🐙 GitHub write",
-    "smart_home":       "🏠 Smart home",
-    "n8n_execute":      "⚡ n8n workflow",
-    "n8n_manage":       "⚡ n8n manage",
-    "cicd_read":        "🔄 CI/CD read",
-    "cicd_trigger":     "🔄 CI/CD trigger",
-    "contacts_read":    "👤 Contacts read",
-    "contacts_write":   "👤 Contacts write",
-    "whatsapp_read":    "💬 WhatsApp read",
-    "whatsapp_send":    "💬 WhatsApp send",
-    "ionos_cloud":      "☁️ IONOS cloud",
-    "ionos_dns":        "🌐 IONOS DNS",
-    "research":         "🔍 Research",
-    "code":             "💻 Code",
-    "content_draft":    "✍️ Content draft",
-    "social_caption":   "📱 Social caption",
-    "ad_copy":          "📣 Ad copy",
-    "content_repurpose":"♻️ Content repurpose",
+    "gmail_read": "📧 Gmail read",
+    "gmail_send": "📧 Gmail send",
+    "gmail_reply": "📧 Gmail reply",
+    "calendar_read": "📅 Calendar read",
+    "calendar_write": "📅 Calendar event",
+    "github_read": "🐙 GitHub read",
+    "github_write": "🐙 GitHub write",
+    "smart_home": "🏠 Smart home",
+    "n8n_execute": "⚡ n8n workflow",
+    "n8n_manage": "⚡ n8n manage",
+    "cicd_read": "🔄 CI/CD read",
+    "cicd_trigger": "🔄 CI/CD trigger",
+    "contacts_read": "👤 Contacts read",
+    "contacts_write": "👤 Contacts write",
+    "whatsapp_read": "💬 WhatsApp read",
+    "whatsapp_send": "💬 WhatsApp send",
+    "ionos_cloud": "☁️ IONOS cloud",
+    "ionos_dns": "🌐 IONOS DNS",
+    "research": "🔍 Research",
+    "code": "💻 Code",
+    "content_draft": "✍️ Content draft",
+    "social_caption": "📱 Social caption",
+    "ad_copy": "📣 Ad copy",
+    "content_repurpose": "♻️ Content repurpose",
     "content_calendar": "🗓️ Content calendar",
-    "repo_read":        "📂 Repo read",
-    "repo_write":       "✏️ Repo write",
-    "repo_commit":      "🚀 Repo commit",
-    "sentry_read":      "🐛 Sentry read",
-    "sentry_manage":    "🐛 Sentry manage",
-    "server_shell":     "🖥️ Server shell",
-    "skill_discover":   "🔎 Skill discovery",
-    "deploy":           "🚀 Deploy",
-    "task_create":      "📋 Task created",
-    "task_read":        "📋 Tasks",
-    "task_update":      "📋 Task updated",
-    "chat":             "💭 Chat",
-    "rate_limited":     "⏱️ Rate limited",
-    "blocked":          "⛔ Blocked",
+    "repo_read": "📂 Repo read",
+    "repo_write": "✏️ Repo write",
+    "repo_commit": "🚀 Repo commit",
+    "sentry_read": "🐛 Sentry read",
+    "sentry_manage": "🐛 Sentry manage",
+    "server_shell": "🖥️ Server shell",
+    "skill_discover": "🔎 Skill discovery",
+    "deploy": "🚀 Deploy",
+    "task_create": "📋 Task created",
+    "task_read": "📋 Tasks",
+    "task_update": "📋 Task updated",
+    "chat": "💭 Chat",
+    "rate_limited": "⏱️ Rate limited",
+    "blocked": "⛔ Blocked",
 }
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _session_id(event: dict) -> str:
     # Keyed by user only — so memory is shared across DMs and channel mentions.
@@ -96,12 +104,12 @@ def _strip_mention(text: str) -> str:
 def _build_skills_help() -> str:
     """Formatted list of all registered skills with descriptions."""
     reg = dispatch.skills
-    available_lines   = []
+    available_lines = []
     unavailable_lines = []
 
     for skill in reg._all:
         intents = " | ".join(f"`{i}`" for i in skill.trigger_intents) if skill.trigger_intents else "_(fallback)_"
-        line    = f"• {intents} — {skill.description}"
+        line = f"• {intents} — {skill.description}"
         if skill.is_available():
             available_lines.append(line)
         else:
@@ -117,20 +125,20 @@ def _build_skills_help() -> str:
     parts.append(
         "\n*✏️ Codebase self-editing workflow:*\n"
         "```\n"
-        "1. Read a file:    \"read app/brain/intent.py\"\n"
-        "2. Make a change:  \"patch app/brain/intent.py — add task_create routing hint\"\n"
+        '1. Read a file:    "read app/brain/intent.py"\n'
+        '2. Make a change:  "patch app/brain/intent.py — add task_create routing hint"\n'
         "3. Confirm:        reply  confirm  (or  cancel  to abort)\n"
-        "4. Commit + push:  \"commit these changes with message: add task routing\"\n"
-        "5. Deploy:         \"deploy\" — rebuilds the Docker image from the latest code\n"
+        '4. Commit + push:  "commit these changes with message: add task routing"\n'
+        '5. Deploy:         "deploy" — rebuilds the Docker image from the latest code\n'
         "```\n"
-        "You can also say _\"show git status\"_, _\"list files in app/skills\"_, or "
-        "_\"what changed since the last commit\"_.\n"
+        'You can also say _"show git status"_, _"list files in app/skills"_, or '
+        '_"what changed since the last commit"_.\n'
     )
     parts.append(
         "*Usage tips:*\n"
-        "• Be specific: _\"send an email to john@co.com about the meeting rescheduled to Friday\"_\n"
+        '• Be specific: _"send an email to john@co.com about the meeting rescheduled to Friday"_\n'
         "• Confirm writes: reply `confirm` or `cancel` when prompted\n"
-        "• Task board: _\"create a task: fix the login bug, priority 4\"_ / _\"list my tasks\"_\n"
+        '• Task board: _"create a task: fix the login bug, priority 4"_ / _"list my tasks"_\n'
         "• Type `help` anytime to see this list"
     )
     return "\n".join(parts)
@@ -139,8 +147,8 @@ def _build_skills_help() -> str:
 def _format_reply(result: DispatchResult, session_id: str = "") -> str:
     """Format a DispatchResult as a clean Slack message with intent header + summary."""
     intent = result.intent
-    agent  = result.agent
-    reply  = result.reply.strip()
+    agent = result.agent
+    reply = result.reply.strip()
 
     label = _INTENT_LABELS.get(intent, f"`{intent}`")
 
@@ -150,13 +158,14 @@ def _format_reply(result: DispatchResult, session_id: str = "") -> str:
     if session_id:
         header_parts.append(f"_`{session_id}`_")
 
-    header  = "  ·  ".join(header_parts)
+    header = "  ·  ".join(header_parts)
     divider = "─" * 36
 
     return f"{header}\n{divider}\n{reply}"
 
 
 # ── Core handler ──────────────────────────────────────────────────────────────
+
 
 async def _handle(event: dict, say, client) -> None:
     text = _strip_mention(event.get("text", "").strip())
@@ -169,13 +178,13 @@ async def _handle(event: dict, say, client) -> None:
         return
 
     session_id = _session_id(event)
-    channel    = event.get("channel")
+    channel = event.get("channel")
     ack_ts: str | None = None
 
     # 1. Immediate ACK — visible within ~100 ms
     try:
         ack_resp = await say("✅ Received — 🧠 thinking...")
-        ack_ts   = ack_resp.get("ts")
+        ack_ts = ack_resp.get("ts")
     except Exception as exc:
         logger.warning("Could not send Slack ACK: %s", exc)
 
@@ -183,6 +192,7 @@ async def _handle(event: dict, say, client) -> None:
     if channel and ack_ts:
         try:
             from app.memory.redis_client import RedisMemory
+
             RedisMemory().set_slack_context(session_id, channel, ack_ts)
         except Exception:
             pass
@@ -190,7 +200,7 @@ async def _handle(event: dict, say, client) -> None:
     # 2. Dispatch through the Brain
     try:
         result = await dispatch.process(text, session_id)
-        reply  = _format_reply(result, session_id=session_id)
+        reply = _format_reply(result, session_id=session_id)
     except Exception as exc:
         logger.error("Slack dispatch error: %s", exc, exc_info=True)
         reply = f"❌ *Error* — `{type(exc).__name__}: {exc}`"
@@ -208,6 +218,7 @@ async def _handle(event: dict, say, client) -> None:
 
 
 # ── App factory ───────────────────────────────────────────────────────────────
+
 
 def _build_app() -> AsyncApp:
     """Create AsyncApp and register event listeners.
@@ -235,11 +246,11 @@ def _build_app() -> AsyncApp:
 
 # ── Socket Mode launcher ──────────────────────────────────────────────────────
 
+
 async def start_socket_mode() -> None:
     if not settings.slack_app_token or not settings.slack_bot_token:
         logger.warning(
-            "Slack tokens not configured — bot will not start. "
-            "Set SLACK_BOT_TOKEN and SLACK_APP_TOKEN in .env"
+            "Slack tokens not configured — bot will not start. Set SLACK_BOT_TOKEN and SLACK_APP_TOKEN in .env"
         )
         return
     slack_app = _build_app()
@@ -252,8 +263,12 @@ async def start_socket_mode() -> None:
         # Log unexpected failures without propagating them — propagating would
         # kill the Brain's lifespan task and take down the whole server.
         exc_name = type(exc).__name__
-        if exc_name in ("ClientConnectionResetError", "ConnectionResetError",
-                        "ServerConnectionError", "CancelledError"):
+        if exc_name in (
+            "ClientConnectionResetError",
+            "ConnectionResetError",
+            "ServerConnectionError",
+            "CancelledError",
+        ):
             logger.debug("Slack socket closed ({}): SDK will reconnect", exc_name)
         else:
             logger.error("Slack Socket Mode exited unexpectedly ({}): {}", exc_name, exc)

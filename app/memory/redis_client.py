@@ -16,8 +16,8 @@ from app.config import get_settings
 
 settings = get_settings()
 
-HISTORY_TTL = 4 * 60 * 60   # 4 hours in seconds
-MAX_TURNS   = 20              # max (user, assistant) pairs kept
+HISTORY_TTL = 4 * 60 * 60  # 4 hours in seconds
+MAX_TURNS = 20  # max (user, assistant) pairs kept
 
 
 class RedisMemory:
@@ -62,7 +62,7 @@ class RedisMemory:
         Trims history to MAX_TURNS pairs if it grows too large.
         """
         history = self.get_history(session_id)
-        history.append({"role": "user",      "content": user_msg})
+        history.append({"role": "user", "content": user_msg})
         history.append({"role": "assistant", "content": assistant_msg})
 
         # Keep only the most recent MAX_TURNS pairs
@@ -125,7 +125,7 @@ class RedisMemory:
     # ── Workspace lock (serialises sentinel-workspace access) ─────────────────
 
     _WORKSPACE_LOCK_KEY = "lock:sentinel_workspace"
-    _WORKSPACE_LOCK_TTL = 600   # 10 min max hold time — hard ceiling per task
+    _WORKSPACE_LOCK_TTL = 600  # 10 min max hold time — hard ceiling per task
 
     def acquire_workspace_lock(self, holder_id: str) -> bool:
         """
@@ -147,11 +147,7 @@ class RedisMemory:
         Release the lock ONLY if still held by `holder_id`.
         Uses a Lua script for an atomic check-and-delete.
         """
-        script = (
-            "if redis.call('get', KEYS[1]) == ARGV[1] then "
-            "  return redis.call('del', KEYS[1]) "
-            "else return 0 end"
-        )
+        script = "if redis.call('get', KEYS[1]) == ARGV[1] then   return redis.call('del', KEYS[1]) else return 0 end"
         return bool(self.client.eval(script, 1, self._WORKSPACE_LOCK_KEY, holder_id))
 
     def get_workspace_lock_holder(self) -> str | None:

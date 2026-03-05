@@ -22,6 +22,7 @@ class CalendarReadSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.google_calendar import CalendarClient
+
         return CalendarClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
@@ -29,7 +30,7 @@ class CalendarReadSkill(BaseSkill):
         from app.config import get_settings
 
         account = params.get("account")  # None = all accounts
-        period  = params.get("period", "this week")
+        period = params.get("period", "this week")
 
         if account:
             # Single account requested
@@ -76,12 +77,14 @@ class CalendarWriteSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.google_calendar import CalendarClient
+
         return CalendarClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.google_calendar import get_calendar_client
+
         account = params.get("account")
-        client  = get_calendar_client(account_name=account)
+        client = get_calendar_client(account_name=account)
 
         if not client.is_configured():
             return SkillResult(
@@ -90,15 +93,15 @@ class CalendarWriteSkill(BaseSkill):
             )
 
         pending = {
-            "intent":   "calendar_write",
-            "action":   "create_calendar_event",
-            "params":   params,
+            "intent": "calendar_write",
+            "action": "create_calendar_event",
+            "params": params,
             "original": original_message,
         }
-        title     = params.get("title", "New Event")
-        date      = params.get("date", "TBD")
-        time_str  = params.get("time", "TBD")
-        duration  = params.get("duration_min", 60)
+        title = params.get("title", "New Event")
+        date = params.get("date", "TBD")
+        time_str = params.get("time", "TBD")
+        duration = params.get("duration_min", 60)
         attendees = [e for e in params.get("attendees", []) if "@" in str(e)]
         context = (
             f"Show the user the calendar event you are about to create:\n"

@@ -20,7 +20,8 @@ class ApprovalCategory(str, Enum):
     Level 2  — confirm CRITICAL, BREAKING             (critical writes only)
     Level 3  — confirm only BREAKING                  (breaking changes only)
     """
-    NONE     = "none"      # read ops — never require confirmation
+
+    NONE = "none"  # read ops — never require confirmation
     STANDARD = "standard"  # normal writes: email, calendar event
     CRITICAL = "critical"  # significant writes: GitHub, smart-home state changes
     BREAKING = "breaking"  # irreversible/destructive — always confirm
@@ -29,10 +30,11 @@ class ApprovalCategory(str, Enum):
 @dataclass
 class SkillResult:
     """Result returned by a skill's execute() method."""
-    context_data:    str        = ""          # injected into LLM prompt
-    pending_action:  dict | None = None       # stored for confirmation flow
-    skill_name:      str        = "chat"
-    confidence:      float      = 1.0
+
+    context_data: str = ""  # injected into LLM prompt
+    pending_action: dict | None = None  # stored for confirmation flow
+    skill_name: str = "chat"
+    confidence: float = 1.0
 
 
 class BaseSkill(ABC):

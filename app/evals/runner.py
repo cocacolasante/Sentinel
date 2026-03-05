@@ -13,8 +13,8 @@ import time
 import uuid
 from pathlib import Path
 
-from app.evals.base    import AgentEvalSummary, EvalCase, EvalResult
-from app.evals.judge   import judge_response
+from app.evals.base import AgentEvalSummary, EvalCase, EvalResult
+from app.evals.judge import judge_response
 
 logger = logging.getLogger(__name__)
 
@@ -23,20 +23,21 @@ _EVALS_DIR = Path(__file__).parent.parent.parent / "evals" / "agents"
 
 # Map eval directory names → agent names in the registry
 _AGENT_DIR_MAP: dict[str, str] = {
-    "engineer":   "engineer",
-    "writer":     "writer",
+    "engineer": "engineer",
+    "writer": "writer",
     "researcher": "researcher",
     "strategist": "strategist",
-    "marketing":  "marketing",
+    "marketing": "marketing",
 }
 
 
 class EvalRunner:
     def __init__(self) -> None:
-        from app.brain.llm_router  import LLMRouter
-        from app.agents.registry   import AgentRegistry
-        self._llm     = LLMRouter()
-        self._agents  = AgentRegistry()
+        from app.brain.llm_router import LLMRouter
+        from app.agents.registry import AgentRegistry
+
+        self._llm = LLMRouter()
+        self._agents = AgentRegistry()
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -54,8 +55,11 @@ class EvalRunner:
             summaries.append(summary)
             logger.info(
                 "Eval %s | %s | %.1f/10 | %d/%d passed",
-                run_id, agent_name, summary.avg_score,
-                summary.passed_tests, summary.total_tests,
+                run_id,
+                agent_name,
+                summary.avg_score,
+                summary.passed_tests,
+                summary.total_tests,
             )
 
         await asyncio.to_thread(self._persist_summaries, summaries)
@@ -68,25 +72,25 @@ class EvalRunner:
         run_id: str | None = None,
     ) -> AgentEvalSummary:
         """Run all tests for one agent directory."""
-        run_id   = run_id or str(uuid.uuid4())[:8]
-        cases    = self._load_cases(agent_dir, agent_name)
+        run_id = run_id or str(uuid.uuid4())[:8]
+        cases = self._load_cases(agent_dir, agent_name)
         results: list[EvalResult] = []
 
         for case in cases:
             result = await self._run_case(case, run_id)
             results.append(result)
 
-        avg_score    = sum(r.score for r in results) / len(results) if results else 0.0
+        avg_score = sum(r.score for r in results) / len(results) if results else 0.0
         passed_count = sum(1 for r in results if r.passed)
 
         return AgentEvalSummary(
-            agent_name   = agent_name,
-            run_id       = run_id,
-            avg_score    = round(avg_score, 2),
-            pass_rate    = round(passed_count / len(results), 2) if results else 0.0,
-            total_tests  = len(results),
-            passed_tests = passed_count,
-            results      = results,
+            agent_name=agent_name,
+            run_id=run_id,
+            avg_score=round(avg_score, 2),
+            pass_rate=round(passed_count / len(results), 2) if results else 0.0,
+            total_tests=len(results),
+            passed_tests=passed_count,
+            results=results,
         )
 
     # ── Internal ──────────────────────────────────────────────────────────────
@@ -111,7 +115,7 @@ class EvalRunner:
             response = await asyncio.to_thread(
                 self._llm.route,
                 case.input,
-                None,   # no history
+                None,  # no history
                 agent,  # agent persona
             )
         except Exception as exc:
@@ -133,23 +137,24 @@ class EvalRunner:
             )
 
         return EvalResult(
-            run_id     = run_id,
-            agent_name = case.agent_name,
-            test_name  = case.name,
-            input      = case.input[:200],
-            response   = response[:500],
-            score      = verdict["score"],
-            threshold  = case.threshold,
-            passed     = verdict["passed"],
-            reasoning  = verdict["reasoning"],
-            latency_ms = latency_ms,
-            error      = error_msg,
+            run_id=run_id,
+            agent_name=case.agent_name,
+            test_name=case.name,
+            input=case.input[:200],
+            response=response[:500],
+            score=verdict["score"],
+            threshold=case.threshold,
+            passed=verdict["passed"],
+            reasoning=verdict["reasoning"],
+            latency_ms=latency_ms,
+            error=error_msg,
         )
 
     def _persist_summaries(self, summaries: list[AgentEvalSummary]) -> None:
         """Store all results in Postgres for trend tracking."""
         try:
             from app.db import postgres
+
             for summary in summaries:
                 for result in summary.results:
                     postgres.execute(
@@ -159,9 +164,15 @@ class EvalRunner:
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
-                            result.run_id, result.agent_name, result.test_name,
-                            result.score, result.passed, result.threshold,
-                            result.reasoning, result.latency_ms, result.error,
+                            result.run_id,
+                            result.agent_name,
+                            result.test_name,
+                            result.score,
+                            result.passed,
+                            result.threshold,
+                            result.reasoning,
+                            result.latency_ms,
+                            result.error,
                         ),
                     )
         except Exception as exc:
@@ -173,6 +184,7 @@ class EvalRunner:
         """Return average score from the most recent prior run for comparison."""
         try:
             from app.db import postgres
+
             row = postgres.execute_one(
                 """
                 SELECT AVG(score) as avg_score

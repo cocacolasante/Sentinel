@@ -26,7 +26,7 @@ from email.mime.text import MIMEText
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _SCOPES = [
@@ -47,7 +47,7 @@ def _resolve_account(account_name: str | None) -> dict | None:
     for acc in accounts:
         if acc["name"].lower() == name_lower:
             return acc
-    return accounts[0]   # fallback to primary
+    return accounts[0]  # fallback to primary
 
 
 def get_gmail_client(account_name: str | None = None) -> "GmailClient":
@@ -97,30 +97,37 @@ class GmailClient:
 
     def _list_emails_sync(self, query: str, max_results: int) -> list[dict]:
         svc = self._build_service()
-        result = svc.users().messages().list(
-            userId="me", q=query, maxResults=max_results
-        ).execute()
+        result = svc.users().messages().list(userId="me", q=query, maxResults=max_results).execute()
         messages = result.get("messages", [])
         emails = []
         for msg in messages:
-            detail = svc.users().messages().get(
-                userId="me", id=msg["id"], format="metadata",
-                metadataHeaders=["From", "To", "Subject", "Date"],
-            ).execute()
+            detail = (
+                svc.users()
+                .messages()
+                .get(
+                    userId="me",
+                    id=msg["id"],
+                    format="metadata",
+                    metadataHeaders=["From", "To", "Subject", "Date"],
+                )
+                .execute()
+            )
             headers = {h["name"]: h["value"] for h in detail.get("payload", {}).get("headers", [])}
-            emails.append({
-                "id":      msg["id"],
-                "from":    headers.get("From", ""),
-                "to":      headers.get("To", ""),
-                "subject": headers.get("Subject", "(no subject)"),
-                "date":    headers.get("Date", ""),
-                "snippet": detail.get("snippet", ""),
-            })
+            emails.append(
+                {
+                    "id": msg["id"],
+                    "from": headers.get("From", ""),
+                    "to": headers.get("To", ""),
+                    "subject": headers.get("Subject", "(no subject)"),
+                    "date": headers.get("Date", ""),
+                    "snippet": detail.get("snippet", ""),
+                }
+            )
         return emails
 
     def _get_email_sync(self, msg_id: str) -> dict:
-        svc  = self._build_service()
-        msg  = svc.users().messages().get(userId="me", id=msg_id, format="full").execute()
+        svc = self._build_service()
+        msg = svc.users().messages().get(userId="me", id=msg_id, format="full").execute()
         payload = msg.get("payload", {})
         headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
 
@@ -134,18 +141,18 @@ class GmailClient:
                     break
 
         return {
-            "id":      msg_id,
-            "from":    headers.get("From", ""),
-            "to":      headers.get("To", ""),
+            "id": msg_id,
+            "from": headers.get("From", ""),
+            "to": headers.get("To", ""),
             "subject": headers.get("Subject", ""),
-            "date":    headers.get("Date", ""),
-            "body":    body,
+            "date": headers.get("Date", ""),
+            "body": body,
         }
 
     def _send_email_sync(self, to: str, subject: str, body: str) -> dict:
         svc = self._build_service()
         mime_msg = MIMEText(body)
-        mime_msg["to"]      = to
+        mime_msg["to"] = to
         mime_msg["subject"] = subject
         raw = base64.urlsafe_b64encode(mime_msg.as_bytes()).decode()
         sent = svc.users().messages().send(userId="me", body={"raw": raw}).execute()
@@ -154,54 +161,52 @@ class GmailClient:
     def _reply_email_sync(self, msg_id: str, body: str) -> dict:
         """Reply in the same thread as msg_id."""
         svc = self._build_service()
-        orig = svc.users().messages().get(
-            userId="me", id=msg_id, format="metadata",
-            metadataHeaders=["From", "Subject", "Message-ID", "References"],
-        ).execute()
+        orig = (
+            svc.users()
+            .messages()
+            .get(
+                userId="me",
+                id=msg_id,
+                format="metadata",
+                metadataHeaders=["From", "Subject", "Message-ID", "References"],
+            )
+            .execute()
+        )
         headers = {h["name"]: h["value"] for h in orig.get("payload", {}).get("headers", [])}
-        thread_id   = orig.get("threadId", "")
-        to_addr     = headers.get("From", "")
-        subject     = headers.get("Subject", "")
+        thread_id = orig.get("threadId", "")
+        to_addr = headers.get("From", "")
+        subject = headers.get("Subject", "")
         if not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
         orig_msg_id = headers.get("Message-ID", "")
-        references  = headers.get("References", "") + f" {orig_msg_id}".strip()
+        references = headers.get("References", "") + f" {orig_msg_id}".strip()
 
         mime_msg = MIMEText(body)
-        mime_msg["to"]          = to_addr
-        mime_msg["subject"]     = subject
+        mime_msg["to"] = to_addr
+        mime_msg["subject"] = subject
         mime_msg["In-Reply-To"] = orig_msg_id
-        mime_msg["References"]  = references.strip()
+        mime_msg["References"] = references.strip()
         raw = base64.urlsafe_b64encode(mime_msg.as_bytes()).decode()
-        sent = svc.users().messages().send(
-            userId="me", body={"raw": raw, "threadId": thread_id}
-        ).execute()
+        sent = svc.users().messages().send(userId="me", body={"raw": raw, "threadId": thread_id}).execute()
         return {"id": sent.get("id"), "thread_id": thread_id, "to": to_addr}
 
     def _mark_read_sync(self, msg_id: str) -> dict:
         svc = self._build_service()
-        svc.users().messages().modify(
-            userId="me", id=msg_id, body={"removeLabelIds": ["UNREAD"]}
-        ).execute()
+        svc.users().messages().modify(userId="me", id=msg_id, body={"removeLabelIds": ["UNREAD"]}).execute()
         return {"id": msg_id, "marked_read": True}
 
     def _list_labels_sync(self) -> list[dict]:
         svc = self._build_service()
         result = svc.users().labels().list(userId="me").execute()
-        return [
-            {"id": l["id"], "name": l["name"]}
-            for l in result.get("labels", [])
-        ]
+        return [{"id": l["id"], "name": l["name"]} for l in result.get("labels", [])]
 
     def _create_draft_sync(self, to: str, subject: str, body: str) -> dict:
         svc = self._build_service()
         mime_msg = MIMEText(body)
-        mime_msg["to"]      = to
+        mime_msg["to"] = to
         mime_msg["subject"] = subject
         raw = base64.urlsafe_b64encode(mime_msg.as_bytes()).decode()
-        draft = svc.users().drafts().create(
-            userId="me", body={"message": {"raw": raw}}
-        ).execute()
+        draft = svc.users().drafts().create(userId="me", body={"message": {"raw": raw}}).execute()
         return {"draft_id": draft.get("id")}
 
     # ── Public async API ──────────────────────────────────────────────────────

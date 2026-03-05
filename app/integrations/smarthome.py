@@ -34,26 +34,27 @@ class SmartHomeClient:
 
     def is_configured(self) -> bool:
         from app.integrations.home_assistant import HomeAssistantClient
+
         return HomeAssistantClient().is_configured()
 
     async def turn_on(self, entity_id: str) -> dict:
         from app.integrations.home_assistant import HomeAssistantClient
-        return await HomeAssistantClient().call_service(
-            _domain_from(entity_id), "turn_on", {"entity_id": entity_id}
-        )
+
+        return await HomeAssistantClient().call_service(_domain_from(entity_id), "turn_on", {"entity_id": entity_id})
 
     async def turn_off(self, entity_id: str) -> dict:
         from app.integrations.home_assistant import HomeAssistantClient
-        return await HomeAssistantClient().call_service(
-            _domain_from(entity_id), "turn_off", {"entity_id": entity_id}
-        )
+
+        return await HomeAssistantClient().call_service(_domain_from(entity_id), "turn_off", {"entity_id": entity_id})
 
     async def get_states(self, domain: str | None = None) -> list[dict]:
         from app.integrations.home_assistant import HomeAssistantClient
+
         return await HomeAssistantClient().list_entities(domain)
 
     async def call_service(self, domain: str, service: str, data: dict) -> dict:
         from app.integrations.home_assistant import HomeAssistantClient
+
         return await HomeAssistantClient().call_service(domain, service, data)
 
     async def announce(self, message: str, target: str | None = None) -> dict:
@@ -64,6 +65,7 @@ class SmartHomeClient:
         Returns an error dict if the integration is not installed.
         """
         from app.integrations.home_assistant import HomeAssistantClient
+
         try:
             return await HomeAssistantClient().call_service(
                 "alexa_media",
@@ -85,4 +87,5 @@ class SmartHomeClient:
 
     async def health(self) -> bool:
         from app.integrations.home_assistant import HomeAssistantClient
+
         return await HomeAssistantClient().health()

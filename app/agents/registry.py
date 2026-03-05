@@ -18,18 +18,27 @@ logger = logging.getLogger(__name__)
 
 class AgentRegistry:
     def __init__(self) -> None:
-        self._agents: list[Agent]       = []
+        self._agents: list[Agent] = []
         self._by_name: dict[str, Agent] = {}
         self._load_defaults()
 
     def _load_defaults(self) -> None:
         from app.agents.definitions import (
-            ENGINEER_AGENT, WRITER_AGENT, RESEARCHER_AGENT,
-            STRATEGIST_AGENT, MARKETING_AGENT, DEFAULT_AGENT,
+            ENGINEER_AGENT,
+            WRITER_AGENT,
+            RESEARCHER_AGENT,
+            STRATEGIST_AGENT,
+            MARKETING_AGENT,
+            DEFAULT_AGENT,
         )
+
         for agent in [
-            ENGINEER_AGENT, WRITER_AGENT, RESEARCHER_AGENT,
-            STRATEGIST_AGENT, MARKETING_AGENT, DEFAULT_AGENT,
+            ENGINEER_AGENT,
+            WRITER_AGENT,
+            RESEARCHER_AGENT,
+            STRATEGIST_AGENT,
+            MARKETING_AGENT,
+            DEFAULT_AGENT,
         ]:
             self.register(agent)
 
@@ -62,10 +71,10 @@ class AgentRegistry:
     def list_agents(self) -> list[dict]:
         return [
             {
-                "name":            a.name,
-                "display_name":    a.display_name,
+                "name": a.name,
+                "display_name": a.display_name,
                 "preferred_model": a.preferred_model,
-                "max_tokens":      a.max_tokens,
+                "max_tokens": a.max_tokens,
                 "trigger_intents": a.trigger_intents,
             }
             for a in self._agents

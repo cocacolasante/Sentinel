@@ -20,10 +20,12 @@ logger = logging.getLogger(__name__)
 
 # ── Individual integration checks ────────────────────────────────────────────
 
+
 async def _check_gmail() -> IntegrationEvalResult:
     t0 = time.monotonic()
     try:
         from app.integrations.gmail import GmailClient
+
         client = GmailClient()
         if not client.is_configured():
             return IntegrationEvalResult("gmail", False, None, "Not configured — GOOGLE_REFRESH_TOKEN missing")
@@ -39,6 +41,7 @@ async def _check_calendar() -> IntegrationEvalResult:
     t0 = time.monotonic()
     try:
         from app.integrations.google_calendar import CalendarClient
+
         client = CalendarClient()
         if not client.is_configured():
             return IntegrationEvalResult("calendar", False, None, "Not configured — GOOGLE_REFRESH_TOKEN missing")
@@ -54,6 +57,7 @@ async def _check_github() -> IntegrationEvalResult:
     t0 = time.monotonic()
     try:
         from app.integrations.github import GitHubClient
+
         client = GitHubClient()
         if not client.is_configured():
             return IntegrationEvalResult("github", False, None, "Not configured — GITHUB_TOKEN missing")
@@ -69,6 +73,7 @@ async def _check_n8n() -> IntegrationEvalResult:
     t0 = time.monotonic()
     try:
         from app.integrations.n8n_bridge import N8nBridge
+
         bridge = N8nBridge()
         if not bridge.is_configured():
             return IntegrationEvalResult("n8n", False, None, "Not configured — N8N_WEBHOOK_URL missing")
@@ -84,6 +89,7 @@ async def _check_home_assistant() -> IntegrationEvalResult:
     t0 = time.monotonic()
     try:
         from app.integrations.home_assistant import HomeAssistantClient
+
         client = HomeAssistantClient()
         if not client.is_configured():
             return IntegrationEvalResult("home_assistant", False, None, "Not configured — HOME_ASSISTANT_URL missing")
@@ -114,6 +120,7 @@ async def run_all_integration_evals() -> list[IntegrationEvalResult]:
 def _persist_integration_results(results: list[IntegrationEvalResult]) -> None:
     try:
         from app.db import postgres
+
         for r in results:
             postgres.execute(
                 """
@@ -131,6 +138,7 @@ def get_uptime_pct(integration: str, days: int = 7) -> float | None:
     """Return rolling uptime percentage for an integration over the last N days."""
     try:
         from app.db import postgres
+
         row = postgres.execute_one(
             """
             SELECT

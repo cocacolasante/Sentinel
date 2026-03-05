@@ -145,12 +145,12 @@ ABSOLUTE RESTRICTION — .env files are secrets vaults:
 
 # ── Model roster (Phase 1 uses Claude only) ────────────────────────────────────
 MODEL_MAP: dict[str, tuple[str, int]] = {
-    "code":      ("claude-opus-4-6", 16_000),
+    "code": ("claude-opus-4-6", 16_000),
     "reasoning": ("claude-sonnet-4-6", 4096),
-    "writing":   ("claude-sonnet-4-6", 4096),
-    "research":  ("claude-sonnet-4-6", 4096),
-    "classify":  ("claude-haiku-4-5-20251001", 512),
-    "default":   ("claude-sonnet-4-6", 2048),
+    "writing": ("claude-sonnet-4-6", 4096),
+    "research": ("claude-sonnet-4-6", 4096),
+    "classify": ("claude-haiku-4-5-20251001", 512),
+    "default": ("claude-sonnet-4-6", 2048),
 }
 
 # Shared TELOS loader (one instance, 5-min cache)
@@ -182,8 +182,9 @@ class LLMRouter:
     def _build_system_prompt(self, agent: "Agent | None" = None) -> str:
         """Combine agent personality (or default) with TELOS context block."""
         from app.agents.base import Agent  # avoid circular at module level
+
         agent_prompt = agent.system_prompt if agent else DEFAULT_AGENT_PROMPT
-        telos_block  = _telos_loader.get_block()
+        telos_block = _telos_loader.get_block()
         if telos_block:
             return f"{agent_prompt}\n\n{telos_block}"
         return agent_prompt
@@ -208,7 +209,7 @@ class LLMRouter:
             agent:   Optional Agent personality — drives model, token budget, system prompt.
         """
         if agent:
-            model      = agent.preferred_model
+            model = agent.preferred_model
             max_tokens = agent.max_tokens
         else:
             model, max_tokens = self._select_model("default")
@@ -230,9 +231,9 @@ class LLMRouter:
             system=system,
             messages=messages,
         )
-        latency_s  = time.monotonic() - t0
+        latency_s = time.monotonic() - t0
 
-        input_tok  = getattr(response.usage, "input_tokens",  0)
+        input_tok = getattr(response.usage, "input_tokens", 0)
         output_tok = getattr(response.usage, "output_tokens", 0)
 
         # ── Record actual usage (always after a successful call) ──────────────
@@ -241,8 +242,12 @@ class LLMRouter:
         # ── Prometheus metrics ────────────────────────────────────────────────
         try:
             from app.observability.prometheus_metrics import (
-                LLM_REQUESTS, LLM_COST_USD, LLM_TOKENS, LLM_LATENCY,
+                LLM_REQUESTS,
+                LLM_COST_USD,
+                LLM_TOKENS,
+                LLM_LATENCY,
             )
+
             agent_name = agent.name if agent else "default"
             LLM_REQUESTS.labels(model=model, agent=agent_name, source="chat", intent="default").inc()
             LLM_COST_USD.labels(model=model, agent=agent_name).inc(call_cost.call_cost_usd)
@@ -255,19 +260,25 @@ class LLMRouter:
         latency_ms = round(latency_s * 1000, 1)
         logger.info(
             "LLM | model={model} | in={in_tok} | out={out_tok} | {ms}ms",
-            model=model, in_tok=input_tok, out_tok=output_tok, ms=latency_ms,
+            model=model,
+            in_tok=input_tok,
+            out_tok=output_tok,
+            ms=latency_ms,
         )
 
         # Thread-safe publish (route() runs in asyncio.to_thread)
         from app.observability.event_bus import event_bus
-        event_bus.publish_sync({
-            "event":        "llm_called",
-            "model":        model,
-            "agent":        agent.name if agent else "default",
-            "input_tokens": input_tok,
-            "output_tokens": output_tok,
-            "latency_ms":   latency_ms,
-            "max_tokens":   max_tokens,
-        })
+
+        event_bus.publish_sync(
+            {
+                "event": "llm_called",
+                "model": model,
+                "agent": agent.name if agent else "default",
+                "input_tokens": input_tok,
+                "output_tokens": output_tok,
+                "latency_ms": latency_ms,
+                "max_tokens": max_tokens,
+            }
+        )
 
         return response.content[0].text

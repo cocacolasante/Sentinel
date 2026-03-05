@@ -8,9 +8,9 @@ from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
 
 class RemindersSkill(BaseSkill):
-    name              = "reminders"
-    description       = "Create, manage, and track reminders and to-do items with notifications and persistence"
-    trigger_intents   = ["set_reminder, create_todo, list_reminders, update_reminder, dismiss_reminder, snooze_reminder"]
+    name = "reminders"
+    description = "Create, manage, and track reminders and to-do items with notifications and persistence"
+    trigger_intents = ["set_reminder, create_todo, list_reminders, update_reminder, dismiss_reminder, snooze_reminder"]
     approval_category = ApprovalCategory.NONE
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:

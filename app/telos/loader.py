@@ -74,11 +74,7 @@ class TelosLoader:
     def _file_order(self) -> list[str]:
         """Return files in priority order, then any extras alphabetically."""
         ordered = [f for f in _DEFAULT_ORDER if (self._dir / f).exists()]
-        extras = sorted(
-            f.name
-            for f in self._dir.glob("*.md")
-            if f.name not in _DEFAULT_ORDER
-        )
+        extras = sorted(f.name for f in self._dir.glob("*.md") if f.name not in _DEFAULT_ORDER)
         return ordered + extras
 
     def _loaded_files(self) -> list[str]:

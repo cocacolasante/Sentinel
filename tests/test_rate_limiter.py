@@ -1,4 +1,5 @@
 """Unit tests for RateLimiter — mocked Redis, no live services needed."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -25,12 +26,14 @@ def _default_settings(per_minute: int = 20, per_hour: int = 200):
 
 # ── Exception class ───────────────────────────────────────────────────────────
 
+
 def test_rate_limit_exceeded_is_exception():
     with pytest.raises(RateLimitExceeded):
         raise RateLimitExceeded("over limit")
 
 
 # ── check() happy path ────────────────────────────────────────────────────────
+
 
 def test_check_passes_on_first_request():
     limiter = _make_limiter(count_min=1, count_hour=1)
@@ -47,6 +50,7 @@ def test_check_passes_at_limit_boundary():
 
 # ── check() failure paths ─────────────────────────────────────────────────────
 
+
 def test_check_raises_when_minute_limit_exceeded():
     limiter = _make_limiter(count_min=21, count_hour=5)
     with patch("app.brain.rate_limiter.get_settings", return_value=_default_settings()):
@@ -62,6 +66,7 @@ def test_check_raises_when_hour_limit_exceeded():
 
 
 # ── TTL behaviour ─────────────────────────────────────────────────────────────
+
 
 def test_check_sets_ttl_on_first_increment():
     """expire() must be called for both keys when counts are 1 (first request)."""

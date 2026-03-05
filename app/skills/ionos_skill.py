@@ -16,66 +16,114 @@ from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 # ── Action classification ─────────────────────────────────────────────────────
 
 # Read-only: execute immediately, no confirmation
-_READ_ACTIONS: frozenset[str] = frozenset({
-    "list_datacenters", "get_datacenter",
-    "list_servers", "get_server", "server_status",
-    "list_volumes", "get_volume", "list_attached_volumes",
-    "list_snapshots", "get_snapshot",
-    "list_nics", "get_nic",
-    "list_lans", "get_lan",
-    "list_ips", "get_ip_block",
-    "list_images",
-    "list_firewall_rules", "get_firewall_rule",
-    "list_load_balancers", "get_load_balancer", "list_lb_nics",
-    "list_nat_gateways", "get_nat_gateway", "list_nat_rules",
-    "list_k8s_clusters", "get_k8s_cluster",
-    "list_k8s_nodepools", "get_k8s_nodepool", "get_k8s_kubeconfig",
-    "get_request_status", "get_server_console",
-})
+_READ_ACTIONS: frozenset[str] = frozenset(
+    {
+        "list_datacenters",
+        "get_datacenter",
+        "list_servers",
+        "get_server",
+        "server_status",
+        "list_volumes",
+        "get_volume",
+        "list_attached_volumes",
+        "list_snapshots",
+        "get_snapshot",
+        "list_nics",
+        "get_nic",
+        "list_lans",
+        "get_lan",
+        "list_ips",
+        "get_ip_block",
+        "list_images",
+        "list_firewall_rules",
+        "get_firewall_rule",
+        "list_load_balancers",
+        "get_load_balancer",
+        "list_lb_nics",
+        "list_nat_gateways",
+        "get_nat_gateway",
+        "list_nat_rules",
+        "list_k8s_clusters",
+        "get_k8s_cluster",
+        "list_k8s_nodepools",
+        "get_k8s_nodepool",
+        "get_k8s_kubeconfig",
+        "get_request_status",
+        "get_server_console",
+    }
+)
 
 # Write actions that require CRITICAL confirmation
-_CONFIRM_ACTIONS: frozenset[str] = frozenset({
-    "create_datacenter", "update_datacenter",
-    "create_server", "update_server", "start_server", "stop_server",
-    "reboot_server", "suspend_server",
-    "provision_server",
-    "create_volume", "update_volume", "attach_volume", "detach_volume",
-    "create_volume_snapshot", "restore_snapshot",
-    "create_nic", "update_nic",
-    "create_lan", "update_lan",
-    "update_snapshot",
-    "create_firewall_rule",
-    "reserve_ip", "update_ip_block",
-    "create_load_balancer", "add_lb_nic", "remove_lb_nic",
-    "create_nat_gateway", "create_nat_rule",
-    "create_k8s_cluster", "create_k8s_nodepool",
-    "ssh_exec", "deploy_docker", "configure_server",
-})
+_CONFIRM_ACTIONS: frozenset[str] = frozenset(
+    {
+        "create_datacenter",
+        "update_datacenter",
+        "create_server",
+        "update_server",
+        "start_server",
+        "stop_server",
+        "reboot_server",
+        "suspend_server",
+        "provision_server",
+        "create_volume",
+        "update_volume",
+        "attach_volume",
+        "detach_volume",
+        "create_volume_snapshot",
+        "restore_snapshot",
+        "create_nic",
+        "update_nic",
+        "create_lan",
+        "update_lan",
+        "update_snapshot",
+        "create_firewall_rule",
+        "reserve_ip",
+        "update_ip_block",
+        "create_load_balancer",
+        "add_lb_nic",
+        "remove_lb_nic",
+        "create_nat_gateway",
+        "create_nat_rule",
+        "create_k8s_cluster",
+        "create_k8s_nodepool",
+        "ssh_exec",
+        "deploy_docker",
+        "configure_server",
+    }
+)
 
 # Destructive/irreversible: require BREAKING confirmation
-_BREAKING_ACTIONS: frozenset[str] = frozenset({
-    "delete_datacenter", "delete_server", "delete_volume",
-    "delete_snapshot", "delete_nic", "delete_lan",
-    "release_ip_block",
-    "delete_firewall_rule",
-    "delete_load_balancer",
-    "delete_nat_gateway", "delete_nat_rule",
-    "delete_k8s_cluster", "delete_k8s_nodepool",
-})
+_BREAKING_ACTIONS: frozenset[str] = frozenset(
+    {
+        "delete_datacenter",
+        "delete_server",
+        "delete_volume",
+        "delete_snapshot",
+        "delete_nic",
+        "delete_lan",
+        "release_ip_block",
+        "delete_firewall_rule",
+        "delete_load_balancer",
+        "delete_nat_gateway",
+        "delete_nat_rule",
+        "delete_k8s_cluster",
+        "delete_k8s_nodepool",
+    }
+)
 
 
 def _describe_action(action: str, params: dict) -> str:
     """Return a human-readable one-liner for the confirmation prompt."""
-    dc  = params.get("datacenter_id", "")
+    dc = params.get("datacenter_id", "")
     srv = params.get("server_id", "")
     loc = params.get("location", "us/las")
     _dc_ctx = f"existing DC `{dc}`" if dc else f"new DC in `{loc}`"
 
     descs = {
         # Datacenters
-        "create_datacenter":  f"Create datacenter **{params.get('name', '?')}** in `{loc}`",
-        "update_datacenter":  f"Update datacenter `{dc}`",
-        "delete_datacenter":  f"**DELETE** entire datacenter `{dc}` — irreversible",
+        "create_datacenter": f"Create datacenter **{params.get('name', '?')}** in `{loc}`",
+        "update_datacenter": f"Update datacenter `{dc}`",
+        "delete_datacenter": f"**DELETE** entire datacenter `{dc}` — irreversible",
         # Servers
         "provision_server": (
             f"Provision Ubuntu {params.get('ubuntu_version', '22')} server "
@@ -84,32 +132,32 @@ def _describe_action(action: str, params: dict) -> str:
             f"{params.get('storage_gb', 20)} GB) in {_dc_ctx}. "
             "Steps: DC → image → volume → server → attach → LAN → NIC."
         ),
-        "create_server":     f"Create server **{params.get('name', '?')}** ({params.get('cores', 2)} cores, {params.get('ram_mb', 2048)} MB RAM) in `{dc}`",
-        "update_server":     f"Update server `{srv}` in `{dc}`",
-        "start_server":      f"Start server `{srv}` in `{dc}`",
-        "stop_server":       f"Stop server `{srv}` in `{dc}`",
-        "reboot_server":     f"Reboot server `{srv}` in `{dc}`",
-        "suspend_server":    f"Suspend server `{srv}` in `{dc}`",
-        "delete_server":     f"**DELETE** server `{srv}` in `{dc}` — irreversible",
-        "ssh_exec":          f"Run `{params.get('command', '?')}` on `{params.get('host', '?')}`",
-        "deploy_docker":     f"Deploy **{params.get('image', '?')}** as `{params.get('container_name', '?')}` on `{params.get('host', '?')}`",
-        "configure_server":  f"Run {len(params.get('commands', []))} command(s) on `{params.get('host', '?')}`",
+        "create_server": f"Create server **{params.get('name', '?')}** ({params.get('cores', 2)} cores, {params.get('ram_mb', 2048)} MB RAM) in `{dc}`",
+        "update_server": f"Update server `{srv}` in `{dc}`",
+        "start_server": f"Start server `{srv}` in `{dc}`",
+        "stop_server": f"Stop server `{srv}` in `{dc}`",
+        "reboot_server": f"Reboot server `{srv}` in `{dc}`",
+        "suspend_server": f"Suspend server `{srv}` in `{dc}`",
+        "delete_server": f"**DELETE** server `{srv}` in `{dc}` — irreversible",
+        "ssh_exec": f"Run `{params.get('command', '?')}` on `{params.get('host', '?')}`",
+        "deploy_docker": f"Deploy **{params.get('image', '?')}** as `{params.get('container_name', '?')}` on `{params.get('host', '?')}`",
+        "configure_server": f"Run {len(params.get('commands', []))} command(s) on `{params.get('host', '?')}`",
         # Volumes
-        "create_volume":        f"Create {params.get('volume_type', 'HDD')} volume **{params.get('name', '?')}** ({params.get('size_gb', 20)} GB) in `{dc}`",
-        "update_volume":        f"Update volume `{params.get('volume_id', '?')}` in `{dc}`",
-        "attach_volume":        f"Attach volume `{params.get('volume_id', '?')}` to server `{srv}` in `{dc}`",
-        "detach_volume":        f"Detach volume `{params.get('volume_id', '?')}` from server `{srv}` in `{dc}`",
-        "delete_volume":        f"**DELETE** volume `{params.get('volume_id', '?')}` in `{dc}` — irreversible",
+        "create_volume": f"Create {params.get('volume_type', 'HDD')} volume **{params.get('name', '?')}** ({params.get('size_gb', 20)} GB) in `{dc}`",
+        "update_volume": f"Update volume `{params.get('volume_id', '?')}` in `{dc}`",
+        "attach_volume": f"Attach volume `{params.get('volume_id', '?')}` to server `{srv}` in `{dc}`",
+        "detach_volume": f"Detach volume `{params.get('volume_id', '?')}` from server `{srv}` in `{dc}`",
+        "delete_volume": f"**DELETE** volume `{params.get('volume_id', '?')}` in `{dc}` — irreversible",
         "create_volume_snapshot": f"Snapshot volume `{params.get('volume_id', '?')}` in `{dc}` as **{params.get('name', 'snapshot')}**",
-        "restore_snapshot":     f"Restore snapshot `{params.get('snapshot_id', '?')}` onto volume `{params.get('volume_id', '?')}` in `{dc}`",
+        "restore_snapshot": f"Restore snapshot `{params.get('snapshot_id', '?')}` onto volume `{params.get('volume_id', '?')}` in `{dc}`",
         # NICs
-        "create_nic":   f"Create NIC on server `{srv}` in `{dc}` (LAN {params.get('lan_id', 1)}, DHCP {params.get('dhcp', True)})",
-        "update_nic":   f"Update NIC `{params.get('nic_id', '?')}` on server `{srv}` in `{dc}`",
-        "delete_nic":   f"**DELETE** NIC `{params.get('nic_id', '?')}` from server `{srv}` in `{dc}`",
+        "create_nic": f"Create NIC on server `{srv}` in `{dc}` (LAN {params.get('lan_id', 1)}, DHCP {params.get('dhcp', True)})",
+        "update_nic": f"Update NIC `{params.get('nic_id', '?')}` on server `{srv}` in `{dc}`",
+        "delete_nic": f"**DELETE** NIC `{params.get('nic_id', '?')}` from server `{srv}` in `{dc}`",
         # LANs
-        "create_lan":   f"Create {'public' if params.get('public', True) else 'private'} LAN **{params.get('name', '?')}** in `{dc}`",
-        "update_lan":   f"Update LAN `{params.get('lan_id', '?')}` in `{dc}`",
-        "delete_lan":   f"**DELETE** LAN `{params.get('lan_id', '?')}` in `{dc}`",
+        "create_lan": f"Create {'public' if params.get('public', True) else 'private'} LAN **{params.get('name', '?')}** in `{dc}`",
+        "update_lan": f"Update LAN `{params.get('lan_id', '?')}` in `{dc}`",
+        "delete_lan": f"**DELETE** LAN `{params.get('lan_id', '?')}` in `{dc}`",
         # Snapshots
         "update_snapshot": f"Update snapshot `{params.get('snapshot_id', '?')}`",
         "delete_snapshot": f"**DELETE** snapshot `{params.get('snapshot_id', '?')}` — irreversible",
@@ -117,22 +165,22 @@ def _describe_action(action: str, params: dict) -> str:
         "create_firewall_rule": f"Create {params.get('protocol', 'TCP')} {params.get('direction', 'INGRESS')} rule **{params.get('name', '?')}** on NIC `{params.get('nic_id', '?')}`",
         "delete_firewall_rule": f"**DELETE** firewall rule `{params.get('rule_id', '?')}` — irreversible",
         # IPs
-        "reserve_ip":      f"Reserve {params.get('size', 1)} IP(s) in `{loc}`",
+        "reserve_ip": f"Reserve {params.get('size', 1)} IP(s) in `{loc}`",
         "update_ip_block": f"Rename IP block `{params.get('ip_block_id', '?')}`",
         "release_ip_block": f"**RELEASE** IP block `{params.get('ip_block_id', '?')}` — irreversible",
         # Load Balancers
         "create_load_balancer": f"Create load balancer **{params.get('name', '?')}** in `{dc}`",
         "delete_load_balancer": f"**DELETE** load balancer `{params.get('lb_id', '?')}` in `{dc}` — irreversible",
-        "add_lb_nic":    f"Balance NIC `{params.get('nic_id', '?')}` under LB `{params.get('lb_id', '?')}` in `{dc}`",
+        "add_lb_nic": f"Balance NIC `{params.get('nic_id', '?')}` under LB `{params.get('lb_id', '?')}` in `{dc}`",
         "remove_lb_nic": f"Remove NIC `{params.get('nic_id', '?')}` from LB `{params.get('lb_id', '?')}` in `{dc}`",
         # NAT Gateways
         "create_nat_gateway": f"Create NAT gateway **{params.get('name', '?')}** in `{dc}` with IPs {params.get('public_ips', [])}",
         "delete_nat_gateway": f"**DELETE** NAT gateway `{params.get('nat_id', '?')}` in `{dc}` — irreversible",
-        "create_nat_rule":    f"Create {params.get('rule_type', 'SNAT')} rule on NAT gateway `{params.get('nat_id', '?')}` in `{dc}`",
-        "delete_nat_rule":    f"**DELETE** NAT rule `{params.get('rule_id', '?')}` — irreversible",
+        "create_nat_rule": f"Create {params.get('rule_type', 'SNAT')} rule on NAT gateway `{params.get('nat_id', '?')}` in `{dc}`",
+        "delete_nat_rule": f"**DELETE** NAT rule `{params.get('rule_id', '?')}` — irreversible",
         # Kubernetes
-        "create_k8s_cluster":  f"Create Kubernetes cluster **{params.get('name', '?')}** (v{params.get('k8s_version', 'latest')})",
-        "delete_k8s_cluster":  f"**DELETE** Kubernetes cluster `{params.get('cluster_id', '?')}` — irreversible",
+        "create_k8s_cluster": f"Create Kubernetes cluster **{params.get('name', '?')}** (v{params.get('k8s_version', 'latest')})",
+        "delete_k8s_cluster": f"**DELETE** Kubernetes cluster `{params.get('cluster_id', '?')}` — irreversible",
         "create_k8s_nodepool": f"Create node pool **{params.get('name', '?')}** ({params.get('node_count', 1)} × {params.get('cores', 2)}c/{params.get('ram_mb', 2048)}MB) in cluster `{params.get('cluster_id', '?')}`",
         "delete_k8s_nodepool": f"**DELETE** node pool `{params.get('nodepool_id', '?')}` from cluster `{params.get('cluster_id', '?')}` — irreversible",
     }
@@ -152,10 +200,12 @@ class IONOSCloudSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.ionos import IONOSClient
+
         return IONOSClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.ionos import IONOSClient
+
         client = IONOSClient()
         if not client.is_configured():
             return SkillResult(
@@ -185,9 +235,9 @@ class IONOSCloudSkill(BaseSkill):
 
         description = _describe_action(action, params)
         pending = {
-            "intent":   "ionos_cloud",
-            "action":   action,
-            "params":   params,
+            "intent": "ionos_cloud",
+            "action": action,
+            "params": params,
             "original": original_message,
         }
         context = (
@@ -211,10 +261,12 @@ class IONOSDNSSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.ionos_dns import IONOSDNSClient
+
         return IONOSDNSClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.ionos_dns import IONOSDNSClient
+
         client = IONOSDNSClient()
         if not client.is_configured():
             return SkillResult(
@@ -222,7 +274,7 @@ class IONOSDNSSkill(BaseSkill):
                 skill_name=self.name,
             )
 
-        action  = params.get("action", "list_zones")
+        action = params.get("action", "list_zones")
         zone_id = params.get("zone_id", "")
 
         # Read-only
@@ -238,9 +290,9 @@ class IONOSDNSSkill(BaseSkill):
 
         # Write actions — confirmation
         pending = {
-            "intent":   "ionos_dns",
-            "action":   action,
-            "params":   params,
+            "intent": "ionos_dns",
+            "action": action,
+            "params": params,
             "original": original_message,
         }
         action_descriptions = {
@@ -255,7 +307,7 @@ class IONOSDNSSkill(BaseSkill):
                 f"Upsert {params.get('type', '?')} record `{params.get('name', '?')}` → "
                 f"`{params.get('content', '?')}` in zone `{params.get('zone_name', '?')}`"
             ),
-            "create_zone":   f"Create DNS zone `{params.get('zone_name', '?')}`",
+            "create_zone": f"Create DNS zone `{params.get('zone_name', '?')}`",
         }
         description = action_descriptions.get(action, f"DNS action: {action}")
         context = (

@@ -20,14 +20,15 @@ logger = logging.getLogger(__name__)
 
 # ── Scheduled tasks ───────────────────────────────────────────────────────────
 
+
 @celery_app.task(
     bind=True,
     name="app.worker.tasks.run_weekly_agent_evals",
     queue="evals",
     max_retries=2,
-    default_retry_delay=300,   # 5 min between retries
-    soft_time_limit=3_600,     # 1hr soft limit — logs warning
-    time_limit=3_900,          # 1hr 5min hard limit — kills worker
+    default_retry_delay=300,  # 5 min between retries
+    soft_time_limit=3_600,  # 1hr soft limit — logs warning
+    time_limit=3_900,  # 1hr 5min hard limit — kills worker
 )
 def run_weekly_agent_evals(self) -> dict:
     """Run all agent quality evals and post Slack scorecard."""
@@ -60,7 +61,7 @@ def run_nightly_integration_evals(self) -> dict:
     bind=True,
     name="app.worker.tasks.run_health_check",
     queue="celery",
-    max_retries=0,          # no retries — next run is in 30 min anyway
+    max_retries=0,  # no retries — next run is in 30 min anyway
     soft_time_limit=30,
     time_limit=45,
 )
@@ -78,13 +79,14 @@ def run_health_check(self) -> dict:
 
 # ── On-demand tasks ───────────────────────────────────────────────────────────
 
+
 @celery_app.task(
     bind=True,
     name="app.worker.tasks.deploy_brain",
     queue="celery",
-    max_retries=0,          # don't retry — a failed deploy needs human eyes
-    soft_time_limit=360,    # 6 min soft limit
-    time_limit=420,         # 7 min hard kill
+    max_retries=0,  # don't retry — a failed deploy needs human eyes
+    soft_time_limit=360,  # 6 min soft limit
+    time_limit=420,  # 7 min hard kill
 )
 def deploy_brain(self, reason: str = "") -> dict:
     """
@@ -143,10 +145,10 @@ def scan_pending_tasks(self) -> dict:
 @celery_app.task(
     bind=True,
     name="app.worker.tasks.execute_board_task",
-    queue="tasks_general",      # overridden to tasks_workspace at call-time if needed
+    queue="tasks_general",  # overridden to tasks_workspace at call-time if needed
     max_retries=0,
-    soft_time_limit=540,        # 9 min soft
-    time_limit=600,             # 10 min hard
+    soft_time_limit=540,  # 9 min soft
+    time_limit=600,  # 10 min hard
 )
 def execute_board_task(self, task_id: int) -> dict:
     """
@@ -194,6 +196,7 @@ def run_shell_and_report_back(
     except Exception as exc:
         logger.error("run_shell_and_report_back failed: %s", exc, exc_info=True)
         from app.integrations.slack_notifier import post_thread_reply_sync
+
         post_thread_reply_sync(
             f"❌ *Background task crashed*\n`{type(exc).__name__}: {exc}`",
             channel,
@@ -208,8 +211,8 @@ def run_shell_and_report_back(
     queue="celery",
     max_retries=1,
     default_retry_delay=60,
-    soft_time_limit=300,   # 5 min soft limit
-    time_limit=360,        # 6 min hard kill
+    soft_time_limit=300,  # 5 min soft limit
+    time_limit=360,  # 6 min hard kill
 )
 def investigate_and_fix_sentry_issue(self, task_id: str, issue_params: dict) -> dict:
     """Auto-investigate a Sentry issue and attempt a code fix via LLM + RepoClient."""
@@ -222,11 +225,12 @@ def investigate_and_fix_sentry_issue(self, task_id: str, issue_params: dict) -> 
 
 # ── Async implementations ──────────────────────────────────────────────────────
 
+
 async def _weekly_evals() -> dict:
-    from app.evals.runner   import EvalRunner
+    from app.evals.runner import EvalRunner
     from app.evals.reporter import post_scorecard_to_slack
 
-    runner    = EvalRunner()
+    runner = EvalRunner()
     summaries = await runner.run_all_agents()
 
     previous: dict[str, float] = {}
@@ -243,10 +247,10 @@ async def _weekly_evals() -> dict:
 
 async def _nightly_evals() -> dict:
     from app.evals.integrations import run_all_integration_evals
-    from app.evals.reporter     import post_integration_health_to_slack
+    from app.evals.reporter import post_integration_health_to_slack
 
     results = await run_all_integration_evals()
-    passed  = sum(1 for r in results if r.passed)
+    passed = sum(1 for r in results if r.passed)
     logger.info("Nightly integration evals | %d/%d passed", passed, len(results))
 
     # Post summary to Slack (quiet on all-green, loud on failures)
@@ -264,7 +268,7 @@ async def _health_check() -> dict:
 
     try:
         async with httpx.AsyncClient() as http:
-            resp   = await http.get("http://brain:8000/api/v1/health", timeout=10)
+            resp = await http.get("http://brain:8000/api/v1/health", timeout=10)
             health = resp.json()
             if not health.get("redis"):
                 issues.append("Redis is *DOWN* or unreachable")
@@ -314,7 +318,7 @@ async def _shell_and_report(
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
             output = (stdout or b"").decode("utf-8", errors="replace")[:1200].strip()
-            code   = proc.returncode or 0
+            code = proc.returncode or 0
         except asyncio.TimeoutError:
             output, code = "[timed out after 120s]", -1
         except Exception as exc:
@@ -354,6 +358,7 @@ def _mark_task(task_id: int, status: str, error: str | None = None) -> None:
     """
     try:
         from app.db import postgres
+
         # Clear celery_task_id on terminal states so tasks can be retried
         if status in ("done", "failed"):
             postgres.execute(
@@ -379,6 +384,7 @@ def _unblock_dependents(completed_task_id: int) -> None:
     """Find tasks blocked by completed_task_id and auto-enqueue those now fully unblocked."""
     try:
         from app.db import postgres
+
         # Find all pending tasks that list completed_task_id in their blocked_by array
         dependents = postgres.execute(
             """
@@ -410,7 +416,8 @@ def _unblock_dependents(completed_task_id: int) -> None:
                 if still_blocked:
                     logger.info(
                         "Task #%s still blocked after #%s completed",
-                        dep_id, completed_task_id,
+                        dep_id,
+                        completed_task_id,
                     )
                     continue
 
@@ -428,9 +435,9 @@ def _unblock_dependents(completed_task_id: int) -> None:
                 logger.info("Auto-enqueued task #%s (unblocked by #%s)", dep_id, completed_task_id)
             else:
                 logger.info(
-                    "Task #%s unblocked by #%s but not auto-queued "
-                    "(no commands or approval_level>1)",
-                    dep_id, completed_task_id,
+                    "Task #%s unblocked by #%s but not auto-queued (no commands or approval_level>1)",
+                    dep_id,
+                    completed_task_id,
                 )
     except Exception as exc:
         logger.warning("Could not unblock dependents of task #%s: %s", completed_task_id, exc)
@@ -464,15 +471,14 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
     if not row:
         return {"error": f"Task #{task_id} not found"}
 
-    title      = row.get("title", f"Task #{task_id}")
-    raw_cmds   = row.get("commands") or []
+    title = row.get("title", f"Task #{task_id}")
+    raw_cmds = row.get("commands") or []
     commands: list[str] = (
-        raw_cmds if isinstance(raw_cmds, list)
-        else _json.loads(raw_cmds) if isinstance(raw_cmds, str) else []
+        raw_cmds if isinstance(raw_cmds, list) else _json.loads(raw_cmds) if isinstance(raw_cmds, str) else []
     )
-    channel        = row.get("slack_channel") or ""
-    thread_ts      = row.get("slack_thread_ts") or ""
-    session_id     = row.get("session_id") or ""
+    channel = row.get("slack_channel") or ""
+    thread_ts = row.get("slack_thread_ts") or ""
+    session_id = row.get("session_id") or ""
     approval_level = row.get("approval_level") or 1
 
     # ── 1b. blocked_by check ──────────────────────────────────────────────────
@@ -490,7 +496,8 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
         if incomplete:
             logger.info(
                 "Task #%s blocked by task(s) %s — re-queuing in 30s (attempt via Celery retry)",
-                task_id, incomplete,
+                task_id,
+                incomplete,
             )
             # Re-queue with a 30s countdown instead of executing now
             execute_board_task.apply_async(args=[task_id], countdown=30)
@@ -501,15 +508,15 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
     # (Approved tasks arrive here via the task board PATCH endpoint which sets
     # status=in_progress; at that point approval_level can be ignored.)
     # We only block tasks that are still in 'pending' status here.
-    pending_status_row = postgres.execute_one(
-        "SELECT status FROM tasks WHERE id = %s", (task_id,)
-    )
+    pending_status_row = postgres.execute_one("SELECT status FROM tasks WHERE id = %s", (task_id,))
     current_status = (pending_status_row or {}).get("status", "pending")
     if approval_level >= 2 and current_status == "pending":
         from app.config import get_settings as _gs
+
         _s = _gs()
         if _s.slack_owner_user_id and _s.slack_bot_token:
             from app.integrations.slack_notifier import post_dm_sync, post_alert_sync as _pas
+
             _domain = _s.domain or "sentinelai.cloud"
             _dm = (
                 f"🔐 *Approval needed — Task #{task_id}: {title}*\n"
@@ -521,8 +528,7 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
             )
             post_dm_sync(_dm)
             _pas(
-                f"🔐 *Approval needed — Task #{task_id}: {title}*\n"
-                f"Approval level {approval_level} — DM sent to owner."
+                f"🔐 *Approval needed — Task #{task_id}: {title}*\nApproval level {approval_level} — DM sent to owner."
             )
         _mark_task(task_id, "pending")  # stays pending until approved
         return {"status": "awaiting_approval", "approval_level": approval_level}
@@ -531,7 +537,7 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
     if (not channel or not thread_ts) and session_id:
         ctx = redis.get_slack_context(session_id)
         if ctx:
-            channel   = ctx.get("channel", "")
+            channel = ctx.get("channel", "")
             thread_ts = ctx.get("thread_ts", "")
 
     if not commands:
@@ -551,7 +557,9 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
             holder = redis.get_workspace_lock_holder()
             logger.info(
                 "Task #%s waiting for workspace lock (held by %s) — attempt %d/10",
-                task_id, holder, attempt + 1,
+                task_id,
+                holder,
+                attempt + 1,
             )
             await asyncio.sleep(30)
 
@@ -562,7 +570,8 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
                     f"⏳ *Task #{task_id} — {title}*\n"
                     "Could not start — workspace was busy for 5 minutes. "
                     "The task has been marked failed; create it again to retry.",
-                    channel, thread_ts,
+                    channel,
+                    thread_ts,
                 )
             return {"error": "workspace_lock_timeout"}
 
@@ -588,7 +597,7 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
             output = (stdout or b"").decode("utf-8", errors="replace")[:1_200].strip()
-            code   = proc.returncode or 0
+            code = proc.returncode or 0
         except asyncio.TimeoutError:
             output, code = "[timed out after 120s]", -1
         except Exception as exc:
@@ -616,7 +625,7 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
             else f"❌ *Task #{task_id} — {title}* — failed at step {len(results)}"
         )
         divider = "─" * 36
-        body    = f"\n{divider}\n".join(results)
+        body = f"\n{divider}\n".join(results)
         post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
 
     return {"task_id": task_id, "passed": all_passed, "steps": len(results)}
@@ -642,7 +651,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     from app.integrations.slack_notifier import post_thread_reply_sync
 
     settings = get_settings()
-    redis    = RedisMemory()
+    redis = RedisMemory()
     code_root = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
 
     # ── Load task ─────────────────────────────────────────────────────────────
@@ -655,21 +664,20 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     if not row:
         return {"error": f"Task #{task_id} not found"}
 
-    title       = row.get("title", f"Task #{task_id}")
+    title = row.get("title", f"Task #{task_id}")
     description = row.get("description") or ""
-    channel     = row.get("slack_channel") or ""
-    thread_ts   = row.get("slack_thread_ts") or ""
+    channel = row.get("slack_channel") or ""
+    thread_ts = row.get("slack_thread_ts") or ""
 
     # blocked_by check
     import json as _json
+
     raw_blocked = row.get("blocked_by") or []
     if isinstance(raw_blocked, str):
         raw_blocked = _json.loads(raw_blocked)
     blocker_ids = [int(x) for x in raw_blocked if x]
     if blocker_ids:
-        blocker_rows = postgres.execute(
-            "SELECT id, status FROM tasks WHERE id = ANY(%s)", (blocker_ids,)
-        )
+        blocker_rows = postgres.execute("SELECT id, status FROM tasks WHERE id = ANY(%s)", (blocker_ids,))
         incomplete = [r["id"] for r in blocker_rows if r["status"] != "done"]
         if incomplete:
             execute_board_task.apply_async(args=[task_id], countdown=30)
@@ -681,9 +689,11 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     current_status = (pending_row or {}).get("status", "pending")
     if approval_level >= 2 and current_status == "pending":
         from app.config import get_settings as _gs
+
         _s = _gs()
         if _s.slack_owner_user_id and _s.slack_bot_token:
             from app.integrations.slack_notifier import post_dm_sync, post_alert_sync as _pas
+
             _domain = _s.domain or "sentinelai.cloud"
             _dm = (
                 f"🔐 *Approval needed — Task #{task_id}: {title}*\n"
@@ -699,7 +709,8 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     if channel and thread_ts:
         post_thread_reply_sync(
             f"🧠 *Task #{task_id} — {title}*\n_Planning and executing autonomously..._",
-            channel, thread_ts,
+            channel,
+            thread_ts,
         )
 
     # ── Sync workspace to latest origin/main before starting ─────────────────
@@ -707,8 +718,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     if os.path.isdir(os.path.join(code_root, ".git")):
         try:
             sync_proc = await asyncio.create_subprocess_shell(
-                f"git -C {code_root} fetch origin && "
-                f"git -C {code_root} reset --hard origin/main",
+                f"git -C {code_root} fetch origin && git -C {code_root} reset --hard origin/main",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 executable="/bin/bash",
@@ -744,13 +754,13 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     ]
 
     results: list[str] = []
-    all_passed          = True
-    lm_said_done        = False
+    all_passed = True
+    lm_said_done = False
     workspace_lock_held = False
-    max_rounds          = 20
-    round_num           = 0
-    parse_errors        = 0
-    write_commands_run  = 0   # track how many write/edit commands have been issued
+    max_rounds = 20
+    round_num = 0
+    parse_errors = 0
+    write_commands_run = 0  # track how many write/edit commands have been issued
 
     _READ_ONLY_PREFIXES = ("cat ", "grep ", "find ", "ls ", "head ", "tail ", "wc ", "echo ")
 
@@ -759,14 +769,16 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     for round_num in range(max_rounds):
         # Warn LLM when nearing the round limit
         if round_num == max_rounds - 3:
-            messages.append({
-                "role": "user",
-                "content": (
-                    f"⚠️ You have {max_rounds - round_num} rounds remaining. "
-                    "If the task is complete or cannot be completed, return "
-                    '{"done": true, "summary": "..."} now.'
-                ),
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"⚠️ You have {max_rounds - round_num} rounds remaining. "
+                        "If the task is complete or cannot be completed, return "
+                        '{"done": true, "summary": "..."} now.'
+                    ),
+                }
+            )
 
         # Ask LLM for the next action
         try:
@@ -789,16 +801,20 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             logger.error("LLM round %d failed for task #%s: %s", round_num, task_id, exc)
             if parse_errors >= 3:
                 all_passed = False
-                results.append(f"❌ *LLM parse error (round {round_num + 1}):* {exc} — aborting after 3 consecutive errors")
+                results.append(
+                    f"❌ *LLM parse error (round {round_num + 1}):* {exc} — aborting after 3 consecutive errors"
+                )
                 break
             # inject a correction hint and retry
-            messages.append({
-                "role": "user",
-                "content": (
-                    f"Your last response could not be parsed as JSON (error: {exc}). "
-                    "Reply with ONLY a valid JSON object — no markdown, no explanation."
-                ),
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Your last response could not be parsed as JSON (error: {exc}). "
+                        "Reply with ONLY a valid JSON object — no markdown, no explanation."
+                    ),
+                }
+            )
             continue
 
         if action.get("done"):
@@ -841,7 +857,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
                 executable="/bin/bash",
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-            output    = (stdout or b"").decode("utf-8", errors="replace")[:2_000].strip()
+            output = (stdout or b"").decode("utf-8", errors="replace")[:2_000].strip()
             exit_code = proc.returncode or 0
         except asyncio.TimeoutError:
             output, exit_code = "[timed out after 120s]", -1
@@ -854,11 +870,15 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             write_commands_run += 1
 
         status_icon = "✅" if exit_code == 0 else "❌"
-        snippet     = f"```\n{output}\n```" if output else ""
+        snippet = f"```\n{output}\n```" if output else ""
         results.append(f"{status_icon} *Round {round_num + 1}:* `{cmd[:120]}`\n{snippet}".strip())
         logger.info(
             "Task #%s round %d/%d exit=%d cmd=%s",
-            task_id, round_num + 1, max_rounds, exit_code, cmd[:80],
+            task_id,
+            round_num + 1,
+            max_rounds,
+            exit_code,
+            cmd[:80],
         )
 
         # Inject action-pressure message if still only reading after round 4
@@ -872,18 +892,20 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
 
         # Feed result back to LLM
         messages.append({"role": "assistant", "content": raw})
-        messages.append({
-            "role": "user",
-            "content": (
-                f"Command output (exit {exit_code}):\n```\n{output[:1_500]}\n```\n"
-                + (
-                    "Command succeeded. Continue with next step or mark done."
-                    if exit_code == 0
-                    else "Command FAILED. You may retry, try an alternative, or mark done/failed."
-                )
-                + action_pressure
-            ),
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"Command output (exit {exit_code}):\n```\n{output[:1_500]}\n```\n"
+                    + (
+                        "Command succeeded. Continue with next step or mark done."
+                        if exit_code == 0
+                        else "Command FAILED. You may retry, try an alternative, or mark done/failed."
+                    )
+                    + action_pressure
+                ),
+            }
+        )
 
         if exit_code != 0 and round_num >= max_rounds - 2:
             all_passed = False
@@ -918,20 +940,16 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     # If we exhausted max_rounds without the LLM saying done, mark failed.
     if not lm_said_done and all_passed:
         all_passed = False
-        results.append(
-            f"❌ *Agent exhausted {max_rounds} rounds without explicitly completing the task*"
-        )
+        results.append(f"❌ *Agent exhausted {max_rounds} rounds without explicitly completing the task*")
 
     _mark_task(task_id, "done" if all_passed else "failed")
 
     if channel and thread_ts:
         header = (
-            f"✅ *Task #{task_id} — {title}* — complete"
-            if all_passed
-            else f"❌ *Task #{task_id} — {title}* — failed"
+            f"✅ *Task #{task_id} — {title}* — complete" if all_passed else f"❌ *Task #{task_id} — {title}* — failed"
         )
         divider = "─" * 36
-        body    = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
+        body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
         post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
 
     return {"task_id": task_id, "passed": all_passed, "rounds": round_num + 1}
@@ -963,7 +981,7 @@ async def _scan_pending_tasks() -> dict:
     )
 
     dispatched = 0
-    for row in (rows or []):
+    for row in rows or []:
         task_id = row["id"]
 
         # Skip blocked tasks
@@ -973,9 +991,7 @@ async def _scan_pending_tasks() -> dict:
         if raw_blocked:
             blocker_ids = [int(x) for x in raw_blocked if x]
             if blocker_ids:
-                blocker_rows = postgres.execute(
-                    "SELECT status FROM tasks WHERE id = ANY(%s)", (blocker_ids,)
-                )
+                blocker_rows = postgres.execute("SELECT status FROM tasks WHERE id = ANY(%s)", (blocker_ids,))
                 if any(r["status"] != "done" for r in (blocker_rows or [])):
                     logger.info("scan_pending_tasks: task #%s still blocked — skipping", task_id)
                     continue
@@ -998,7 +1014,10 @@ async def _scan_pending_tasks() -> dict:
         task_type = "cmd" if commands else "llm"
         logger.info(
             "scan_pending_tasks: dispatched task #%s (%s) → %s celery_id=%s",
-            task_id, task_type, q, result.id[:8],
+            task_id,
+            task_type,
+            q,
+            result.id[:8],
         )
         dispatched += 1
 
@@ -1008,6 +1027,7 @@ async def _scan_pending_tasks() -> dict:
 def post_alert_sync(text: str) -> None:
     """Fire-and-forget sync Slack alert (used inside Celery tasks)."""
     from app.integrations.slack_notifier import post_alert_sync as _pas
+
     _pas(text)
 
 
@@ -1022,9 +1042,9 @@ async def _deploy_brain(reason: str) -> dict:
     """
     from app.integrations.slack_notifier import post_alert_sync as _notify
 
-    project_dir  = "/root/sentinel-workspace"
+    project_dir = "/root/sentinel-workspace"
     compose_file = f"{project_dir}/docker-compose.yml"
-    steps:  list[str] = []
+    steps: list[str] = []
     errors: list[str] = []
 
     _notify(
@@ -1033,14 +1053,17 @@ async def _deploy_brain(reason: str) -> dict:
         "_Pulling latest code and rebuilding image..._"
     )
 
-    await asyncio.sleep(5)   # let the brain finish its HTTP/Slack response
+    await asyncio.sleep(5)  # let the brain finish its HTTP/Slack response
 
     # ── 1. git pull ───────────────────────────────────────────────────────────
     try:
         env = {**os.environ, "GIT_SSH_COMMAND": "ssh -o StrictHostKeyChecking=no"}
         r = subprocess.run(
             ["git", "-C", project_dir, "pull", "origin", "main"],
-            capture_output=True, text=True, timeout=60, env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
         )
         if r.returncode == 0:
             steps.append(f"git pull: {r.stdout.strip() or 'already up to date'}")
@@ -1059,9 +1082,10 @@ async def _deploy_brain(reason: str) -> dict:
     # ── 2. docker compose build brain ────────────────────────────────────────
     try:
         r = subprocess.run(
-            ["docker", "compose", "-p", "sentinel",
-             "-f", compose_file, "build", "brain"],
-            capture_output=True, text=True, timeout=300,
+            ["docker", "compose", "-p", "sentinel", "-f", compose_file, "build", "brain"],
+            capture_output=True,
+            text=True,
+            timeout=300,
             env={**os.environ, "DOCKER_BUILDKIT": "1"},
         )
         if r.returncode == 0:
@@ -1084,9 +1108,10 @@ async def _deploy_brain(reason: str) -> dict:
     # -p sentinel: match the project name used when the stack was first started.
     try:
         r = subprocess.run(
-            ["docker", "compose", "-p", "sentinel",
-             "-f", compose_file, "up", "-d", "--no-deps", "brain"],
-            capture_output=True, text=True, timeout=60,
+            ["docker", "compose", "-p", "sentinel", "-f", compose_file, "up", "-d", "--no-deps", "brain"],
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if r.returncode == 0:
             steps.append("docker compose up -d brain: success")
@@ -1127,11 +1152,11 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
 
     settings = get_settings()
 
-    issue_id   = issue_params.get("issue_id", "")
-    title      = issue_params.get("title", "Unknown error")
-    level      = issue_params.get("level", "error")
-    project    = issue_params.get("project", "")
-    permalink  = issue_params.get("permalink", "")
+    issue_id = issue_params.get("issue_id", "")
+    title = issue_params.get("title", "Unknown error")
+    level = issue_params.get("level", "error")
+    project = issue_params.get("project", "")
+    permalink = issue_params.get("permalink", "")
 
     # ── 1. Mark executing ──────────────────────────────────────────────────────
     try:
@@ -1146,11 +1171,12 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
     issue_context = ""
     # Track which files+lines the Sentry API tells us are relevant so we can
     # extract the exact function from the repo, not just dump the whole file.
-    _sentry_frames: list[dict] = []   # [{filename, lineno, function}]
+    _sentry_frames: list[dict] = []  # [{filename, lineno, function}]
 
     if settings.sentry_auth_token and issue_id:
         try:
             import httpx
+
             headers = {"Authorization": f"Bearer {settings.sentry_auth_token}"}
             async with httpx.AsyncClient() as http:
                 resp = await http.get(
@@ -1166,20 +1192,20 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
                     if entry.get("type") != "exception":
                         continue
                     for exc_val in (entry.get("data") or {}).get("values", [])[:2]:
-                        exc_type  = exc_val.get("type", "")
+                        exc_type = exc_val.get("type", "")
                         exc_value = exc_val.get("value", "")
                         issue_context += f"Exception: {exc_type}: {exc_value}\n"
 
                         frames = (exc_val.get("stacktrace") or {}).get("frames", [])
                         # Last 8 frames — deepest call is most relevant
                         for frame in frames[-8:]:
-                            fname  = frame.get("filename", "")
+                            fname = frame.get("filename", "")
                             lineno = frame.get("lineno", 0)
-                            func   = frame.get("function", "")
-                            ctx    = (frame.get("context_line") or "").strip()
-                            pre    = frame.get("pre_context") or []
-                            post   = frame.get("post_context") or []
-                            lvars  = frame.get("vars") or {}
+                            func = frame.get("function", "")
+                            ctx = (frame.get("context_line") or "").strip()
+                            pre = frame.get("pre_context") or []
+                            post = frame.get("post_context") or []
+                            lvars = frame.get("vars") or {}
 
                             issue_context += f"\n  File {fname}:{lineno} in {func}()\n"
                             # Sentry gives ±5 surrounding lines — include them all
@@ -1205,7 +1231,7 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
                     if crumbs:
                         issue_context += "\nBreadcrumbs (last 10 before crash):\n"
                         for c in crumbs:
-                            ts  = (c.get("timestamp") or "")[:19]
+                            ts = (c.get("timestamp") or "")[:19]
                             cat = c.get("category", "")
                             msg = (c.get("message") or c.get("data", {}).get("url", ""))[:120]
                             issue_context += f"  [{ts}] {cat}: {msg}\n"
@@ -1218,6 +1244,7 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
     # ── 2b. Read relevant source functions from repo ──────────────────────────
     # Merge frames from the API response with files listed in the webhook payload.
     import os as _os
+
     _CODE_ROOT = "/root/sentinel-workspace" if _os.path.isdir("/root/sentinel-workspace") else "/app"
 
     # Build a map of {filename: [lineno, ...]} from all known frames
@@ -1246,7 +1273,7 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
             seen_ranges: list[tuple[int, int]] = []
             snippets: list[str] = []
             for lineno in sorted(set(linenos)):
-                idx = lineno - 1   # 0-based
+                idx = lineno - 1  # 0-based
                 # Walk up to find the enclosing def / class / async def
                 fn_start = max(0, idx - 60)
                 for i in range(idx, max(-1, idx - 120), -1):
@@ -1275,17 +1302,18 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
 
     # ── 3. LLM fix plan ───────────────────────────────────────────────────────
     fix_plan: dict = {
-        "fixable":          False,
-        "root_cause":       "Analysis unavailable",
-        "patches":          [],
-        "commit_message":   f"fix: auto-fix for Sentry issue {issue_id}",
+        "fixable": False,
+        "root_cause": "Analysis unavailable",
+        "patches": [],
+        "commit_message": f"fix: auto-fix for Sentry issue {issue_id}",
         "resolve_in_sentry": False,
-        "summary":          "LLM analysis could not be completed",
+        "summary": "LLM analysis could not be completed",
     }
     try:
         import anthropic
+
         context_block = f"\nStack trace:\n{issue_context}" if issue_context else ""
-        file_block    = file_context if file_context else ""
+        file_block = file_context if file_context else ""
         prompt = (
             f"You are an AI assistant that investigates and fixes software bugs reported in Sentry.\n\n"
             f"Issue: {title}\nLevel: {level}\nProject: {project}{context_block}{file_block}\n\n"
@@ -1320,8 +1348,8 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
             raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         # Extract the first complete JSON object — handles trailing text or truncation
         brace_depth = 0
-        json_start  = raw.find("{")
-        json_end    = -1
+        json_start = raw.find("{")
+        json_end = -1
         if json_start != -1:
             for i, ch in enumerate(raw[json_start:], json_start):
                 if ch == "{":
@@ -1340,11 +1368,12 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
 
     # ── 4. Apply patches ──────────────────────────────────────────────────────
     patches_applied: list[str] = []
-    patch_errors:    list[str] = []
+    patch_errors: list[str] = []
 
     if fix_plan.get("fixable") and fix_plan.get("patches"):
         try:
             from app.integrations.repo import RepoClient
+
             repo = RepoClient()
             if repo.is_configured():
                 await repo.ensure_repo()
@@ -1373,6 +1402,7 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
     if fix_plan.get("resolve_in_sentry") and patches_applied and settings.sentry_auth_token and issue_id:
         try:
             import httpx
+
             async with httpx.AsyncClient() as http:
                 await http.put(
                     f"https://sentry.io/api/0/issues/{issue_id}/",
@@ -1418,7 +1448,7 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
 
     # ── 7. Mark task done ─────────────────────────────────────────────────────
     final_status = "completed" if not patch_errors or patches_applied else "failed"
-    error_text   = "; ".join(patch_errors[:3]) if patch_errors and not patches_applied else None
+    error_text = "; ".join(patch_errors[:3]) if patch_errors and not patches_applied else None
     try:
         postgres.execute(
             "UPDATE pending_write_tasks SET status=%s, error=%s, updated_at=NOW() WHERE task_id=%s",
@@ -1428,9 +1458,9 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
         logger.warning("Could not update task to %s: %s", final_status, exc)
 
     return {
-        "task_id":         task_id,
-        "fixable":         fix_plan.get("fixable"),
+        "task_id": task_id,
+        "fixable": fix_plan.get("fixable"),
         "patches_applied": patches_applied,
-        "patch_errors":    patch_errors,
-        "status":          final_status,
+        "patch_errors": patch_errors,
+        "status": final_status,
     }

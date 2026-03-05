@@ -15,10 +15,12 @@ class SmartHomeSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.smarthome import SmartHomeClient
+
         return SmartHomeClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.smarthome import SmartHomeClient
+
         client = SmartHomeClient()
         if not client.is_configured():
             return SkillResult(
@@ -35,6 +37,7 @@ class SmartHomeSkill(BaseSkill):
             data = await client.turn_off(entity)
         elif action == "status":
             from app.integrations.home_assistant import HomeAssistantClient
+
             if entity:
                 data = await HomeAssistantClient().get_entity(entity)
             else:

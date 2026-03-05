@@ -45,7 +45,7 @@ class RateLimiter:
         """
         s = get_settings()
 
-        min_key  = f"brain:rate:{session_id}:minute"
+        min_key = f"brain:rate:{session_id}:minute"
         hour_key = f"brain:rate:{session_id}:hour"
 
         pipe = self._r.pipeline()
@@ -55,26 +55,21 @@ class RateLimiter:
 
         # Set TTL on first increment (EXPIRE is a no-op if key already has TTL)
         if count_min == 1:
-            self._r.expire(min_key,  60)
+            self._r.expire(min_key, 60)
         if count_hour == 1:
             self._r.expire(hour_key, 3_600)
 
         if count_min > s.rate_limit_per_minute:
-            logger.warning(
-                "Rate limit (minute) hit | session={} | count={}", session_id, count_min
-            )
+            logger.warning("Rate limit (minute) hit | session={} | count={}", session_id, count_min)
             raise RateLimitExceeded(
                 f"Too many requests — {count_min} in the last minute "
                 f"(limit: {s.rate_limit_per_minute}). Please slow down."
             )
 
         if count_hour > s.rate_limit_per_hour:
-            logger.warning(
-                "Rate limit (hour) hit | session={} | count={}", session_id, count_hour
-            )
+            logger.warning("Rate limit (hour) hit | session={} | count={}", session_id, count_hour)
             raise RateLimitExceeded(
-                f"Too many requests — {count_hour} in the last hour "
-                f"(limit: {s.rate_limit_per_hour}). Try again later."
+                f"Too many requests — {count_hour} in the last hour (limit: {s.rate_limit_per_hour}). Try again later."
             )
 
 

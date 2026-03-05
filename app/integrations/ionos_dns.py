@@ -20,19 +20,17 @@ import httpx
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
-_BASE    = "https://dns.de-fra.ionos.com"
+_BASE = "https://dns.de-fra.ionos.com"
 _TIMEOUT = 30.0
 
 
 def _auth_headers() -> dict:
     if settings.ionos_token:
         return {"Authorization": f"Bearer {settings.ionos_token}"}
-    creds = base64.b64encode(
-        f"{settings.ionos_username}:{settings.ionos_password}".encode()
-    ).decode()
+    creds = base64.b64encode(f"{settings.ionos_username}:{settings.ionos_password}".encode()).decode()
     return {"Authorization": f"Basic {creds}"}
 
 
@@ -60,8 +58,8 @@ class IONOSDNSClient:
         r.raise_for_status()
         return [
             {
-                "id":      z["id"],
-                "name":    z["properties"].get("zoneName", ""),
+                "id": z["id"],
+                "name": z["properties"].get("zoneName", ""),
                 "enabled": z["properties"].get("enabled", True),
             }
             for z in r.json().get("items", [])
@@ -81,7 +79,7 @@ class IONOSDNSClient:
 
     async def create_zone(self, zone_name: str) -> dict:
         body = {"properties": {"zoneName": zone_name, "enabled": True}}
-        r    = await self.client.post("/v1/zones", json=body)
+        r = await self.client.post("/v1/zones", json=body)
         r.raise_for_status()
         return r.json()
 
@@ -92,11 +90,11 @@ class IONOSDNSClient:
         r.raise_for_status()
         return [
             {
-                "id":      rec["id"],
-                "name":    rec["properties"].get("name", ""),
-                "type":    rec["properties"].get("type", ""),
+                "id": rec["id"],
+                "name": rec["properties"].get("name", ""),
+                "type": rec["properties"].get("type", ""),
                 "content": rec["properties"].get("content", ""),
-                "ttl":     rec["properties"].get("ttl", 3600),
+                "ttl": rec["properties"].get("ttl", 3600),
                 "enabled": rec["properties"].get("enabled", True),
             }
             for rec in r.json().get("items", [])
@@ -113,10 +111,10 @@ class IONOSDNSClient:
     ) -> dict:
         """Create a DNS record. Types: A, AAAA, CNAME, MX, TXT, SRV, NS, CAA, SSHFP."""
         props: dict[str, Any] = {
-            "name":    name,
-            "type":    record_type.upper(),
+            "name": name,
+            "type": record_type.upper(),
             "content": content,
-            "ttl":     ttl,
+            "ttl": ttl,
             "enabled": True,
         }
         if priority is not None:
@@ -159,14 +157,11 @@ class IONOSDNSClient:
 
         # Check for existing record with same name+type
         existing = [
-            r for r in records
-            if r["name"].lower() == name.lower()
-            and r["type"].upper() == record_type.upper()
+            r for r in records if r["name"].lower() == name.lower() and r["type"].upper() == record_type.upper()
         ]
 
         if existing:
             return await self.update_record(
-                zone_id, existing[0]["id"],
-                {"content": content, "ttl": ttl, "enabled": True}
+                zone_id, existing[0]["id"], {"content": content, "ttl": ttl, "enabled": True}
             )
         return await self.create_record(zone_id, name, record_type, content, ttl)

@@ -27,16 +27,17 @@ from app.config import get_settings
 # ── Published Anthropic pricing (USD per 1M tokens, 2025) ─────────────────────
 # Update these when Anthropic changes rates.
 PRICING: dict[str, dict[str, float]] = {
-    "claude-opus-4-6":            {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4-6":          {"input": 3.00,  "output": 15.00},
-    "claude-haiku-4-5-20251001":  {"input": 0.25,  "output":  1.25},
+    "claude-opus-4-6": {"input": 15.00, "output": 75.00},
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
+    "claude-haiku-4-5-20251001": {"input": 0.25, "output": 1.25},
 }
-_FALLBACK_PRICING = {"input": 3.00, "output": 15.00}   # assume Sonnet rate for unknowns
+_FALLBACK_PRICING = {"input": 3.00, "output": 15.00}  # assume Sonnet rate for unknowns
 
-_KEY_TTL = 172_800   # 48 hours — keys auto-expire without a cron job
+_KEY_TTL = 172_800  # 48 hours — keys auto-expire without a cron job
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
+
 
 class BudgetExceeded(Exception):
     """Raised before an LLM call when the daily ceiling or a model token budget is hit."""
@@ -44,17 +45,19 @@ class BudgetExceeded(Exception):
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class CallCost:
-    model:              str
-    input_tokens:       int
-    output_tokens:      int
-    call_cost_usd:      float
-    daily_total_usd:    float
+    model: str
+    input_tokens: int
+    output_tokens: int
+    call_cost_usd: float
+    daily_total_usd: float
     daily_model_tokens: int
 
 
 # ── Core class ────────────────────────────────────────────────────────────────
+
 
 class CostTracker:
     """
@@ -86,11 +89,20 @@ class CostTracker:
     def _today() -> str:
         return date.today().isoformat()
 
-    def _total_key(self, today: str)                    -> str: return f"brain:cost:daily:{today}:total"
-    def _model_tin_key(self, today: str, model: str)    -> str: return f"brain:cost:daily:{today}:model:{model}:tokens_in"
-    def _model_tout_key(self, today: str, model: str)   -> str: return f"brain:cost:daily:{today}:model:{model}:tokens_out"
-    def _model_cost_key(self, today: str, model: str)   -> str: return f"brain:cost:daily:{today}:model:{model}:cost"
-    def _alert_key(self, today: str, pct: int)          -> str: return f"brain:cost:alert:{today}:{pct}"
+    def _total_key(self, today: str) -> str:
+        return f"brain:cost:daily:{today}:total"
+
+    def _model_tin_key(self, today: str, model: str) -> str:
+        return f"brain:cost:daily:{today}:model:{model}:tokens_in"
+
+    def _model_tout_key(self, today: str, model: str) -> str:
+        return f"brain:cost:daily:{today}:model:{model}:tokens_out"
+
+    def _model_cost_key(self, today: str, model: str) -> str:
+        return f"brain:cost:daily:{today}:model:{model}:cost"
+
+    def _alert_key(self, today: str, pct: int) -> str:
+        return f"brain:cost:alert:{today}:{pct}"
 
     # ── Cost calculation ──────────────────────────────────────────────────────
 
@@ -109,7 +121,7 @@ class CostTracker:
         - Today's running total has already hit the daily ceiling, OR
         - This model's daily token count has hit its per-model budget.
         """
-        s     = get_settings()
+        s = get_settings()
         today = self._today()
 
         # ── Daily cost ceiling ─────────────────────────────────────────────
@@ -124,12 +136,10 @@ class CostTracker:
         # ── Per-model token budget ─────────────────────────────────────────
         budget = self._model_token_budget(s, model)
         if budget:
-            tin  = int(self._r.get(self._model_tin_key(today, model))  or 0)
+            tin = int(self._r.get(self._model_tin_key(today, model)) or 0)
             tout = int(self._r.get(self._model_tout_key(today, model)) or 0)
             if tin + tout >= budget:
-                raise BudgetExceeded(
-                    f"{model} token budget exhausted: {tin + tout:,} / {budget:,} tokens today."
-                )
+                raise BudgetExceeded(f"{model} token budget exhausted: {tin + tout:,} / {budget:,} tokens today.")
 
     def record(self, model: str, input_tokens: int, output_tokens: int) -> CallCost:
         """
@@ -138,7 +148,7 @@ class CostTracker:
         Atomically increments all Redis counters in a pipeline and triggers
         threshold alerts if a new threshold has been crossed.
         """
-        today    = self._today()
+        today = self._today()
         cost_usd = self._calc_usd(model, input_tokens, output_tokens)
 
         pipe = self._r.pipeline()
@@ -148,23 +158,26 @@ class CostTracker:
         pipe.expire(self._total_key(today), _KEY_TTL)
 
         # Per-model counters
-        pipe.incrby(self._model_tin_key(today, model),  input_tokens)
-        pipe.expire(self._model_tin_key(today, model),  _KEY_TTL)
+        pipe.incrby(self._model_tin_key(today, model), input_tokens)
+        pipe.expire(self._model_tin_key(today, model), _KEY_TTL)
         pipe.incrby(self._model_tout_key(today, model), output_tokens)
         pipe.expire(self._model_tout_key(today, model), _KEY_TTL)
         pipe.incrbyfloat(self._model_cost_key(today, model), cost_usd)
         pipe.expire(self._model_cost_key(today, model), _KEY_TTL)
 
-        results      = pipe.execute()
-        new_total    = float(results[0])
-        model_tokens = (
-            int(self._r.get(self._model_tin_key(today, model))  or 0) +
-            int(self._r.get(self._model_tout_key(today, model)) or 0)
+        results = pipe.execute()
+        new_total = float(results[0])
+        model_tokens = int(self._r.get(self._model_tin_key(today, model)) or 0) + int(
+            self._r.get(self._model_tout_key(today, model)) or 0
         )
 
         logger.info(
             "COST | model={} | call=${:.6f} | day=${:.4f} | in={} out={}",
-            model, cost_usd, new_total, input_tokens, output_tokens,
+            model,
+            cost_usd,
+            new_total,
+            input_tokens,
+            output_tokens,
         )
 
         self._update_prometheus(new_total)
@@ -181,37 +194,37 @@ class CostTracker:
 
     def get_daily_summary(self) -> dict:
         """Return today's full spend breakdown. Used by GET /api/v1/costs."""
-        s     = get_settings()
+        s = get_settings()
         today = self._today()
 
-        total   = float(self._r.get(self._total_key(today)) or 0)
+        total = float(self._r.get(self._total_key(today)) or 0)
         ceiling = s.daily_cost_ceiling_usd
 
         models: dict[str, dict] = {}
         for model in PRICING:
-            tin  = int(self._r.get(self._model_tin_key(today, model))  or 0)
+            tin = int(self._r.get(self._model_tin_key(today, model)) or 0)
             tout = int(self._r.get(self._model_tout_key(today, model)) or 0)
             cost = float(self._r.get(self._model_cost_key(today, model)) or 0)
             if tin or tout:
                 budget = self._model_token_budget(s, model)
                 models[model] = {
-                    "tokens_in":    tin,
-                    "tokens_out":   tout,
+                    "tokens_in": tin,
+                    "tokens_out": tout,
                     "tokens_total": tin + tout,
-                    "cost_usd":     round(cost, 6),
+                    "cost_usd": round(cost, 6),
                     "token_budget": budget or None,
                     "pct_of_budget": round((tin + tout) / budget * 100, 1) if budget else None,
                 }
 
         return {
-            "date":              today,
-            "total_cost_usd":    round(total, 6),
+            "date": today,
+            "total_cost_usd": round(total, 6),
             "daily_ceiling_usd": ceiling or None,
-            "pct_of_ceiling":    round(total / ceiling * 100, 1) if ceiling else None,
-            "remaining_usd":     round(max(ceiling - total, 0), 6) if ceiling else None,
+            "pct_of_ceiling": round(total / ceiling * 100, 1) if ceiling else None,
+            "remaining_usd": round(max(ceiling - total, 0), 6) if ceiling else None,
             "rate_limits": {
                 "per_minute": s.rate_limit_per_minute,
-                "per_hour":   s.rate_limit_per_hour,
+                "per_hour": s.rate_limit_per_hour,
             },
             "models": models,
         }
@@ -232,6 +245,7 @@ class CostTracker:
     def _update_prometheus(self, total_usd: float) -> None:
         try:
             from app.observability.prometheus_metrics import COST_DAILY_USD, COST_CEILING_USD
+
             COST_DAILY_USD.set(total_usd)
             COST_CEILING_USD.set(get_settings().daily_cost_ceiling_usd)
         except Exception:
@@ -254,7 +268,7 @@ class CostTracker:
     def _send_slack_alert(total_usd: float, ceiling: float, threshold: float, s) -> None:
         if not s.slack_bot_token:
             return
-        pct  = round(threshold * 100)
+        pct = round(threshold * 100)
         over = threshold >= 1.0
 
         if over:
@@ -273,10 +287,13 @@ class CostTracker:
         )
 
         try:
-            from slack_sdk import WebClient   # sync client — safe in thread pool
+            from slack_sdk import WebClient  # sync client — safe in thread pool
+
             channel = s.slack_alert_channel or "brain-alerts"
             WebClient(token=s.slack_bot_token).chat_postMessage(
-                channel=channel, text=text, mrkdwn=True,
+                channel=channel,
+                text=text,
+                mrkdwn=True,
             )
             logger.info("Budget alert posted to Slack | threshold={}%", pct)
         except Exception as exc:
@@ -289,6 +306,7 @@ cost_tracker = CostTracker()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _parse_thresholds(raw: str) -> list[float]:
     """Parse comma-separated threshold string, e.g. '0.5,0.8,1.0'."""

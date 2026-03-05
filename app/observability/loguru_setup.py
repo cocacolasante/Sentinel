@@ -67,11 +67,11 @@ def configure(log_dir: str = "/var/log/aibrain", level: str = "INFO") -> None:
     logger.add(
         log_path / "brain.json",
         level=level,
-        rotation="00:00",        # rotate at midnight
+        rotation="00:00",  # rotate at midnight
         retention="7 days",
         compression="gz",
-        serialize=True,          # writes each line as a JSON object
-        enqueue=True,            # non-blocking writes
+        serialize=True,  # writes each line as a JSON object
+        enqueue=True,  # non-blocking writes
     )
 
     # ── Intercept stdlib logging ───────────────────────────────────────────────

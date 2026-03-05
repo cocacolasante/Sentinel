@@ -23,6 +23,7 @@ router = APIRouter(prefix="/observe", tags=["observability"])
 
 # ── WebSocket stream ──────────────────────────────────────────────────────────
 
+
 @router.websocket("/stream")
 async def event_stream(websocket: WebSocket):
     """
@@ -48,11 +49,13 @@ async def event_stream(websocket: WebSocket):
     logger.info("Observe WS connected | subscribers={}", event_bus.subscriber_count)
 
     # Send a welcome event so the client knows the connection is live
-    await websocket.send_json({
-        "event": "connected",
-        "message": "Brain observability stream active",
-        "subscriber_count": event_bus.subscriber_count,
-    })
+    await websocket.send_json(
+        {
+            "event": "connected",
+            "message": "Brain observability stream active",
+            "subscriber_count": event_bus.subscriber_count,
+        }
+    )
 
     try:
         while True:
@@ -72,6 +75,7 @@ async def event_stream(websocket: WebSocket):
 
 
 # ── HTTP endpoints ────────────────────────────────────────────────────────────
+
 
 @router.get("/metrics")
 async def metrics():

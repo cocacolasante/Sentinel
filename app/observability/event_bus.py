@@ -21,20 +21,21 @@ from datetime import datetime, timezone
 
 # ── Metrics store ─────────────────────────────────────────────────────────────
 
+
 class MetricsStore:
     """In-memory rolling metrics. Not persisted — resets on restart."""
 
     def __init__(self) -> None:
-        self._start         = time.time()
-        self._total_req     = 0
-        self._total_errors  = 0
-        self._latencies_ms: list[float]   = []   # last 200 completed requests
-        self._intents:      dict[str, int] = defaultdict(int)
-        self._agents:       dict[str, int] = defaultdict(int)
-        self._models:       dict[str, int] = defaultdict(int)
+        self._start = time.time()
+        self._total_req = 0
+        self._total_errors = 0
+        self._latencies_ms: list[float] = []  # last 200 completed requests
+        self._intents: dict[str, int] = defaultdict(int)
+        self._agents: dict[str, int] = defaultdict(int)
+        self._models: dict[str, int] = defaultdict(int)
         self._token_totals: dict[str, int] = defaultdict(int)
-        self._recent:       deque[dict]    = deque(maxlen=100)
-        self._errors:       deque[dict]    = deque(maxlen=50)
+        self._recent: deque[dict] = deque(maxlen=100)
+        self._errors: deque[dict] = deque(maxlen=50)
 
     def record(self, event: dict) -> None:
         etype = event.get("event", "")
@@ -46,7 +47,7 @@ class MetricsStore:
         elif etype == "llm_called":
             model = event.get("model", "unknown")
             self._models[model] = self._models.get(model, 0) + 1
-            self._token_totals["input"]  = self._token_totals.get("input", 0)  + event.get("input_tokens", 0)
+            self._token_totals["input"] = self._token_totals.get("input", 0) + event.get("input_tokens", 0)
             self._token_totals["output"] = self._token_totals.get("output", 0) + event.get("output_tokens", 0)
 
         elif etype == "response_delivered":
@@ -55,9 +56,9 @@ class MetricsStore:
             if len(self._latencies_ms) > 200:
                 self._latencies_ms.pop(0)
             intent = event.get("intent", "unknown")
-            agent  = event.get("agent",  "unknown")
+            agent = event.get("agent", "unknown")
             self._intents[intent] = self._intents.get(intent, 0) + 1
-            self._agents[agent]   = self._agents.get(agent, 0)   + 1
+            self._agents[agent] = self._agents.get(agent, 0) + 1
             if event.get("error"):
                 self._total_errors += 1
                 self._errors.append(event)
@@ -72,8 +73,13 @@ class MetricsStore:
         """Update Prometheus counters/histograms. Silent no-op if prometheus_client unavailable."""
         try:
             from app.observability.prometheus_metrics import (
-                REQUESTS_TOTAL, RESPONSE_LATENCY, LLM_TOKENS, LLM_LATENCY, SKILL_LATENCY,
+                REQUESTS_TOTAL,
+                RESPONSE_LATENCY,
+                LLM_TOKENS,
+                LLM_LATENCY,
+                SKILL_LATENCY,
             )
+
             etype = event.get("event", "")
 
             if etype == "llm_called":
@@ -87,19 +93,18 @@ class MetricsStore:
                 SKILL_LATENCY.labels(skill=skill).observe(event.get("latency_ms", 0) / 1000)
 
             elif etype == "response_delivered":
-                intent  = event.get("intent", "unknown")
-                agent   = event.get("agent",  "unknown")
+                intent = event.get("intent", "unknown")
+                agent = event.get("agent", "unknown")
                 success = "false" if event.get("error") else "true"
                 REQUESTS_TOTAL.labels(intent=intent, agent=agent, success=success).inc()
-                RESPONSE_LATENCY.labels(intent=intent, agent=agent).observe(
-                    event.get("latency_ms", 0) / 1000
-                )
+                RESPONSE_LATENCY.labels(intent=intent, agent=agent).observe(event.get("latency_ms", 0) / 1000)
         except Exception:
             pass  # never let Prometheus errors break the event bus
 
     def snapshot(self) -> dict:
         lat = self._latencies_ms
         sorted_lat = sorted(lat) if lat else []
+
         def percentile(pct: float) -> float | None:
             if len(sorted_lat) < 10:
                 return None
@@ -107,28 +112,29 @@ class MetricsStore:
             return round(sorted_lat[min(idx, len(sorted_lat) - 1)], 1)
 
         return {
-            "uptime_seconds":  round(time.time() - self._start),
-            "total_requests":  self._total_req,
-            "total_errors":    self._total_errors,
-            "error_rate":      round(self._total_errors / self._total_req, 4) if self._total_req else 0.0,
+            "uptime_seconds": round(time.time() - self._start),
+            "total_requests": self._total_req,
+            "total_errors": self._total_errors,
+            "error_rate": round(self._total_errors / self._total_req, 4) if self._total_req else 0.0,
             "latency_ms": {
                 "avg": round(sum(lat) / len(lat), 1) if lat else None,
                 "p50": percentile(0.50),
                 "p95": percentile(0.95),
                 "p99": percentile(0.99),
             },
-            "intents":         dict(self._intents),
-            "agents":          dict(self._agents),
-            "models":          dict(self._models),
+            "intents": dict(self._intents),
+            "agents": dict(self._agents),
+            "models": dict(self._models),
             "tokens": {
-                "total_input":  self._token_totals.get("input", 0),
+                "total_input": self._token_totals.get("input", 0),
                 "total_output": self._token_totals.get("output", 0),
             },
-            "recent_errors":   list(self._errors)[-10:],
+            "recent_errors": list(self._errors)[-10:],
         }
 
 
 # ── Event bus ─────────────────────────────────────────────────────────────────
+
 
 class EventBus:
     def __init__(self) -> None:

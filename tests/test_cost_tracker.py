@@ -1,4 +1,5 @@
 """Unit tests for CostTracker — pure logic and mocked-Redis paths."""
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +11,7 @@ from app.brain.cost_tracker import (
 
 
 # ── _calc_usd (pure math, no external deps) ───────────────────────────────────
+
 
 def test_calc_usd_sonnet_per_million():
     # $3.00 input + $15.00 output per 1M tokens
@@ -47,6 +49,7 @@ def test_calc_usd_output_only():
 
 # ── _parse_thresholds (pure parsing) ─────────────────────────────────────────
 
+
 def test_parse_thresholds_normal():
     assert _parse_thresholds("0.5,0.8,1.0") == pytest.approx([0.5, 0.8, 1.0])
 
@@ -71,6 +74,7 @@ def test_parse_thresholds_single_value():
 
 # ── _model_token_budget ───────────────────────────────────────────────────────
 
+
 def test_model_token_budget_sonnet():
     s = MagicMock()
     s.sonnet_daily_token_budget = 500_000
@@ -91,6 +95,7 @@ def test_model_token_budget_unknown_is_zero():
 
 
 # ── check_budget (mocked Redis) ───────────────────────────────────────────────
+
 
 def _mock_settings(ceiling: float = 10.0, sonnet_budget: int = 0, haiku_budget: int = 0):
     s = MagicMock()

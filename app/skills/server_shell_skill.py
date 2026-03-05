@@ -98,16 +98,16 @@ _ENV_WRITE_RE = re.compile(
 # references /root/sentinel (the raw host path), /sentinel-project (old mount),
 # or bare /sentinel is unconditionally blocked.
 _PROTECTED_PATH_RE = re.compile(
-    r"/root/sentinel(?!/\s*-\s*workspace)(?:/|\s|['\"]|$)"   # /root/sentinel (not -workspace)
-    r"|/sentinel-project(?:/|\s|['\"]|$)"                     # old mount point
-    r"|(?<![a-zA-Z0-9_\-])/sentinel(?:/|\s|['\"]|$)",         # bare /sentinel
+    r"/root/sentinel(?!/\s*-\s*workspace)(?:/|\s|['\"]|$)"  # /root/sentinel (not -workspace)
+    r"|/sentinel-project(?:/|\s|['\"]|$)"  # old mount point
+    r"|(?<![a-zA-Z0-9_\-])/sentinel(?:/|\s|['\"]|$)",  # bare /sentinel
     re.IGNORECASE,
 )
 
 # Use the bind-mounted live host code when available, fall back to container /app
-_CODE_ROOT   = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
+_CODE_ROOT = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
 _DEFAULT_CWD = _CODE_ROOT
-_MAX_OUTPUT  = 8_000   # chars
+_MAX_OUTPUT = 8_000  # chars
 
 
 def _is_destructive(command: str) -> bool:
@@ -134,14 +134,14 @@ async def _run_command(command: str, cwd: str) -> tuple[str, int]:
             executable="/bin/bash",
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
-        output    = (stdout or b"").decode("utf-8", errors="replace")
-        code      = proc.returncode or 0
+        output = (stdout or b"").decode("utf-8", errors="replace")
+        code = proc.returncode or 0
     except asyncio.TimeoutError:
         output = "[Command timed out after 120 seconds]"
-        code   = -1
+        code = -1
     except FileNotFoundError:
         output = f"[Working directory not found: {cwd}]"
-        code   = -1
+        code = -1
 
     if len(output) > _MAX_OUTPUT:
         output = output[:_MAX_OUTPUT] + f"\n... [output truncated at {_MAX_OUTPUT} chars]"
@@ -150,7 +150,7 @@ async def _run_command(command: str, cwd: str) -> tuple[str, int]:
 
 
 class ServerShellSkill(BaseSkill):
-    name        = "server_shell"
+    name = "server_shell"
     description = (
         "Execute shell commands on the server — navigate filesystem, read/write files, "
         "search code with grep, create directories, run builds (npm, pip, docker), "
@@ -159,15 +159,15 @@ class ServerShellSkill(BaseSkill):
         "Pass command= for raw shell. Destructive commands (rm -rf, kill, etc.) require confirmation. "
         "git push/commit/pull, docker restart, and docker compose all execute immediately."
     )
-    trigger_intents  = ["server_shell"]
-    approval_category = ApprovalCategory.NONE   # set dynamically per command
+    trigger_intents = ["server_shell"]
+    approval_category = ApprovalCategory.NONE  # set dynamically per command
 
     def is_available(self) -> bool:
-        return True   # always available — no external credentials required
+        return True  # always available — no external credentials required
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
-        action     = (params.get("action") or "").strip().lower()
-        cwd        = (params.get("cwd") or _DEFAULT_CWD).rstrip("/") or _DEFAULT_CWD
+        action = (params.get("action") or "").strip().lower()
+        cwd = (params.get("cwd") or _DEFAULT_CWD).rstrip("/") or _DEFAULT_CWD
         background = str(params.get("background", "false")).lower() in ("true", "1", "yes")
         session_id = (params.get("session_id") or "").strip()
 
@@ -209,20 +209,18 @@ class ServerShellSkill(BaseSkill):
         elif action == "inspect_env":
             # Show all environment variables so the AI knows what integrations are configured.
             command = "printenv | sort"
-            cwd     = _DEFAULT_CWD
+            cwd = _DEFAULT_CWD
 
         elif action == "docker_restart":
-            service = (
-                params.get("service") or params.get("container") or "ai-brain"
-            ).strip()
+            service = (params.get("service") or params.get("container") or "ai-brain").strip()
             command = f"docker restart {shlex.quote(service)}"
-            cwd     = _DEFAULT_CWD
+            cwd = _DEFAULT_CWD
 
         elif action == "docker_compose":
             sub_cmd = (params.get("sub_command") or params.get("command") or "ps").strip()
             compose_file = _CODE_ROOT + "/docker-compose.yml"
             command = f"docker compose -f {shlex.quote(compose_file)} {sub_cmd}"
-            cwd     = _CODE_ROOT
+            cwd = _CODE_ROOT
 
         else:
             command = (params.get("command") or "").strip()
@@ -237,9 +235,7 @@ class ServerShellSkill(BaseSkill):
             )
 
         # Protected path block — /root/sentinel must never be accessed or modified
-        _check_targets = [command, cwd] + [
-            str(v) for k, v in params.items() if k in ("path", "search_path") and v
-        ]
+        _check_targets = [command, cwd] + [str(v) for k, v in params.items() if k in ("path", "search_path") and v]
         if any(_touches_protected_path(t) for t in _check_targets):
             return SkillResult(
                 context_data=(
@@ -265,9 +261,9 @@ class ServerShellSkill(BaseSkill):
             # Elevate this skill's approval category so the dispatcher always confirms
             self.approval_category = ApprovalCategory.BREAKING  # type: ignore[assignment]
             pending = {
-                "intent":   "server_shell",
-                "action":   "shell_exec",
-                "params":   params,
+                "intent": "server_shell",
+                "action": "shell_exec",
+                "params": params,
                 "original": original_message,
             }
             context = (
@@ -285,9 +281,9 @@ class ServerShellSkill(BaseSkill):
         # Destructive commands → confirmation flow
         if _is_destructive(command):
             pending = {
-                "intent":  "server_shell",
-                "action":  "shell_exec",
-                "params":  params,
+                "intent": "server_shell",
+                "action": "shell_exec",
+                "params": params,
                 "original": original_message,
             }
             context = (
@@ -308,12 +304,14 @@ class ServerShellSkill(BaseSkill):
             slack_ctx = None
             try:
                 from app.memory.redis_client import RedisMemory
+
                 slack_ctx = RedisMemory().get_slack_context(session_id)
             except Exception:
                 pass
 
             if slack_ctx:
                 from app.worker.tasks import run_shell_and_report_back
+
                 run_shell_and_report_back.delay(
                     commands=[command],
                     channel=slack_ctx["channel"],
@@ -343,14 +341,13 @@ class ServerShellSkill(BaseSkill):
         )
 
         # Log milestone for write-type safe commands (not pure reads like cat/ls/grep)
-        _is_milestone = (
-            action in ("docker_restart", "docker_compose")
-            or bool(_MILESTONE_CMD_RE.search(command))
-        )
+        _is_milestone = action in ("docker_restart", "docker_compose") or bool(_MILESTONE_CMD_RE.search(command))
         if code == 0 and _is_milestone:
+
             async def _notify() -> None:
                 try:
                     from app.integrations.milestone_logger import log_milestone
+
                     await log_milestone(
                         action=action or "shell_command",
                         intent="server_shell",
@@ -360,6 +357,7 @@ class ServerShellSkill(BaseSkill):
                     )
                 except Exception:
                     pass
+
             asyncio.create_task(_notify())
 
         return SkillResult(context_data=context, skill_name=self.name)

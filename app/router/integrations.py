@@ -16,44 +16,46 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.integrations.gmail           import GmailClient
+from app.integrations.gmail import GmailClient
 from app.integrations.google_calendar import CalendarClient
-from app.integrations.github          import GitHubClient
-from app.integrations.n8n_bridge      import N8nBridge
-from app.integrations.home_assistant  import HomeAssistantClient
+from app.integrations.github import GitHubClient
+from app.integrations.n8n_bridge import N8nBridge
+from app.integrations.home_assistant import HomeAssistantClient
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 logger = logging.getLogger(__name__)
 
 # Singletons
-gmail    = GmailClient()
+gmail = GmailClient()
 calendar = CalendarClient()
-github   = GitHubClient()
-n8n      = N8nBridge()
-ha       = HomeAssistantClient()
+github = GitHubClient()
+n8n = N8nBridge()
+ha = HomeAssistantClient()
 
 
 # ── Status ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/status")
 async def integration_status() -> dict:
     """Return configuration status for all Phase 2 integrations."""
     n8n_ok = await n8n.health()
-    ha_ok  = await ha.health() if ha.is_configured() else False
+    ha_ok = await ha.health() if ha.is_configured() else False
     return {
-        "gmail":          gmail.is_configured(),
-        "calendar":       calendar.is_configured(),
-        "github":         github.is_configured(),
-        "n8n":            {"configured": n8n.is_configured(), "reachable": n8n_ok},
-        "home_assistant": {"configured": ha.is_configured(),  "reachable": ha_ok},
+        "gmail": gmail.is_configured(),
+        "calendar": calendar.is_configured(),
+        "github": github.is_configured(),
+        "n8n": {"configured": n8n.is_configured(), "reachable": n8n_ok},
+        "home_assistant": {"configured": ha.is_configured(), "reachable": ha_ok},
     }
 
 
 # ── Gmail ─────────────────────────────────────────────────────────────────────
 
+
 @router.get("/gmail")
 async def list_emails(
-    query:       str = Query(default="is:unread", description="Gmail search query"),
+    query: str = Query(default="is:unread", description="Gmail search query"),
     max_results: int = Query(default=10, ge=1, le=50),
 ) -> list[dict]:
     if not gmail.is_configured():
@@ -62,6 +64,7 @@ async def list_emails(
 
 
 # ── Calendar ──────────────────────────────────────────────────────────────────
+
 
 @router.get("/calendar")
 async def list_events(
@@ -74,7 +77,7 @@ async def list_events(
 
 @router.get("/calendar/free-slots")
 async def free_slots(
-    date:         str = Query(..., description="Date in YYYY-MM-DD format"),
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
     duration_min: int = Query(default=60, ge=15, le=480),
 ) -> list[dict]:
     if not calendar.is_configured():
@@ -83,6 +86,7 @@ async def free_slots(
 
 
 # ── GitHub ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/github/notifications")
 async def github_notifications() -> list[dict]:
@@ -93,7 +97,7 @@ async def github_notifications() -> list[dict]:
 
 @router.get("/github/issues")
 async def github_issues(
-    repo:  str = Query(default="", description="owner/repo — defaults to GITHUB_DEFAULT_REPO"),
+    repo: str = Query(default="", description="owner/repo — defaults to GITHUB_DEFAULT_REPO"),
     state: str = Query(default="open"),
 ) -> list[dict]:
     if not github.is_configured():
@@ -103,7 +107,7 @@ async def github_issues(
 
 @router.get("/github/prs")
 async def github_prs(
-    repo:  str = Query(default=""),
+    repo: str = Query(default=""),
     state: str = Query(default="open"),
 ) -> list[dict]:
     if not github.is_configured():
@@ -112,6 +116,7 @@ async def github_prs(
 
 
 # ── Home Assistant ────────────────────────────────────────────────────────────
+
 
 @router.get("/home-assistant/states")
 async def ha_states(
@@ -130,9 +135,9 @@ async def ha_entity(entity_id: str) -> dict:
 
 
 class ServiceCall(BaseModel):
-    domain:  str
+    domain: str
     service: str
-    data:    dict = {}
+    data: dict = {}
 
 
 @router.post("/home-assistant/service")
@@ -144,9 +149,10 @@ async def ha_call_service(call: ServiceCall) -> dict:
 
 # ── n8n ───────────────────────────────────────────────────────────────────────
 
+
 class N8nTrigger(BaseModel):
     workflow: str
-    payload:  dict = {}
+    payload: dict = {}
 
 
 @router.post("/n8n/trigger")

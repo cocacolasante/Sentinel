@@ -25,11 +25,12 @@ _INSPECT_TIMEOUT = 3.0
 @router.get("/tasks")
 async def list_tasks():
     """Return active, reserved, and scheduled tasks across all workers."""
+
     def _inspect():
         i = celery_app.control.inspect(timeout=_INSPECT_TIMEOUT)
         return {
-            "active":    i.active()    or {},
-            "reserved":  i.reserved()  or {},
+            "active": i.active() or {},
+            "reserved": i.reserved() or {},
             "scheduled": i.scheduled() or {},
         }
 
@@ -45,6 +46,7 @@ async def revoke_task(
     terminate: bool = Query(False, description="Send SIGTERM to the running process"),
 ):
     """Revoke a task. Set terminate=true to kill a running task immediately."""
+
     def _revoke():
         celery_app.control.revoke(task_id, terminate=terminate, signal="SIGTERM")
 
@@ -55,6 +57,7 @@ async def revoke_task(
 @router.post("/workers/pause")
 async def pause_workers():
     """Cancel queue consumers on all workers — they finish the current task then stop."""
+
     def _pause():
         for queue in _QUEUES:
             celery_app.control.cancel_consumer(queue)
@@ -66,6 +69,7 @@ async def pause_workers():
 @router.post("/workers/resume")
 async def resume_workers():
     """Re-add queue consumers on all workers — they resume pulling tasks."""
+
     def _resume():
         for queue in _QUEUES:
             celery_app.control.add_consumer(queue)

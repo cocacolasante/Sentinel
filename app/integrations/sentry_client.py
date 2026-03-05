@@ -20,7 +20,7 @@ import httpx
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 SENTRY_BASE = "https://sentry.io/api/0"
@@ -28,8 +28,8 @@ SENTRY_BASE = "https://sentry.io/api/0"
 
 class SentryClient:
     def __init__(self) -> None:
-        self._token   = settings.sentry_auth_token
-        self._org     = settings.sentry_org
+        self._token = settings.sentry_auth_token
+        self._org = settings.sentry_org
         self._project = settings.sentry_project
 
     def is_configured(self) -> bool:
@@ -38,7 +38,7 @@ class SentryClient:
     def _headers(self) -> dict:
         return {
             "Authorization": f"Bearer {self._token}",
-            "Content-Type":  "application/json",
+            "Content-Type": "application/json",
         }
 
     # ── Sync internals ────────────────────────────────────────────────────────
@@ -46,8 +46,8 @@ class SentryClient:
     def _list_issues_sync(
         self,
         project: str | None = None,
-        query:   str        = "is:unresolved",
-        limit:   int        = 25,
+        query: str = "is:unresolved",
+        limit: int = 25,
     ) -> list[dict]:
         proj = project or self._project
         if proj:
@@ -85,19 +85,20 @@ class SentryClient:
     def _format_issue(raw: dict) -> dict:
         proj = raw.get("project", {})
         return {
-            "id":          raw.get("id", ""),
-            "title":       raw.get("title", ""),
-            "level":       raw.get("level", "error"),
-            "status":      raw.get("status", "unresolved"),
-            "project":     proj.get("slug", "") if isinstance(proj, dict) else str(proj),
-            "platform":    raw.get("platform", ""),
-            "count":       raw.get("count", 0),
-            "first_seen":  raw.get("firstSeen", ""),
-            "last_seen":   raw.get("lastSeen", ""),
-            "permalink":   raw.get("permalink", ""),
+            "id": raw.get("id", ""),
+            "title": raw.get("title", ""),
+            "level": raw.get("level", "error"),
+            "status": raw.get("status", "unresolved"),
+            "project": proj.get("slug", "") if isinstance(proj, dict) else str(proj),
+            "platform": raw.get("platform", ""),
+            "count": raw.get("count", 0),
+            "first_seen": raw.get("firstSeen", ""),
+            "last_seen": raw.get("lastSeen", ""),
+            "permalink": raw.get("permalink", ""),
             "assigned_to": (raw.get("assignedTo") or {}).get("email", "")
-                           if isinstance(raw.get("assignedTo"), dict) else "",
-            "culprit":     raw.get("culprit", ""),
+            if isinstance(raw.get("assignedTo"), dict)
+            else "",
+            "culprit": raw.get("culprit", ""),
         }
 
     # ── Public async API ──────────────────────────────────────────────────────
@@ -105,8 +106,8 @@ class SentryClient:
     async def list_issues(
         self,
         project: str | None = None,
-        query:   str        = "is:unresolved",
-        limit:   int        = 25,
+        query: str = "is:unresolved",
+        limit: int = 25,
     ) -> list[dict]:
         return await asyncio.to_thread(self._list_issues_sync, project, query, limit)
 

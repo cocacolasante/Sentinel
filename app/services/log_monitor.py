@@ -23,11 +23,11 @@ import httpx
 
 from app.services.error_logger import error_collector
 
-_LOKI_URL           = "http://loki:3100"
-_QUERY              = '{job="docker"} |~ "(?i)(error|exception|traceback|critical|warning)"'
-_POLL_INTERVAL      = 3600  # 1 hour between polls
-_LOOK_BACK          = 3600  # look back 1 hour on the very first poll
-_MAX_TASKS_PER_POLL = 5     # max new tasks created per poll cycle
+_LOKI_URL = "http://loki:3100"
+_QUERY = '{job="docker"} |~ "(?i)(error|exception|traceback|critical|warning)"'
+_POLL_INTERVAL = 3600  # 1 hour between polls
+_LOOK_BACK = 3600  # look back 1 hour on the very first poll
+_MAX_TASKS_PER_POLL = 5  # max new tasks created per poll cycle
 
 
 def _classify_line(line: str) -> str:
@@ -63,21 +63,19 @@ class LogMonitor:
     async def _poll(self) -> None:
         """Fetch new lines from Loki, bucket by (service, error_type), submit top N."""
         start_ns = self._last_ts_ns + 1
-        end_ns   = int(time.time()) * 1_000_000_000
+        end_ns = int(time.time()) * 1_000_000_000
 
         params = {
-            "query":     _QUERY,
-            "start":     str(start_ns),
-            "end":       str(end_ns),
-            "limit":     "2000",
+            "query": _QUERY,
+            "start": str(start_ns),
+            "end": str(end_ns),
+            "limit": "2000",
             "direction": "forward",
         }
 
         try:
             async with httpx.AsyncClient(timeout=20) as client:
-                resp = await client.get(
-                    f"{_LOKI_URL}/loki/api/v1/query_range", params=params
-                )
+                resp = await client.get(f"{_LOKI_URL}/loki/api/v1/query_range", params=params)
             if resp.status_code != 200:
                 logger.warning("Loki returned {}: {}", resp.status_code, resp.text[:200])
                 return
@@ -129,7 +127,9 @@ class LogMonitor:
         total_lines = sum(len(v) for v in buckets.values())
         logger.info(
             "LogMonitor: {} line(s) -> {} bucket(s), submitting top {}",
-            total_lines, len(ranked), _MAX_TASKS_PER_POLL,
+            total_lines,
+            len(ranked),
+            _MAX_TASKS_PER_POLL,
         )
 
         submitted = 0
@@ -137,10 +137,7 @@ class LogMonitor:
             if submitted >= _MAX_TASKS_PER_POLL:
                 break
             sample = lines[0][:300]
-            summary = (
-                f"{len(lines)} occurrence(s) in the last hour.\n"
-                f"Sample: {sample}"
-            )
+            summary = f"{len(lines)} occurrence(s) in the last hour.\nSample: {sample}"
             created = await error_collector.log_error(
                 service=service,
                 error_type=error_type,
@@ -159,10 +156,7 @@ class LogMonitor:
         for entry in error_collector.error_buffer:
             svc = entry["service"]
             services[svc] = services.get(svc, 0) + 1
-        return {
-            svc: {"error_count": cnt, "source": "loki"}
-            for svc, cnt in services.items()
-        }
+        return {svc: {"error_count": cnt, "source": "loki"} for svc, cnt in services.items()}
 
 
 log_monitor = LogMonitor()

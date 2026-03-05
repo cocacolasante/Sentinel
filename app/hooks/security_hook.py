@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class SecurityHook(BaseHook):
-    name   = "security"
+    name = "security"
     events = [HookEvent.PRE_PROCESS]
 
     async def handle(self, ctx: HookContext) -> HookContext:
@@ -19,7 +19,9 @@ class SecurityHook(BaseHook):
             if pattern.search(ctx.message):
                 logger.warning(
                     "Injection blocked | session=%s | pattern=%s | msg=%.80s",
-                    ctx.session_id, pattern.pattern, ctx.message,
+                    ctx.session_id,
+                    pattern.pattern,
+                    ctx.message,
                 )
                 ctx.metadata["blocked"] = True
                 ctx.metadata["blocked_reply"] = (

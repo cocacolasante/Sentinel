@@ -17,10 +17,12 @@ class GitHubReadSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.github import GitHubClient
+
         return GitHubClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.github import GitHubClient
+
         client = GitHubClient()
         if not client.is_configured():
             return SkillResult(
@@ -28,7 +30,7 @@ class GitHubReadSkill(BaseSkill):
                 skill_name=self.name,
             )
         resource = params.get("resource", "notifications")
-        repo     = params.get("repo", "")
+        repo = params.get("repo", "")
         if resource == "issues":
             data = await client.list_issues(repo)
         elif resource == "prs":
@@ -46,19 +48,21 @@ class GitHubWriteSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.github import GitHubClient
+
         return GitHubClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.github import GitHubClient
+
         client = GitHubClient()
         if not client.is_configured():
             return SkillResult(context_data="[GitHub not configured]", skill_name=self.name)
         action = params.get("action", "create_issue")
         if action == "create_issue":
             result = await client.create_issue(
-                repo  = params.get("repo", settings.github_default_repo),
-                title = params.get("title", "New issue"),
-                body  = params.get("body", ""),
+                repo=params.get("repo", settings.github_default_repo),
+                title=params.get("title", "New issue"),
+                body=params.get("body", ""),
             )
             return SkillResult(context_data=json.dumps(result, indent=2), skill_name=self.name)
         return SkillResult(

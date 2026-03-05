@@ -18,10 +18,7 @@ class ErrorCollectionMiddleware(BaseHTTPMiddleware):
                 await error_collector.log_error(
                     service="fastapi-brain",
                     error_type="http_error",
-                    message=(
-                        f"HTTP {response.status_code} on "
-                        f"{request.method} {request.url.path}"
-                    ),
+                    message=(f"HTTP {response.status_code} on {request.method} {request.url.path}"),
                     context={
                         "method": request.method,
                         "path": request.url.path,

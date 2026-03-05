@@ -21,11 +21,12 @@ class ContactsReadSkill(BaseSkill):
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.contacts import ContactsClient
+
         client = ContactsClient()
 
         action = params.get("action", "search")
-        query  = params.get("query", params.get("name", ""))
-        email  = params.get("email", "")
+        query = params.get("query", params.get("name", ""))
+        email = params.get("email", "")
 
         if action == "list" or (not query and not email):
             contacts = await client.get_all(limit=50)
@@ -37,7 +38,9 @@ class ContactsReadSkill(BaseSkill):
         if action == "lookup_email" or email:
             contact = await client.get_by_email(email)
             return SkillResult(
-                context_data=json.dumps(contact, indent=2, default=str) if contact else f"[No contact with email {email}]",
+                context_data=json.dumps(contact, indent=2, default=str)
+                if contact
+                else f"[No contact with email {email}]",
                 skill_name=self.name,
             )
 
@@ -63,12 +66,12 @@ class ContactsWriteSkill(BaseSkill):
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         action = params.get("action", "add")
-        name   = params.get("name", "")
+        name = params.get("name", "")
 
         pending = {
-            "intent":   "contacts_write",
-            "action":   action,
-            "params":   params,
+            "intent": "contacts_write",
+            "action": action,
+            "params": params,
             "original": original_message,
         }
 
@@ -78,8 +81,10 @@ class ContactsWriteSkill(BaseSkill):
                     context_data="[contacts_write requires at least a name to add a contact]",
                     skill_name=self.name,
                 )
-            fields = {k: params.get(k, "") for k in
-                      ("email", "phone", "whatsapp", "company", "github", "slack_id", "tags", "notes")}
+            fields = {
+                k: params.get(k, "")
+                for k in ("email", "phone", "whatsapp", "company", "github", "slack_id", "tags", "notes")
+            }
             field_summary = "\n".join(f"  {k}: {v}" for k, v in fields.items() if v)
             context = (
                 f"Show the user the contact that is about to be added and ask them to confirm:\n\n"

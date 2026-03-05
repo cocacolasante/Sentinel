@@ -26,7 +26,7 @@ class ErrorCollector:
         has elapsed. Returns True if a task was created, False otherwise.
         """
         # Validate service name — reject 'unknown' or empty services
-        if not service or service.lower() == 'unknown':
+        if not service or service.lower() == "unknown":
             logger.warning(
                 "Rejecting error log with invalid service name: {}",
                 service or "<empty>",
@@ -64,9 +64,7 @@ class ErrorCollector:
     async def _create_remediation_task(self, error_record: Dict[str, Any]) -> None:
         """Insert a pending, approval-required task into the task board."""
         try:
-            task_title = (
-                f"[AUTO] Fix {error_record['service']} - {error_record['error_type']}"
-            )
+            task_title = f"[AUTO] Fix {error_record['service']} - {error_record['error_type']}"
             task_description = (
                 f"Service: {error_record['service']}\n"
                 f"Error Type: {error_record['error_type']}\n"
@@ -76,9 +74,8 @@ class ErrorCollector:
                 f"Stacktrace:\n{error_record['stacktrace'] or 'N/A'}"
             )
             from app.db import postgres
-            tags = json.dumps(
-                ["auto-generated", "error-handling", error_record["service"]]
-            )
+
+            tags = json.dumps(["auto-generated", "error-handling", error_record["service"]])
             postgres.execute(
                 """
                 INSERT INTO tasks (title, description, status, priority, priority_num,
@@ -89,7 +86,8 @@ class ErrorCollector:
             )
             logger.info(
                 "Queued approval-required task for {} ({})",
-                error_record["service"], error_record["error_type"],
+                error_record["service"],
+                error_record["error_type"],
             )
         except Exception as e:
             logger.error("Failed to create remediation task: {}", e)

@@ -30,7 +30,7 @@ import anthropic
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # ── Prompt ────────────────────────────────────────────────────────────────────
@@ -237,6 +237,7 @@ chat            — anything else: analysis, writing, questions, conversation"""
 
 # ── Classifier ────────────────────────────────────────────────────────────────
 
+
 class IntentClassifier:
     def __init__(self) -> None:
         self._client: anthropic.Anthropic | None = None
@@ -257,7 +258,7 @@ class IntentClassifier:
             return ""
         # history is a flat list: [user, assistant, user, assistant, ...]
         # Take only the most recent pairs
-        pairs = history[-(max_turns * 2):]
+        pairs = history[-(max_turns * 2) :]
         lines = ["Recent conversation (use this to understand follow-up messages):"]
         for turn in pairs:
             role = "User" if turn.get("role") == "user" else "Assistant"
@@ -297,16 +298,18 @@ class IntentClassifier:
                 model="claude-haiku-4-5-20251001",
                 max_tokens=300,
                 system=_SYSTEM,
-                messages=[{
-                    "role": "user",
-                    "content": _USER_TEMPLATE.format(
-                        message=message,
-                        available_skills=skill_list,
-                        today=_date.today().isoformat(),
-                        recent_context=recent_context,
-                        followup_hint=followup_hint,
-                    ),
-                }],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": _USER_TEMPLATE.format(
+                            message=message,
+                            available_skills=skill_list,
+                            today=_date.today().isoformat(),
+                            recent_context=recent_context,
+                            followup_hint=followup_hint,
+                        ),
+                    }
+                ],
             )
             raw = response.content[0].text.strip()
             # Strip any accidental markdown fences
@@ -315,7 +318,9 @@ class IntentClassifier:
                 if raw.startswith("json"):
                     raw = raw[4:]
             result = json.loads(raw)
-            logger.debug("Intent: %s (%.2f) params=%s", result.get("intent"), result.get("confidence"), result.get("params"))
+            logger.debug(
+                "Intent: %s (%.2f) params=%s", result.get("intent"), result.get("confidence"), result.get("params")
+            )
             return result
         except Exception as exc:
             logger.warning("Intent classification failed (%s) — defaulting to chat", exc)

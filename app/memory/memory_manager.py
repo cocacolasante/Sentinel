@@ -24,9 +24,9 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
-from app.memory.redis_client    import RedisMemory
+from app.memory.redis_client import RedisMemory
 from app.memory.postgres_memory import PostgresMemory
-from app.memory.qdrant_client   import QdrantMemory
+from app.memory.qdrant_client import QdrantMemory
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +36,10 @@ _HIGH_SIGNAL_MIN_LENGTH = 200
 
 @dataclass
 class MemoryContext:
-    hot_history:           list[dict] = field(default_factory=list)
-    warm_summary:          str        = ""
-    cold_matches:          list[dict] = field(default_factory=list)
-    cross_session_context: str        = ""   # from the shared primary session
+    hot_history: list[dict] = field(default_factory=list)
+    warm_summary: str = ""
+    cold_matches: list[dict] = field(default_factory=list)
+    cross_session_context: str = ""  # from the shared primary session
 
 
 class MemoryManager:
@@ -55,14 +55,14 @@ class MemoryManager:
         flush_interval_turns: int = 10,
         primary_session: str = "brain",
     ) -> None:
-        self.redis    = RedisMemory()
+        self.redis = RedisMemory()
         self.postgres = PostgresMemory(dsn=postgres_dsn)
-        self.qdrant   = QdrantMemory(
+        self.qdrant = QdrantMemory(
             host=qdrant_host,
             port=qdrant_port,
             collection=qdrant_collection,
         )
-        self._flush_interval  = flush_interval_turns
+        self._flush_interval = flush_interval_turns
         self._primary_session = primary_session
         # Turn counts per session (resets on restart — acceptable)
         self._turn_counts: dict[str, int] = {}
@@ -76,13 +76,11 @@ class MemoryManager:
         """
         hot_history = self.redis.get_history(session_id)
 
-        warm_task  = asyncio.to_thread(self._get_warm_summary,          session_id, hot_history)
-        cold_task  = self.qdrant.search_relevant_context(message, limit=4)
+        warm_task = asyncio.to_thread(self._get_warm_summary, session_id, hot_history)
+        cold_task = self.qdrant.search_relevant_context(message, limit=4)
         cross_task = asyncio.to_thread(self._get_cross_session_context, session_id)
 
-        warm_summary, cold_matches, cross_ctx = await asyncio.gather(
-            warm_task, cold_task, cross_task
-        )
+        warm_summary, cold_matches, cross_ctx = await asyncio.gather(warm_task, cold_task, cross_task)
 
         return MemoryContext(
             hot_history=hot_history,
@@ -132,9 +130,7 @@ class MemoryManager:
 
         # ── Warm (per-interface) ───────────────────────────────────────────────
         if turn_count % self._flush_interval == 0:
-            asyncio.create_task(
-                self.flush_session_to_postgres(session_id, intent=intent)
-            )
+            asyncio.create_task(self.flush_session_to_postgres(session_id, intent=intent))
 
         # ── Cross-interface: feed the primary session ──────────────────────────
         # Every turn from any interface is also stored under the primary session
@@ -154,9 +150,7 @@ class MemoryManager:
                 )
             )
 
-    async def _cross_post_to_primary(
-        self, user_msg: str, assistant_msg: str, intent: str
-    ) -> None:
+    async def _cross_post_to_primary(self, user_msg: str, assistant_msg: str, intent: str) -> None:
         """
         Store this turn in the primary session's Postgres conversations table
         and periodically regenerate the primary session's warm summary.
@@ -166,19 +160,15 @@ class MemoryManager:
                 self.postgres.store_session,
                 self._primary_session,
                 [
-                    {"role": "user",      "content": user_msg},
+                    {"role": "user", "content": user_msg},
                     {"role": "assistant", "content": assistant_msg},
                 ],
                 intent,
             )
             # Refresh primary session summary every flush_interval cross-posts
-            self._turn_counts[self._primary_session] = (
-                self._turn_counts.get(self._primary_session, 0) + 1
-            )
+            self._turn_counts[self._primary_session] = self._turn_counts.get(self._primary_session, 0) + 1
             if self._turn_counts[self._primary_session] % self._flush_interval == 0:
-                asyncio.create_task(
-                    self.flush_session_to_postgres(self._primary_session, intent=intent)
-                )
+                asyncio.create_task(self.flush_session_to_postgres(self._primary_session, intent=intent))
         except Exception as exc:
             logger.debug("Cross-post to primary session failed (non-fatal): %s", exc)
 
@@ -196,12 +186,8 @@ class MemoryManager:
             return
 
         try:
-            await asyncio.to_thread(
-                self.postgres.store_session, session_id, history, intent
-            )
-            summary = await asyncio.to_thread(
-                self.postgres.generate_summary, history
-            )
+            await asyncio.to_thread(self.postgres.store_session, session_id, history, intent)
+            summary = await asyncio.to_thread(self.postgres.generate_summary, history)
             if summary:
                 await asyncio.to_thread(
                     self.postgres.store_summary,

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.config import get_settings
 from app.learning.feedback_store import FeedbackStore
 
-router   = APIRouter(prefix="/feedback", tags=["feedback"])
+router = APIRouter(prefix="/feedback", tags=["feedback"])
 settings = get_settings()
 
 
@@ -23,21 +23,23 @@ def _store() -> FeedbackStore:
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class RateRequest(BaseModel):
-    session_id:    str          = Field(..., max_length=128)
-    message_index: int          = Field(default=0, ge=0)
-    rating:        int          = Field(..., ge=1, le=10)
-    comment:       str | None   = Field(default=None, max_length=1000)
-    intent:        str          = Field(default="chat", max_length=64)
+    session_id: str = Field(..., max_length=128)
+    message_index: int = Field(default=0, ge=0)
+    rating: int = Field(..., ge=1, le=10)
+    comment: str | None = Field(default=None, max_length=1000)
+    intent: str = Field(default="chat", max_length=64)
 
 
 class ThumbsRequest(BaseModel):
-    session_id:    str  = Field(..., max_length=128)
-    message_index: int  = Field(default=0, ge=0)
-    positive:      bool
+    session_id: str = Field(..., max_length=128)
+    message_index: int = Field(default=0, ge=0)
+    positive: bool
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.post("/rate")
 async def rate_interaction(req: RateRequest):
@@ -53,10 +55,10 @@ async def rate_interaction(req: RateRequest):
     if rating_id < 0:
         raise HTTPException(status_code=500, detail="Failed to store rating")
     return {
-        "id":            rating_id,
-        "session_id":    req.session_id,
+        "id": rating_id,
+        "session_id": req.session_id,
         "message_index": req.message_index,
-        "rating":        req.rating,
+        "rating": req.rating,
         "qdrant_seeded": req.rating >= 8,
     }
 
@@ -75,8 +77,8 @@ async def thumbs(req: ThumbsRequest):
     if rating_id < 0:
         raise HTTPException(status_code=500, detail="Failed to store rating")
     return {
-        "id":      rating_id,
-        "rating":  mapped_rating,
+        "id": rating_id,
+        "rating": mapped_rating,
         "positive": req.positive,
     }
 

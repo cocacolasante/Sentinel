@@ -13,21 +13,22 @@ import uuid
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
 class QdrantMemory:
     def __init__(self, host: str, port: int, collection: str) -> None:
-        self._host       = host
-        self._port       = port
+        self._host = host
+        self._port = port
         self._collection = collection
-        self._client     = None
+        self._client = None
 
     @property
     def client(self):
         if self._client is None:
             from qdrant_client import QdrantClient  # type: ignore
+
             self._client = QdrantClient(host=self._host, port=self._port)
         return self._client
 
@@ -37,6 +38,7 @@ class QdrantMemory:
         """Create the Qdrant collection if it does not exist."""
         try:
             from qdrant_client.http.models import Distance, VectorParams  # type: ignore
+
             existing = [c.name for c in self.client.get_collections().collections]
             if self._collection not in existing:
                 self.client.create_collection(
@@ -59,6 +61,7 @@ class QdrantMemory:
         if settings.openai_api_key:
             try:
                 import openai  # type: ignore
+
                 client = openai.OpenAI(api_key=settings.openai_api_key)
                 resp = client.embeddings.create(
                     model=settings.openai_embedding_model,
@@ -80,16 +83,17 @@ class QdrantMemory:
     ) -> str:
         """Embed and store content in Qdrant. Returns the point UUID."""
         content_hash = hashlib.sha256(content.encode()).hexdigest()
-        point_id     = str(uuid.uuid4())
-        vector       = self._get_embedding(content)
-        payload      = {
-            "session_id":    session_id,
-            "content":       content[:2000],
-            "content_hash":  content_hash,
+        point_id = str(uuid.uuid4())
+        vector = self._get_embedding(content)
+        payload = {
+            "session_id": session_id,
+            "content": content[:2000],
+            "content_hash": content_hash,
             **(metadata or {}),
         }
         try:
             from qdrant_client.http.models import PointStruct  # type: ignore
+
             self.client.upsert(
                 collection_name=self._collection,
                 points=[PointStruct(id=point_id, vector=vector, payload=payload)],
@@ -109,11 +113,7 @@ class QdrantMemory:
                 query_vector=vector,
                 limit=limit,
             )
-            return [
-                {"score": r.score, **r.payload}
-                for r in results
-                if r.score > 0.75
-            ]
+            return [{"score": r.score, **r.payload} for r in results if r.score > 0.75]
         except Exception as exc:
             logger.warning("Qdrant search failed: %s", exc)
             return []
@@ -121,4 +121,5 @@ class QdrantMemory:
     async def search_relevant_context(self, query: str, limit: int = 5) -> list[dict]:
         """Async-friendly wrapper around search()."""
         import asyncio
+
         return await asyncio.to_thread(self.search, query, limit)

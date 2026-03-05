@@ -1,4 +1,5 @@
 """Unit tests for app.router.task_board helpers and Pydantic models."""
+
 import pytest
 from app.router.task_board import (
     TaskCreate,
@@ -11,6 +12,7 @@ from app.router.task_board import (
 
 
 # ── _enrich() ─────────────────────────────────────────────────────────────────
+
 
 def test_enrich_adds_priority_label():
     row = {"id": 1, "title": "Fix bug", "priority_num": 5, "approval_level": 1}
@@ -65,6 +67,7 @@ def test_enrich_does_not_mutate_input():
 
 # ── Priority / approval label maps ────────────────────────────────────────────
 
+
 def test_priority_to_text_covers_all_levels():
     for level in range(1, 6):
         assert level in _PRIORITY_TO_TEXT
@@ -80,6 +83,7 @@ def test_approval_label_covers_all_levels():
 
 
 # ── TaskCreate Pydantic model ─────────────────────────────────────────────────
+
 
 def test_task_create_defaults():
     task = TaskCreate(title="My task")
@@ -113,6 +117,7 @@ def test_task_create_requires_title():
 
 
 # ── TaskUpdate Pydantic model ─────────────────────────────────────────────────
+
 
 def test_task_update_all_optional():
     """TaskUpdate with no fields should be valid (all Optional)."""

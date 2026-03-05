@@ -10,31 +10,31 @@ from __future__ import annotations
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
-_PRIORITY_LABEL  = {
+_PRIORITY_LABEL = {
     1: "🟢 Low (1)",
     2: "🔵 Minor (2)",
     3: "🟡 Normal (3)",
     4: "🟠 High (4)",
     5: "🔴 Critical (5)",
 }
-_APPROVAL_LABEL  = {
+_APPROVAL_LABEL = {
     1: "auto-approve",
     2: "needs review",
     3: "requires sign-off",
 }
 _STATUS_EMOJI = {
-    "pending":     "⏳",
+    "pending": "⏳",
     "in_progress": "🔄",
-    "done":        "✅",
-    "cancelled":   "❌",
+    "done": "✅",
+    "cancelled": "❌",
 }
 _PRIORITY_TO_TEXT = {1: "low", 2: "low", 3: "normal", 4: "high", 5: "urgent"}
 _TEXT_TO_PRIORITY = {"low": 1, "normal": 3, "high": 4, "urgent": 5}
 
 
 def _fmt_task(row: dict) -> str:
-    pri  = row.get("priority_num") or _TEXT_TO_PRIORITY.get(row.get("priority", "normal"), 3)
-    app  = row.get("approval_level", 2)
+    pri = row.get("priority_num") or _TEXT_TO_PRIORITY.get(row.get("priority", "normal"), 3)
+    app = row.get("approval_level", 2)
     stat = row.get("status", "pending")
     line = (
         f"{_STATUS_EMOJI.get(stat, '?')} **#{row['id']}** {row['title']}\n"
@@ -52,8 +52,8 @@ def _fmt_task(row: dict) -> str:
 
 
 class TaskCreateSkill(BaseSkill):
-    name            = "task_create"
-    description     = (
+    name = "task_create"
+    description = (
         "Create a new task with a title, optional description, priority 1–5 "
         "(1=low, 5=critical), and approval level 1–3 (1=auto-approve, 3=requires sign-off). "
         "Use this when the user asks to track, create, or add a task."
@@ -79,15 +79,15 @@ class TaskCreateSkill(BaseSkill):
             combined = "\n\n---\n\n".join(results)
             return SkillResult(context_data=combined, skill_name=self.name)
 
-        title          = (params.get("title") or "").strip()
-        description    = params.get("description", "")
-        priority_num   = max(1, min(5, int(params.get("priority", 3))))
+        title = (params.get("title") or "").strip()
+        description = params.get("description", "")
+        priority_num = max(1, min(5, int(params.get("priority", 3))))
         approval_level = max(1, min(3, int(params.get("approval_level", 2))))
-        due_date       = params.get("due_date") or None
-        source         = params.get("source", "brain")
-        tags           = params.get("tags") or None
-        assigned_to    = params.get("assigned_to") or None
-        session_id     = (params.get("session_id") or "").strip()
+        due_date = params.get("due_date") or None
+        source = params.get("source", "brain")
+        tags = params.get("tags") or None
+        assigned_to = params.get("assigned_to") or None
+        session_id = (params.get("session_id") or "").strip()
 
         # blocked_by: list of task IDs that must be done before this task runs
         raw_blocked = params.get("blocked_by") or []
@@ -109,7 +109,8 @@ class TaskCreateSkill(BaseSkill):
 
         # Auto-detect queue: workspace tasks serialised, everything else parallel
         from app.worker.tasks import _touches_workspace
-        uses_workspace  = _touches_workspace(commands)
+
+        uses_workspace = _touches_workspace(commands)
         execution_queue = "tasks_workspace" if uses_workspace else "tasks_general"
         # Allow explicit override
         if params.get("execution_queue"):
@@ -117,15 +118,12 @@ class TaskCreateSkill(BaseSkill):
 
         if not title:
             return SkillResult(
-                context_data=(
-                    "[task_create requires a task title. "
-                    "Ask the user: what should the task be called?]"
-                ),
+                context_data=("[task_create requires a task title. Ask the user: what should the task be called?]"),
                 skill_name=self.name,
             )
 
-        priority_text  = _PRIORITY_TO_TEXT[priority_num]
-        commands_json  = _json.dumps(commands)
+        priority_text = _PRIORITY_TO_TEXT[priority_num]
+        commands_json = _json.dumps(commands)
         blocked_by_json = _json.dumps(blocked_by)
 
         # Look up stored Slack context so the task can report back
@@ -133,9 +131,10 @@ class TaskCreateSkill(BaseSkill):
         if session_id:
             try:
                 from app.memory.redis_client import RedisMemory
+
                 ctx = RedisMemory().get_slack_context(session_id)
                 if ctx:
-                    slack_channel   = ctx.get("channel")
+                    slack_channel = ctx.get("channel")
                     slack_thread_ts = ctx.get("thread_ts")
             except Exception:
                 pass
@@ -155,9 +154,20 @@ class TaskCreateSkill(BaseSkill):
                           due_date, source, tags, assigned_to, created_at, blocked_by
                 """,
                 (
-                    title, description, priority_text, priority_num, approval_level,
-                    due_date, source, tags, assigned_to,
-                    commands_json, execution_queue, slack_channel, slack_thread_ts, session_id or None,
+                    title,
+                    description,
+                    priority_text,
+                    priority_num,
+                    approval_level,
+                    due_date,
+                    source,
+                    tags,
+                    assigned_to,
+                    commands_json,
+                    execution_queue,
+                    slack_channel,
+                    slack_thread_ts,
+                    session_id or None,
                     blocked_by_json,
                 ),
             )
@@ -165,16 +175,18 @@ class TaskCreateSkill(BaseSkill):
             return SkillResult(context_data=f"[task_create failed: {exc}]", skill_name=self.name)
 
         queue_note = ""
-        celery_id  = None
+        celery_id = None
 
         # Auto-queue if commands were provided
         if commands:
             # Tasks with approval_level >= 2 require owner sign-off before running
             if approval_level >= 2:
                 from app.config import get_settings as _gs
+
                 _s = _gs()
                 if _s.slack_owner_user_id and _s.slack_bot_token:
                     from app.integrations.slack_notifier import post_dm_sync, post_alert_sync
+
                     _domain = _s.domain or "sentinelai.cloud"
                     _dm_text = (
                         f"🔐 *Approval needed — Task #{row['id']}*\n"
@@ -198,6 +210,7 @@ class TaskCreateSkill(BaseSkill):
             else:
                 try:
                     from app.worker.tasks import execute_board_task
+
                     result = execute_board_task.apply_async(
                         args=[row["id"]],
                         queue=execution_queue,
@@ -226,8 +239,8 @@ class TaskCreateSkill(BaseSkill):
 
 
 class TaskReadSkill(BaseSkill):
-    name            = "task_read"
-    description     = (
+    name = "task_read"
+    description = (
         "List, filter, or view tasks. Filter by status, priority, or ID. "
         "Use this when the user asks to see, list, show, or check tasks."
     )
@@ -237,11 +250,11 @@ class TaskReadSkill(BaseSkill):
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.db import postgres
 
-        action   = params.get("action", "list")
-        task_id  = params.get("id") or params.get("task_id")
-        status   = params.get("status")
+        action = params.get("action", "list")
+        task_id = params.get("id") or params.get("task_id")
+        status = params.get("status")
         priority = params.get("priority")
-        limit    = max(1, min(100, int(params.get("limit", 20))))
+        limit = max(1, min(100, int(params.get("limit", 20))))
 
         # Single task lookup
         if action == "get" and task_id:
@@ -280,7 +293,7 @@ class TaskReadSkill(BaseSkill):
                 conditions.append("priority = %s")
                 values.append(str(priority))
 
-        where  = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         values.append(limit)
 
         rows = postgres.execute(
@@ -314,23 +327,20 @@ class TaskReadSkill(BaseSkill):
 
 
 class TaskUpdateSkill(BaseSkill):
-    name            = "task_update"
-    description     = (
+    name = "task_update"
+    description = (
         "Update a task — change its status (pending/in_progress/done/cancelled), "
         "priority (1–5), approval level (1–3), title, or description. "
         "Requires a task ID."
     )
-    trigger_intents   = ["task_update"]
+    trigger_intents = ["task_update"]
     approval_category = ApprovalCategory.STANDARD
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         task_id = params.get("id") or params.get("task_id")
         if not task_id:
             return SkillResult(
-                context_data=(
-                    "[task_update requires a task ID. "
-                    "Ask the user which task they want to update.]"
-                ),
+                context_data=("[task_update requires a task ID. Ask the user which task they want to update.]"),
                 skill_name=self.name,
             )
 
@@ -388,8 +398,8 @@ class TaskUpdateSkill(BaseSkill):
         return SkillResult(
             context_data=context,
             pending_action={
-                "action":   "task_update",
-                "params":   params,
+                "action": "task_update",
+                "params": params,
                 "original": original_message,
             },
             skill_name=self.name,

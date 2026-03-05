@@ -53,36 +53,39 @@ def _print_integration_table(results) -> None:
     for r in results:
         status = "✅ PASS" if r.passed else "❌ FAIL"
         latency = f"{r.latency_ms:.0f}ms" if r.latency_ms else "n/a"
-        error   = f"  → {r.error}" if r.error else ""
+        error = f"  → {r.error}" if r.error else ""
         print(f"  {status}  {r.integration:<20} {latency}{error}")
     print("=" * 60)
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Brain Eval Runner")
-    parser.add_argument("--agent",   help="Run evals for one agent only (engineer, writer, etc.)")
-    parser.add_argument("--test",    help="Run a single test case by name (e.g. test_01_write_function)")
+    parser.add_argument("--agent", help="Run evals for one agent only (engineer, writer, etc.)")
+    parser.add_argument("--test", help="Run a single test case by name (e.g. test_01_write_function)")
     parser.add_argument("--nightly", action="store_true", help="Run integration reliability checks")
-    parser.add_argument("--slack",   action="store_true", help="Post results to Slack after running")
+    parser.add_argument("--slack", action="store_true", help="Post results to Slack after running")
     parser.add_argument("--no-save", action="store_true", help="Skip saving results to Postgres")
     args = parser.parse_args()
 
     if args.nightly:
         print("Running nightly integration evals...")
         from app.evals.integrations import run_all_integration_evals
+
         results = await run_all_integration_evals()
         _print_integration_table(results)
         if args.slack:
             from app.evals.reporter import post_scorecard_to_slack
+
             await post_scorecard_to_slack([], integration_results=results)
         return
 
     from app.evals.runner import EvalRunner
+
     runner = EvalRunner()
 
     if args.agent:
         agent_name = args.agent.lower()
-        evals_dir  = Path(__file__).parent / "agents" / agent_name
+        evals_dir = Path(__file__).parent / "agents" / agent_name
         if not evals_dir.exists():
             print(f"Error: no eval directory for agent '{agent_name}'")
             print(f"Available: {', '.join(d.name for d in (Path(__file__).parent / 'agents').iterdir() if d.is_dir())}")
@@ -92,11 +95,12 @@ async def main() -> None:
             # Run single test case
             from app.evals.base import EvalCase
             from app.evals.judge import judge_response
+
             test_file = evals_dir / f"{args.test}.json"
             if not test_file.exists():
                 print(f"Error: test file not found: {test_file}")
                 sys.exit(1)
-            case    = EvalCase.from_file(test_file, agent_name)
+            case = EvalCase.from_file(test_file, agent_name)
             summary = await runner.run_agent(agent_name, evals_dir)
             _print_summary_table([summary])
         else:
@@ -105,6 +109,7 @@ async def main() -> None:
             _print_summary_table([summary])
             if args.slack:
                 from app.evals.reporter import post_scorecard_to_slack
+
                 await post_scorecard_to_slack([summary])
 
     else:
@@ -119,6 +124,7 @@ async def main() -> None:
                 if prev is not None:
                     previous[s.agent_name] = prev
             from app.evals.reporter import post_scorecard_to_slack
+
             await post_scorecard_to_slack(summaries, previous_scores=previous)
             print("\nScorecard posted to Slack.")
 

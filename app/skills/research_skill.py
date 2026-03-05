@@ -33,7 +33,7 @@ _CODE_HINTS = re.compile(
 
 # Root of the brain codebase inside the container
 _APP_ROOT = "/app"
-_MAX_GREP = 4_000   # chars
+_MAX_GREP = 4_000  # chars
 _MAX_FIND = 2_000
 
 
@@ -84,7 +84,9 @@ def _extract_search_term(message: str) -> str:
     cleaned = re.sub(
         r"^(how does|how is|where is|find|show me|read|review|look at|search for|"
         r"what is|tell me about|explain)\s+",
-        "", message.strip(), flags=re.IGNORECASE,
+        "",
+        message.strip(),
+        flags=re.IGNORECASE,
     )
     # Take the first 4 significant words
     words = [w for w in cleaned.split() if len(w) > 2][:4]
@@ -107,6 +109,7 @@ class ResearchSkill(BaseSkill):
         try:
             from app.memory.qdrant_client import QdrantMemory
             from app.config import get_settings
+
             settings = get_settings()
             qm = QdrantMemory(
                 host=settings.qdrant_host,
@@ -115,10 +118,7 @@ class ResearchSkill(BaseSkill):
             )
             matches = await qm.search_relevant_context(original_message, limit=4)
             if matches:
-                parts.append(
-                    "**Relevant past context from memory:**\n"
-                    + json.dumps(matches, indent=2)
-                )
+                parts.append("**Relevant past context from memory:**\n" + json.dumps(matches, indent=2))
         except Exception as exc:
             logger.debug("ResearchSkill Qdrant search skipped: %s", exc)
 
@@ -134,13 +134,9 @@ class ResearchSkill(BaseSkill):
             grep_out, find_out = await asyncio.gather(grep_task, find_task)
 
             if grep_out and grep_out != "(no matches found)":
-                parts.append(
-                    f"**Codebase grep results for `{search_term}`:**\n```\n{grep_out}\n```"
-                )
+                parts.append(f"**Codebase grep results for `{search_term}`:**\n```\n{grep_out}\n```")
             if find_out and find_out != "(no files found)":
-                parts.append(
-                    f"**Files matching `{search_term}`:**\n```\n{find_out}\n```"
-                )
+                parts.append(f"**Files matching `{search_term}`:**\n```\n{find_out}\n```")
 
             # Also list the top-level app structure so the LLM knows what's available
             if not parts:
@@ -153,9 +149,7 @@ class ResearchSkill(BaseSkill):
                     stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
                     listing = stdout.decode("utf-8", errors="replace").strip()
                     if listing:
-                        parts.append(
-                            f"**Codebase file listing ({_APP_ROOT}):**\n```\n{listing}\n```"
-                        )
+                        parts.append(f"**Codebase file listing ({_APP_ROOT}):**\n```\n{listing}\n```")
                 except Exception:
                     pass
 

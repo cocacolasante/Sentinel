@@ -30,7 +30,7 @@ import httpx
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _TIMEOUT = 10.0
@@ -46,7 +46,7 @@ class HomeAssistantClient:
     def _headers(self) -> dict:
         return {
             "Authorization": f"Bearer {settings.home_assistant_token}",
-            "Content-Type":  "application/json",
+            "Content-Type": "application/json",
         }
 
     @property
@@ -77,9 +77,9 @@ class HomeAssistantClient:
         data = await self._get("/states")
         return [
             {
-                "entity_id":   s.get("entity_id"),
-                "state":       s.get("state"),
-                "name":        s.get("attributes", {}).get("friendly_name", s.get("entity_id")),
+                "entity_id": s.get("entity_id"),
+                "state": s.get("state"),
+                "name": s.get("attributes", {}).get("friendly_name", s.get("entity_id")),
                 "last_changed": s.get("last_changed"),
             }
             for s in data
@@ -89,8 +89,8 @@ class HomeAssistantClient:
         """Return the full state of a single entity."""
         data = await self._get(f"/states/{entity_id}")
         return {
-            "entity_id":  data.get("entity_id"),
-            "state":      data.get("state"),
+            "entity_id": data.get("entity_id"),
+            "state": data.get("state"),
             "attributes": data.get("attributes", {}),
             "last_changed": data.get("last_changed"),
         }
@@ -106,9 +106,9 @@ class HomeAssistantClient:
         # HA returns the list of affected states
         affected = [s.get("entity_id") for s in result] if isinstance(result, list) else []
         return {
-            "success":  True,
-            "domain":   domain,
-            "service":  service,
+            "success": True,
+            "domain": domain,
+            "service": service,
             "affected": affected,
         }
 
@@ -122,7 +122,7 @@ class HomeAssistantClient:
     async def get_history(self, entity_id: str, hours: int = 24) -> list[dict]:
         """Return state history for an entity over the last N hours."""
         start = (datetime.now(tz=timezone.utc) - timedelta(hours=hours)).isoformat()
-        data  = await self._get(f"/history/period/{start}?filter_entity_id={entity_id}")
+        data = await self._get(f"/history/period/{start}?filter_entity_id={entity_id}")
         if not data or not data[0]:
             return []
         return [

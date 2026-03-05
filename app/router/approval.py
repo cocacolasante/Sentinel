@@ -34,11 +34,13 @@ _LEVEL_LABELS = {
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class SetLevelRequest(BaseModel):
     level: int
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _update_task_status(task_id: str, status: str, error: str | None = None) -> None:
     postgres.execute(
@@ -52,6 +54,7 @@ def _update_task_status(task_id: str, status: str, error: str | None = None) -> 
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/approval/level")
 async def get_level():
@@ -123,6 +126,7 @@ async def approve_task(task_id: str):
     # Re-use _execute_pending from Dispatcher
     try:
         from app.brain.dispatcher import Dispatcher
+
         dispatcher = Dispatcher()
         pending_action = {
             "action": row["action"],

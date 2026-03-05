@@ -14,7 +14,7 @@ import psycopg2.extras
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -79,9 +79,10 @@ class FeedbackStore:
 
             idx = message_index * 2
             content = (
-                f"User: {history[idx]['content']}\n"
-                f"Assistant: {history[idx + 1]['content']}"
-            ) if idx + 1 < len(history) else history[idx]["content"]
+                (f"User: {history[idx]['content']}\nAssistant: {history[idx + 1]['content']}")
+                if idx + 1 < len(history)
+                else history[idx]["content"]
+            )
 
             qm = QdrantMemory(
                 host=settings.qdrant_host,
@@ -160,10 +161,10 @@ class FeedbackStore:
                     cur.execute(sql)
                     row = dict(cur.fetchone())
             return {
-                "total_ratings":    int(row["total_ratings"] or 0),
-                "avg_rating":       round(float(row["avg_rating"] or 0), 2),
-                "unique_sessions":  int(row["unique_sessions"] or 0),
-                "top_intent":       row["top_intent"] or "chat",
+                "total_ratings": int(row["total_ratings"] or 0),
+                "avg_rating": round(float(row["avg_rating"] or 0), 2),
+                "unique_sessions": int(row["unique_sessions"] or 0),
+                "top_intent": row["top_intent"] or "chat",
             }
         except Exception as exc:
             logger.error("FeedbackStore.get_summary failed: %s", exc)

@@ -21,10 +21,12 @@ class WhatsAppReadSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.whatsapp import WhatsAppClient
+
         return WhatsAppClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.whatsapp import WhatsAppClient
+
         client = WhatsAppClient()
         if not client.is_configured():
             return SkillResult(
@@ -33,15 +35,15 @@ class WhatsAppReadSkill(BaseSkill):
             )
 
         action = params.get("action", "list")
-        sid    = params.get("sid", "")
+        sid = params.get("sid", "")
 
         if action == "get" and sid:
             msg = await client.get_message(sid)
             return SkillResult(context_data=json.dumps(msg, indent=2), skill_name=self.name)
 
-        to    = params.get("to", params.get("contact", ""))
+        to = params.get("to", params.get("contact", ""))
         limit = int(params.get("limit", 20))
-        msgs  = await client.list_messages(to=to or None, limit=limit)
+        msgs = await client.list_messages(to=to or None, limit=limit)
         if not msgs:
             return SkillResult(
                 context_data="[No WhatsApp messages found]",
@@ -59,14 +61,16 @@ class WhatsAppSendSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.whatsapp import WhatsAppClient
+
         return WhatsAppClient().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.whatsapp import WhatsAppClient
+
         if not WhatsAppClient().is_configured():
             return SkillResult(context_data="[WhatsApp not configured]", skill_name=self.name)
 
-        to   = params.get("to", "")
+        to = params.get("to", "")
         body = params.get("body", params.get("message", ""))
 
         if not to:
@@ -76,9 +80,9 @@ class WhatsAppSendSkill(BaseSkill):
             )
 
         pending = {
-            "intent":   "whatsapp_send",
-            "action":   "send_whatsapp",
-            "params":   params,
+            "intent": "whatsapp_send",
+            "action": "send_whatsapp",
+            "params": params,
             "original": original_message,
         }
         context = (

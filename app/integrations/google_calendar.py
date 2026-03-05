@@ -21,14 +21,14 @@ from datetime import datetime, timedelta, timezone
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 _PERIOD_DAYS: dict[str, int] = {
-    "today":     0,
-    "tomorrow":  1,
+    "today": 0,
+    "tomorrow": 1,
     "this week": 6,
     "next week": 13,
     "next 7 days": 6,
@@ -47,7 +47,7 @@ def _resolve_account(account_name: str | None) -> dict | None:
     for acc in accounts:
         if acc["name"].lower() == name_lower:
             return acc
-    return accounts[0]   # fallback to primary
+    return accounts[0]  # fallback to primary
 
 
 def get_calendar_client(account_name: str | None = None) -> "CalendarClient":
@@ -98,33 +98,39 @@ class CalendarClient:
     # ── Sync internals ────────────────────────────────────────────────────────
 
     def _list_events_sync(self, period: str, calendar_id: str) -> list[dict]:
-        svc  = self._build_service()
-        now  = datetime.now(tz=timezone.utc)
+        svc = self._build_service()
+        now = datetime.now(tz=timezone.utc)
         days = _PERIOD_DAYS.get(period.lower(), 6)
-        end  = now + timedelta(days=days + 1)
+        end = now + timedelta(days=days + 1)
 
-        result = svc.events().list(
-            calendarId=calendar_id,
-            timeMin=now.isoformat(),
-            timeMax=end.isoformat(),
-            maxResults=25,
-            singleEvents=True,
-            orderBy="startTime",
-        ).execute()
+        result = (
+            svc.events()
+            .list(
+                calendarId=calendar_id,
+                timeMin=now.isoformat(),
+                timeMax=end.isoformat(),
+                maxResults=25,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
 
         events = []
         for e in result.get("items", []):
             start = e.get("start", {})
             end_t = e.get("end", {})
-            events.append({
-                "id":          e.get("id"),
-                "title":       e.get("summary", "(no title)"),
-                "description": e.get("description", ""),
-                "location":    e.get("location", ""),
-                "start":       start.get("dateTime", start.get("date", "")),
-                "end":         end_t.get("dateTime", end_t.get("date", "")),
-                "attendees":   [a.get("email") for a in e.get("attendees", [])],
-            })
+            events.append(
+                {
+                    "id": e.get("id"),
+                    "title": e.get("summary", "(no title)"),
+                    "description": e.get("description", ""),
+                    "location": e.get("location", ""),
+                    "start": start.get("dateTime", start.get("date", "")),
+                    "end": end_t.get("dateTime", end_t.get("date", "")),
+                    "attendees": [a.get("email") for a in e.get("attendees", [])],
+                }
+            )
         return events
 
     @staticmethod
@@ -135,6 +141,7 @@ class CalendarClient:
         Returns empty string if unresolvable (triggers the +1-hour fallback in caller).
         """
         from datetime import date as date_cls
+
         s = (date_str or "").strip().lower()
         if not s:
             return ""
@@ -160,6 +167,7 @@ class CalendarClient:
         """Return tz_name if it's a valid IANA timezone, else fall back to UTC."""
         try:
             import zoneinfo
+
             zoneinfo.ZoneInfo(tz_name)
             return tz_name
         except Exception:
@@ -171,7 +179,7 @@ class CalendarClient:
         raw_date = params.get("date", "")
         time_str = params.get("time", "09:00")
         duration = int(params.get("duration_min", 60))
-        tz_name  = self._validated_tz(params.get("timezone", settings.timezone))
+        tz_name = self._validated_tz(params.get("timezone", settings.timezone))
 
         date = self._resolve_date(raw_date)
 
@@ -191,26 +199,30 @@ class CalendarClient:
         end_dt = start_dt + timedelta(minutes=duration)
 
         body = {
-            "summary":     params.get("title", "New Event"),
+            "summary": params.get("title", "New Event"),
             "description": params.get("description", ""),
-            "location":    params.get("location", ""),
-            "start":       {"dateTime": start_dt.isoformat(), "timeZone": tz_name},
-            "end":         {"dateTime": end_dt.isoformat(),   "timeZone": tz_name},
+            "location": params.get("location", ""),
+            "start": {"dateTime": start_dt.isoformat(), "timeZone": tz_name},
+            "end": {"dateTime": end_dt.isoformat(), "timeZone": tz_name},
         }
         attendees = [e for e in params.get("attendees", []) if "@" in str(e)]
         if attendees:
             body["attendees"] = [{"email": e} for e in attendees]
 
-        created = svc.events().insert(
-            calendarId=calendar_id,
-            body=body,
-            sendUpdates="all" if attendees else "none",
-        ).execute()
+        created = (
+            svc.events()
+            .insert(
+                calendarId=calendar_id,
+                body=body,
+                sendUpdates="all" if attendees else "none",
+            )
+            .execute()
+        )
         return {
-            "id":        created.get("id"),
-            "title":     created.get("summary"),
-            "start":     created.get("start", {}).get("dateTime"),
-            "link":      created.get("htmlLink"),
+            "id": created.get("id"),
+            "title": created.get("summary"),
+            "start": created.get("start", {}).get("dateTime"),
+            "link": created.get("htmlLink"),
             "attendees": attendees,
         }
 
@@ -218,36 +230,38 @@ class CalendarClient:
         svc = self._build_service()
         try:
             day_start = datetime.fromisoformat(f"{date}T08:00:00")
-            day_end   = datetime.fromisoformat(f"{date}T20:00:00")
+            day_end = datetime.fromisoformat(f"{date}T20:00:00")
         except ValueError:
             return []
 
-        fb = svc.freebusy().query(body={
-            "timeMin": day_start.isoformat() + "Z",
-            "timeMax": day_end.isoformat() + "Z",
-            "items":   [{"id": calendar_id}],
-        }).execute()
+        fb = (
+            svc.freebusy()
+            .query(
+                body={
+                    "timeMin": day_start.isoformat() + "Z",
+                    "timeMax": day_end.isoformat() + "Z",
+                    "items": [{"id": calendar_id}],
+                }
+            )
+            .execute()
+        )
 
-        busy_blocks = [
-            (b["start"], b["end"])
-            for b in fb.get("calendars", {}).get(calendar_id, {}).get("busy", [])
-        ]
+        busy_blocks = [(b["start"], b["end"]) for b in fb.get("calendars", {}).get(calendar_id, {}).get("busy", [])]
 
         free_slots = []
         cursor = day_start
         while cursor + timedelta(minutes=duration_min) <= day_end:
             slot_end = cursor + timedelta(minutes=duration_min)
             slot_start_str = cursor.isoformat() + "Z"
-            slot_end_str   = slot_end.isoformat() + "Z"
-            overlap = any(
-                b_start < slot_end_str and b_end > slot_start_str
-                for b_start, b_end in busy_blocks
-            )
+            slot_end_str = slot_end.isoformat() + "Z"
+            overlap = any(b_start < slot_end_str and b_end > slot_start_str for b_start, b_end in busy_blocks)
             if not overlap:
-                free_slots.append({
-                    "start": cursor.strftime("%H:%M"),
-                    "end":   slot_end.strftime("%H:%M"),
-                })
+                free_slots.append(
+                    {
+                        "start": cursor.strftime("%H:%M"),
+                        "end": slot_end.strftime("%H:%M"),
+                    }
+                )
             cursor += timedelta(minutes=30)
 
         return free_slots[:8]

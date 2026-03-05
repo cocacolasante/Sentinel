@@ -41,12 +41,12 @@ router = APIRouter(prefix="/sentry", tags=["sentry"])
 
 # Sentry level → (approval_category, task_priority)
 _LEVEL_MAP: dict[str, tuple[str, str]] = {
-    "fatal":    ("breaking",  "urgent"),
-    "critical": ("critical",  "urgent"),
-    "error":    ("critical",  "high"),
-    "warning":  ("standard",  "normal"),
-    "info":     ("none",      "low"),
-    "debug":    ("none",      "low"),
+    "fatal": ("breaking", "urgent"),
+    "critical": ("critical", "urgent"),
+    "error": ("critical", "high"),
+    "warning": ("standard", "normal"),
+    "info": ("none", "low"),
+    "debug": ("none", "low"),
 }
 
 
@@ -54,7 +54,7 @@ def _verify_signature(payload: bytes, signature: str | None) -> bool:
     """Verify Sentry HMAC-SHA256 webhook signature if secret is configured."""
     secret = getattr(settings, "sentry_webhook_secret", "")
     if not secret:
-        return True   # No secret configured — accept all
+        return True  # No secret configured — accept all
     if not signature:
         return False
     expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
@@ -62,19 +62,20 @@ def _verify_signature(payload: bytes, signature: str | None) -> bool:
 
 
 def _save_sentry_issue(
-    issue_id:   str,
-    title:      str,
-    level:      str,
-    status:     str,
-    project:    str,
-    permalink:  str,
-    count:      int,
-    platform:   str,
+    issue_id: str,
+    title: str,
+    level: str,
+    status: str,
+    project: str,
+    permalink: str,
+    count: int,
+    platform: str,
     first_seen: str,
-    category:   str,
+    category: str,
 ) -> None:
     try:
         from app.db import postgres
+
         postgres.execute(
             """
             INSERT INTO sentry_issues
@@ -86,8 +87,7 @@ def _save_sentry_issue(
                    count       = EXCLUDED.count,
                    received_at = NOW()
             """,
-            (issue_id, title, level, status, project, permalink,
-             count, platform, first_seen, category),
+            (issue_id, title, level, status, project, permalink, count, platform, first_seen, category),
         )
     except Exception as exc:
         logger.warning("Could not save sentry_issue row: {}", exc)
@@ -96,6 +96,7 @@ def _save_sentry_issue(
 def _create_pending_task(task_id: str, title: str, params: dict, category: str) -> None:
     try:
         from app.db import postgres
+
         postgres.execute(
             """
             INSERT INTO pending_write_tasks
@@ -107,17 +108,19 @@ def _create_pending_task(task_id: str, title: str, params: dict, category: str) 
         )
         logger.info(
             "Sentry task created | task_id={} | category={} | title={}",
-            task_id, category, title[:60],
+            task_id,
+            category,
+            title[:60],
         )
     except Exception as exc:
         logger.error("Could not create sentry pending task: {}", exc)
 
 
 _LEVEL_BADGE = {
-    "fatal":    "🔴",
+    "fatal": "🔴",
     "critical": "🔴",
-    "error":    "🟠",
-    "warning":  "🟡",
+    "error": "🟠",
+    "warning": "🟡",
 }
 
 
@@ -134,6 +137,7 @@ async def _maybe_slack_alert(
         return
     try:
         from app.integrations.slack_notifier import post_alert
+
         badge = _LEVEL_BADGE.get(level, "🟠")
         count_str = f"{count:,}" if count else "?"
         link_text = f"<{permalink}|View in Sentry>" if permalink else f"Issue `{issue_id}`"
@@ -152,26 +156,29 @@ async def _process_sentry_event(payload: dict) -> None:
     """Parse a Sentry webhook payload and create a Brain task if warranted."""
     try:
         action = payload.get("action", "created")
-        issue  = payload.get("data", {}).get("issue") or payload.get("issue") or {}
+        issue = payload.get("data", {}).get("issue") or payload.get("issue") or {}
 
         if not issue:
             logger.debug("Sentry webhook: no issue payload — skipping")
             return
 
-        issue_id   = str(issue.get("id", ""))
-        title      = issue.get("title", "Unknown error")
-        level      = (issue.get("level") or "error").lower()
-        status     = issue.get("status", "unresolved")
-        proj_raw   = issue.get("project", {})
-        project    = proj_raw.get("slug", "") if isinstance(proj_raw, dict) else str(proj_raw)
-        permalink  = issue.get("permalink", "")
-        count      = int(issue.get("count") or 0)
-        platform   = issue.get("platform", "")
+        issue_id = str(issue.get("id", ""))
+        title = issue.get("title", "Unknown error")
+        level = (issue.get("level") or "error").lower()
+        status = issue.get("status", "unresolved")
+        proj_raw = issue.get("project", {})
+        project = proj_raw.get("slug", "") if isinstance(proj_raw, dict) else str(proj_raw)
+        permalink = issue.get("permalink", "")
+        count = int(issue.get("count") or 0)
+        platform = issue.get("platform", "")
         first_seen = issue.get("firstSeen", "")
 
         logger.info(
             "Sentry webhook | action={} | level={} | issue={} | title={}",
-            action, level, issue_id, title[:80],
+            action,
+            level,
+            issue_id,
+            title[:80],
         )
 
         # Skip resolution events — nothing to action
@@ -182,14 +189,13 @@ async def _process_sentry_event(payload: dict) -> None:
         category, _priority = _LEVEL_MAP.get(level, ("critical", "high"))
 
         # Always persist to the sentry_issues audit table
-        _save_sentry_issue(issue_id, title, level, status, project, permalink,
-                           count, platform, first_seen, category)
+        _save_sentry_issue(issue_id, title, level, status, project, permalink, count, platform, first_seen, category)
 
         # info / debug → log only, no pending task, no alert
         if category == "none":
             return
 
-        task_id    = str(uuid.uuid4())
+        task_id = str(uuid.uuid4())
         task_title = f"[Sentry {level.upper()}] {title[:120]}"
         # Extract affected app/ filenames from the webhook's inline stack trace
         _affected: list[str] = []
@@ -203,14 +209,14 @@ async def _process_sentry_event(payload: dict) -> None:
                         _affected.append(fn)
 
         task_params = {
-            "issue_id":       issue_id,
-            "title":          title,
-            "level":          level,
-            "project":        project,
-            "permalink":      permalink,
-            "count":          count,
-            "platform":       platform,
-            "first_seen":     first_seen,
+            "issue_id": issue_id,
+            "title": title,
+            "level": level,
+            "project": project,
+            "permalink": permalink,
+            "count": count,
+            "platform": platform,
+            "first_seen": first_seen,
             "affected_files": _affected,
         }
 
@@ -219,6 +225,7 @@ async def _process_sentry_event(payload: dict) -> None:
         # Dispatch auto-investigation + fix in a Celery worker (non-blocking)
         try:
             from app.worker.tasks import investigate_and_fix_sentry_issue
+
             investigate_and_fix_sentry_issue.delay(task_id, task_params)
             logger.info("Dispatched auto-fix task | task_id={} | issue={}", task_id, issue_id)
         except Exception as exc:
@@ -233,9 +240,10 @@ async def _process_sentry_event(payload: dict) -> None:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.post("/webhook")
 async def sentry_webhook(
-    request:    Request,
+    request: Request,
     background: BackgroundTasks,
     sentry_hook_signature: str | None = Header(None, alias="sentry-hook-signature"),
 ):
@@ -269,6 +277,7 @@ async def list_tracked_issues(limit: int = 25):
     """List recent Sentry issues tracked in the Brain's database."""
     try:
         from app.db import postgres
+
         rows = postgres.execute(
             """
             SELECT issue_id, title, level, status, project, count,
@@ -282,14 +291,14 @@ async def list_tracked_issues(limit: int = 25):
         return {
             "issues": [
                 {
-                    "issue_id":    r["issue_id"],
-                    "title":       r["title"],
-                    "level":       r["level"],
-                    "status":      r["status"],
-                    "project":     r["project"],
-                    "count":       r["count"],
-                    "permalink":   r["permalink"],
-                    "category":    r["category"],
+                    "issue_id": r["issue_id"],
+                    "title": r["title"],
+                    "level": r["level"],
+                    "status": r["status"],
+                    "project": r["project"],
+                    "count": r["count"],
+                    "permalink": r["permalink"],
+                    "category": r["category"],
                     "received_at": r["received_at"].isoformat() if r.get("received_at") else None,
                 }
                 for r in rows

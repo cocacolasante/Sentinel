@@ -58,25 +58,24 @@ class SkillDiscoverySkill(BaseSkill):
         settings = get_settings()
 
         # Build skill list description
-        reg    = _build_skill_registry()
+        reg = _build_skill_registry()
         skills = reg.list_all_descriptions()
 
         # Ask Claude Haiku to analyze the gap
         try:
             client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-            resp   = client.messages.create(
+            resp = client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=600,
                 system=_DISCOVERY_SYSTEM,
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"User request: {original_message}\n\n"
-                        f"Available skills:\n{skills}"
-                    ),
-                }],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (f"User request: {original_message}\n\nAvailable skills:\n{skills}"),
+                    }
+                ],
             )
-            raw    = resp.content[0].text.strip()
+            raw = resp.content[0].text.strip()
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -103,10 +102,7 @@ class SkillDiscoverySkill(BaseSkill):
                 "Try rephrasing your request using that skill's intent directly."
             )
         elif coverage == "partial" and existing:
-            lines.append(
-                f"The **{existing}** skill partially covers this, but: "
-                f"{analysis.get('gap_description', '')}"
-            )
+            lines.append(f"The **{existing}** skill partially covers this, but: {analysis.get('gap_description', '')}")
         else:
             lines.append(
                 f"**No existing skill covers this request.**\n"
@@ -117,15 +113,15 @@ class SkillDiscoverySkill(BaseSkill):
         originating_task_id: int | None = params.get("originating_task_id")
 
         if analysis.get("new_skill_needed") and proposed:
-            skill_name   = proposed.get("name", "new_skill")
+            skill_name = proposed.get("name", "new_skill")
             skill_intent = proposed.get("intent", skill_name)
-            skill_desc   = proposed.get("description", "")
-            integration  = proposed.get("integration", "")
-            hints        = proposed.get("implementation_hints", "")
+            skill_desc = proposed.get("description", "")
+            integration = proposed.get("integration", "")
+            hints = proposed.get("implementation_hints", "")
 
             # Auto-build: create a workspace task to scaffold + commit the new skill
-            skill_file   = f"app/skills/{skill_name}.py"
-            build_cmds   = [
+            skill_file = f"app/skills/{skill_name}.py"
+            build_cmds = [
                 "cd /root/sentinel-workspace && git pull",
                 (
                     f"cat > {skill_file} << 'PYEOF'\n"
@@ -138,11 +134,11 @@ class SkillDiscoverySkill(BaseSkill):
                     f'    trigger_intents   = ["{skill_intent}"]\n'
                     "    approval_category = ApprovalCategory.NONE\n\n"
                     "    async def execute(self, params: dict, original_message: str) -> SkillResult:\n"
-                    f'        # TODO: implement — {hints}\n'
-                    '        return SkillResult(\n'
+                    f"        # TODO: implement — {hints}\n"
+                    "        return SkillResult(\n"
                     f'            context_data="[{skill_name} skill not yet implemented]",\n'
-                    '            skill_name=self.name,\n'
-                    '        )\n'
+                    "            skill_name=self.name,\n"
+                    "        )\n"
                     "PYEOF"
                 ),
                 (
@@ -153,24 +149,26 @@ class SkillDiscoverySkill(BaseSkill):
             ]
             try:
                 from app.skills.task_skill import TaskCreateSkill
+
                 _tc = TaskCreateSkill()
                 _tc_params = {
-                    "title":          f"Build {skill_name} skill",
-                    "description":    (
+                    "title": f"Build {skill_name} skill",
+                    "description": (
                         f"Auto-generated skill scaffold for: {skill_desc}\n"
                         f"Integration needed: {integration}\n"
                         f"Implementation notes: {hints}"
                     ),
-                    "priority":       5,
+                    "priority": 5,
                     "approval_level": 1,
-                    "commands":       build_cmds,
+                    "commands": build_cmds,
                     "execution_queue": "tasks_workspace",
-                    "source":         "skill_discovery",
-                    "session_id":     params.get("session_id", ""),
+                    "source": "skill_discovery",
+                    "session_id": params.get("session_id", ""),
                 }
                 _tc_result = await _tc.execute(_tc_params, original_message)
                 # Extract task ID from context
                 import re as _re
+
                 _m = _re.search(r"Task ID: #(\d+)", _tc_result.context_data or "")
                 if _m:
                     build_task_id = int(_m.group(1))
@@ -182,6 +180,7 @@ class SkillDiscoverySkill(BaseSkill):
                 if originating_task_id:
                     try:
                         from app.db import postgres
+
                         postgres.execute(
                             "UPDATE tasks SET blocked_by=%s::jsonb WHERE id=%s",
                             (json.dumps([build_task_id]), originating_task_id),
@@ -193,12 +192,10 @@ class SkillDiscoverySkill(BaseSkill):
                 try:
                     from app.config import get_settings as _gs
                     from app.integrations.slack_notifier import post_dm
+
                     _s = _gs()
                     if _s.slack_owner_user_id:
-                        _dm = (
-                            f"🔧 *Missing skill detected: `{skill_name}`*\n"
-                            f"Auto-building as Task #{build_task_id}."
-                        )
+                        _dm = f"🔧 *Missing skill detected: `{skill_name}`*\nAuto-building as Task #{build_task_id}."
                         if originating_task_id:
                             _dm += f"\nYour original Task #{originating_task_id} is blocked until it deploys."
                         await post_dm(_dm)
@@ -211,9 +208,7 @@ class SkillDiscoverySkill(BaseSkill):
                     f"Notes: {hints}"
                 )
                 if originating_task_id:
-                    lines.append(
-                        f"\nTask #{originating_task_id} is now blocked until the skill deploys."
-                    )
+                    lines.append(f"\nTask #{originating_task_id} is now blocked until the skill deploys.")
             else:
                 lines.append(
                     f"\n**Proposed new skill:** `{skill_name}`\n"
@@ -241,14 +236,50 @@ class SkillGapHandler:
     """
 
     _ACTION_KEYWORDS = {
-        "create", "build", "make", "set up", "deploy", "send", "post",
-        "update", "delete", "remove", "get", "fetch", "list", "show",
-        "connect", "integrate", "configure", "install", "run", "execute",
-        "automate", "schedule", "monitor", "track", "notify", "alert",
+        "create",
+        "build",
+        "make",
+        "set up",
+        "deploy",
+        "send",
+        "post",
+        "update",
+        "delete",
+        "remove",
+        "get",
+        "fetch",
+        "list",
+        "show",
+        "connect",
+        "integrate",
+        "configure",
+        "install",
+        "run",
+        "execute",
+        "automate",
+        "schedule",
+        "monitor",
+        "track",
+        "notify",
+        "alert",
         # Code / improvement actions
-        "improve", "fix", "refactor", "optimize", "enhance", "rewrite",
-        "add", "edit", "patch", "change", "implement", "write", "modify",
-        "debug", "review", "analyse", "analyze",
+        "improve",
+        "fix",
+        "refactor",
+        "optimize",
+        "enhance",
+        "rewrite",
+        "add",
+        "edit",
+        "patch",
+        "change",
+        "implement",
+        "write",
+        "modify",
+        "debug",
+        "review",
+        "analyse",
+        "analyze",
     }
 
     @classmethod

@@ -38,7 +38,7 @@ from app.worker.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 _WORKSPACE = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
-_PROJECTS  = f"{_WORKSPACE}/projects"
+_PROJECTS = f"{_WORKSPACE}/projects"
 
 # Max rounds for the LLM build agent
 _BUILD_MAX_ROUNDS = 20
@@ -46,44 +46,45 @@ _BUILD_MAX_ROUNDS = 20
 # ── Tech-stack package maps ────────────────────────────────────────────────────
 
 _APT_PACKAGES: dict[str, list[str]] = {
-    "python":  ["python3", "python3-pip", "python3-venv", "build-essential"],
+    "python": ["python3", "python3-pip", "python3-venv", "build-essential"],
     "fastapi": ["python3", "python3-pip", "python3-venv", "build-essential"],
-    "flask":   ["python3", "python3-pip", "python3-venv"],
-    "django":  ["python3", "python3-pip", "python3-venv", "build-essential"],
-    "node":    [],   # installed via NodeSource
-    "nodejs":  [],
+    "flask": ["python3", "python3-pip", "python3-venv"],
+    "django": ["python3", "python3-pip", "python3-venv", "build-essential"],
+    "node": [],  # installed via NodeSource
+    "nodejs": [],
     "express": [],
-    "react":   [],
-    "nextjs":  [],
-    "next":    [],
-    "go":      ["golang-go"],
-    "golang":  ["golang-go"],
-    "rust":    ["cargo", "rustc"],
-    "static":  ["nginx"],
-    "html":    ["nginx"],
+    "react": [],
+    "nextjs": [],
+    "next": [],
+    "go": ["golang-go"],
+    "golang": ["golang-go"],
+    "rust": ["cargo", "rustc"],
+    "static": ["nginx"],
+    "html": ["nginx"],
 }
 
 _NODE_STACKS = {"node", "nodejs", "express", "react", "nextjs", "next"}
 
 _RUN_CMD: dict[str, str] = {
-    "python":  "python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt && bash start.sh",
+    "python": "python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt && bash start.sh",
     "fastapi": "python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt && bash start.sh",
-    "flask":   "python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt && bash start.sh",
-    "django":  "python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt && bash start.sh",
-    "node":    "npm install && bash start.sh",
-    "nodejs":  "npm install && bash start.sh",
+    "flask": "python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt && bash start.sh",
+    "django": "python3 -m venv venv && . venv/bin/activate && pip install -r requirements.txt && bash start.sh",
+    "node": "npm install && bash start.sh",
+    "nodejs": "npm install && bash start.sh",
     "express": "npm install && bash start.sh",
-    "react":   "npm install && npm run build && bash start.sh",
-    "nextjs":  "npm install && npm run build && bash start.sh",
-    "next":    "npm install && npm run build && bash start.sh",
-    "go":      "go build -o app . && bash start.sh",
-    "golang":  "go build -o app . && bash start.sh",
-    "rust":    "cargo build --release && bash start.sh",
-    "static":  "bash start.sh",
-    "html":    "bash start.sh",
+    "react": "npm install && npm run build && bash start.sh",
+    "nextjs": "npm install && npm run build && bash start.sh",
+    "next": "npm install && npm run build && bash start.sh",
+    "go": "go build -o app . && bash start.sh",
+    "golang": "go build -o app . && bash start.sh",
+    "rust": "cargo build --release && bash start.sh",
+    "static": "bash start.sh",
+    "html": "bash start.sh",
 }
 
 # ── SSH helpers ────────────────────────────────────────────────────────────────
+
 
 def _get_ssh_key_path() -> str | None:
     """Return path to the SSH private key, writing it from env var if needed."""
@@ -115,11 +116,17 @@ def _get_ssh_key_path() -> str | None:
 def _ssh_cmd(ip: str, key_path: str, cmd: str, timeout: int = 60) -> tuple[str, int]:
     """Run cmd on remote server via SSH. Returns (output, exit_code)."""
     args = [
-        "ssh", "-i", key_path,
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "ConnectTimeout=10",
-        "-o", "BatchMode=yes",
-        f"root@{ip}", cmd,
+        "ssh",
+        "-i",
+        key_path,
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "BatchMode=yes",
+        f"root@{ip}",
+        cmd,
     ]
     try:
         r = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
@@ -137,20 +144,30 @@ def _scp_dir(local_path: str, ip: str, remote_path: str, key_path: str) -> tuple
     try:
         # Create tarball
         r = subprocess.run(
-            ["tar", "czf", tar_path, "-C", os.path.dirname(local_path),
-             os.path.basename(local_path)],
-            capture_output=True, text=True, timeout=60,
+            ["tar", "czf", tar_path, "-C", os.path.dirname(local_path), os.path.basename(local_path)],
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         if r.returncode != 0:
             return f"[tar failed: {r.stderr}]", r.returncode
 
         # SCP tarball
         r2 = subprocess.run(
-            ["scp", "-i", key_path,
-             "-o", "StrictHostKeyChecking=no",
-             "-o", "ConnectTimeout=15",
-             tar_path, f"root@{ip}:{remote_path}.tar.gz"],
-            capture_output=True, text=True, timeout=120,
+            [
+                "scp",
+                "-i",
+                key_path,
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "ConnectTimeout=15",
+                tar_path,
+                f"root@{ip}:{remote_path}.tar.gz",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         os.unlink(tar_path)
         if r2.returncode != 0:
@@ -159,7 +176,8 @@ def _scp_dir(local_path: str, ip: str, remote_path: str, key_path: str) -> tuple
         # Extract on remote
         project_name = os.path.basename(local_path)
         out, code = _ssh_cmd(
-            ip, key_path,
+            ip,
+            key_path,
             f"mkdir -p {remote_path} && tar xzf {remote_path}.tar.gz -C /opt && rm {remote_path}.tar.gz",
             timeout=60,
         )
@@ -170,16 +188,16 @@ def _scp_dir(local_path: str, ip: str, remote_path: str, key_path: str) -> tuple
 
 # ── IONOS IP polling ───────────────────────────────────────────────────────────
 
+
 async def _poll_for_ip(dc_id: str, server_id: str, nic_id: str, timeout_sec: int = 900) -> str | None:
     """Poll the IONOS NIC until an IP is assigned. Returns the IP or None on timeout."""
     from app.integrations.ionos import IONOSClient
+
     client = IONOSClient()
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
         try:
-            nic = await client._get(
-                f"/datacenters/{dc_id}/servers/{server_id}/nics/{nic_id}"
-            )
+            nic = await client._get(f"/datacenters/{dc_id}/servers/{server_id}/nics/{nic_id}")
             ips = nic.get("properties", {}).get("ips") or []
             if ips:
                 return ips[0]
@@ -202,12 +220,13 @@ async def _wait_for_ssh(ip: str, key_path: str, timeout_sec: int = 600) -> bool:
 
 # ── build_project Celery task ──────────────────────────────────────────────────
 
+
 @celery_app.task(
     bind=True,
     name="app.worker.project_tasks.build_project",
     queue="tasks_workspace",
     max_retries=0,
-    soft_time_limit=1800,   # 30 min soft
+    soft_time_limit=1800,  # 30 min soft
     time_limit=1900,
 )
 def build_project(
@@ -245,19 +264,19 @@ async def _build_project(
     from app.integrations.slack_notifier import post_thread_reply_sync
 
     settings = get_settings()
-    redis    = RedisMemory()
+    redis = RedisMemory()
 
     # ── Load project ──────────────────────────────────────────────────────────
     row = postgres.execute_one("SELECT * FROM projects WHERE id=%s", (project_id,))
     if not row:
         return {"error": f"Project #{project_id} not found"}
 
-    name        = row["name"]
+    name = row["name"]
     description = row.get("description") or ""
-    tech_stack  = (row.get("tech_stack") or "python").lower()
-    path        = row.get("path") or f"{_PROJECTS}/{row['slug']}"
-    channel     = row.get("slack_channel") or ""
-    thread_ts   = row.get("slack_thread_ts") or ""
+    tech_stack = (row.get("tech_stack") or "python").lower()
+    path = row.get("path") or f"{_PROJECTS}/{row['slug']}"
+    channel = row.get("slack_channel") or ""
+    thread_ts = row.get("slack_thread_ts") or ""
 
     os.makedirs(path, exist_ok=True)
 
@@ -268,7 +287,8 @@ async def _build_project(
             f"🔨 *Building project: {name}*\n"
             f"Tech stack: {tech_stack} | Path: `{path}`\n"
             "_Writing code autonomously — I'll update this thread as I go..._",
-            channel, thread_ts,
+            channel,
+            thread_ts,
         )
 
     # Acquire workspace lock
@@ -312,19 +332,17 @@ async def _build_project(
         - No markdown in your response — pure JSON only
     """).strip()
 
-    messages: list[dict] = [
-        {"role": "user", "content": f"Build: {name}\nDescription: {description}"}
-    ]
+    messages: list[dict] = [{"role": "user", "content": f"Build: {name}\nDescription: {description}"}]
 
-    client    = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     build_log = []
-    all_good  = True
+    all_good = True
 
     for round_num in range(_BUILD_MAX_ROUNDS):
         try:
             resp = await asyncio.to_thread(
                 client.messages.create,
-                model="claude-sonnet-4-6",     # use Sonnet for code quality
+                model="claude-sonnet-4-6",  # use Sonnet for code quality
                 max_tokens=1024,
                 system=system_prompt,
                 messages=messages,
@@ -354,18 +372,21 @@ async def _build_project(
         # Execute command
         try:
             proc = await asyncio.create_subprocess_shell(
-                cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-                cwd=path, executable="/bin/bash",
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=path,
+                executable="/bin/bash",
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
-            output    = (stdout or b"").decode("utf-8", errors="replace")[:2000].strip()
+            output = (stdout or b"").decode("utf-8", errors="replace")[:2000].strip()
             exit_code = proc.returncode or 0
         except asyncio.TimeoutError:
             output, exit_code = "[timed out after 5min]", -1
         except Exception as exc:
             output, exit_code = f"[error: {exc}]", -1
 
-        icon    = "✅" if exit_code == 0 else "❌"
+        icon = "✅" if exit_code == 0 else "❌"
         snippet = f"```\n{output[:600]}\n```" if output else ""
         log_line = f"{icon} Round {round_num + 1}: `{cmd[:100]}`\n{snippet}".strip()
         build_log.append(log_line)
@@ -376,13 +397,15 @@ async def _build_project(
 
         # Feed back to LLM
         messages.append({"role": "assistant", "content": raw})
-        messages.append({
-            "role": "user",
-            "content": (
-                f"Output (exit {exit_code}):\n```\n{output[:1500]}\n```\n"
-                + ("Continue." if exit_code == 0 else "Command FAILED. Fix it or mark done/failed.")
-            ),
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"Output (exit {exit_code}):\n```\n{output[:1500]}\n```\n"
+                    + ("Continue." if exit_code == 0 else "Command FAILED. Fix it or mark done/failed.")
+                ),
+            }
+        )
 
         if exit_code != 0 and round_num >= _BUILD_MAX_ROUNDS - 3:
             all_good = False
@@ -399,11 +422,10 @@ async def _build_project(
         if all_good:
             header = f"✅ *{name}* — build complete!"
             log_tail = "\n".join(build_log[-5:])
-            body = (
-                f"Project built at `{path}`\n"
-                f"```\n{log_tail}\n```\n"
-                + ("🚀 Queuing IONOS deploy next..." if auto_deploy else
-                   f"_Say 'deploy project {name}' to spin up a staging server._")
+            body = f"Project built at `{path}`\n```\n{log_tail}\n```\n" + (
+                "🚀 Queuing IONOS deploy next..."
+                if auto_deploy
+                else f"_Say 'deploy project {name}' to spin up a staging server._"
             )
         else:
             header = f"❌ *{name}* — build failed"
@@ -424,12 +446,13 @@ async def _build_project(
 
 # ── deploy_project Celery task ─────────────────────────────────────────────────
 
+
 @celery_app.task(
     bind=True,
     name="app.worker.project_tasks.deploy_project",
     queue="tasks_general",
     max_retries=0,
-    soft_time_limit=1800,   # 30 min — provisioning + SSH setup takes time
+    soft_time_limit=1800,  # 30 min — provisioning + SSH setup takes time
     time_limit=1900,
 )
 def deploy_project(
@@ -441,9 +464,7 @@ def deploy_project(
 ) -> dict:
     """Provision IONOS server, SSH install, deploy project, report IP."""
     try:
-        return asyncio.run(
-            _deploy_project(project_id, ionos_location, server_cores, server_ram_mb)
-        )
+        return asyncio.run(_deploy_project(project_id, ionos_location, server_cores, server_ram_mb))
     except Exception as exc:
         logger.error("deploy_project(%s) crashed: %s", project_id, exc, exc_info=True)
         _update_project(project_id, status="failed")
@@ -468,12 +489,12 @@ async def _deploy_project(
     if not row:
         return {"error": f"Project #{project_id} not found"}
 
-    name       = row["name"]
-    slug       = row["slug"]
+    name = row["name"]
+    slug = row["slug"]
     tech_stack = (row.get("tech_stack") or "python").lower()
-    path       = row.get("path") or f"{_PROJECTS}/{slug}"
-    channel    = row.get("slack_channel") or ""
-    thread_ts  = row.get("slack_thread_ts") or ""
+    path = row.get("path") or f"{_PROJECTS}/{slug}"
+    channel = row.get("slack_channel") or ""
+    thread_ts = row.get("slack_thread_ts") or ""
 
     def _post(msg: str) -> None:
         if channel and thread_ts:
@@ -510,18 +531,15 @@ async def _deploy_project(
         _post(f"❌ *Deploy failed — {name}*\n{err}")
         return {"error": err}
 
-    dc_id     = prov["datacenter_id"]
+    dc_id = prov["datacenter_id"]
     server_id = prov["server_id"]
-    nic_id    = prov["nic_id"]
+    nic_id = prov["nic_id"]
 
     postgres.execute(
         "UPDATE projects SET ionos_dc_id=%s, ionos_server_id=%s, ionos_nic_id=%s, updated_at=NOW() WHERE id=%s",
         (dc_id, server_id, nic_id, project_id),
     )
-    _post(
-        f"✅ *Server provisioned* — waiting for IP assignment...\n"
-        f"Server ID: `{server_id[:12]}…`"
-    )
+    _post(f"✅ *Server provisioned* — waiting for IP assignment...\nServer ID: `{server_id[:12]}…`")
 
     # ── Wait for IP ───────────────────────────────────────────────────────────
     ip = await _poll_for_ip(dc_id, server_id, nic_id, timeout_sec=900)
@@ -549,7 +567,7 @@ async def _deploy_project(
 
     # ── System packages ───────────────────────────────────────────────────────
     apt_pkgs = ["curl", "git", "screen"] + _APT_PACKAGES.get(tech_stack, ["python3", "python3-pip"])
-    apt_cmd  = f"DEBIAN_FRONTEND=noninteractive apt-get update -qq && apt-get install -y {' '.join(apt_pkgs)}"
+    apt_cmd = f"DEBIAN_FRONTEND=noninteractive apt-get update -qq && apt-get install -y {' '.join(apt_pkgs)}"
 
     out, code = await asyncio.to_thread(_ssh_cmd, ip, key_path, apt_cmd, timeout=300)
     if code != 0:
@@ -558,10 +576,7 @@ async def _deploy_project(
 
     # Node.js via NodeSource if needed
     if tech_stack in _NODE_STACKS:
-        node_setup = (
-            "curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && "
-            "apt-get install -y nodejs"
-        )
+        node_setup = "curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs"
         out, code = await asyncio.to_thread(_ssh_cmd, ip, key_path, node_setup, timeout=180)
         logger.info("Node.js install exit=%d", code)
 
@@ -569,7 +584,7 @@ async def _deploy_project(
 
     # ── Upload project ────────────────────────────────────────────────────────
     remote_dir = f"/opt/{slug}"
-    out, code  = await asyncio.to_thread(_scp_dir, path, ip, remote_dir, key_path)
+    out, code = await asyncio.to_thread(_scp_dir, path, ip, remote_dir, key_path)
     if code != 0:
         err = f"SCP upload failed: {out[:300]}"
         _update_project(project_id, status="failed")
@@ -585,14 +600,16 @@ async def _deploy_project(
 
     # Wrap in screen so it survives SSH disconnect
     screen_cmd = f"screen -dmS app bash -c 'cd /opt/{slug} && {run_cmd_template} >> /var/log/app.log 2>&1'"
-    out, code  = await asyncio.to_thread(_ssh_cmd, ip, key_path, screen_cmd, timeout=300)
+    out, code = await asyncio.to_thread(_ssh_cmd, ip, key_path, screen_cmd, timeout=300)
     logger.info("App start exit=%d output=%s", code, out[:200])
 
     # Give it a few seconds to start
     await asyncio.sleep(5)
 
     # Quick health check
-    health_cmd = f"curl -sf http://localhost:8080/ || curl -sf http://localhost:3000/ || echo 'app may still be starting'"
+    health_cmd = (
+        f"curl -sf http://localhost:8080/ || curl -sf http://localhost:3000/ || echo 'app may still be starting'"
+    )
     health_out, _ = await asyncio.to_thread(_ssh_cmd, ip, key_path, health_cmd, 15)
 
     # ── Finalize ──────────────────────────────────────────────────────────────
@@ -634,11 +651,13 @@ async def _deploy_project(
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def _update_project(project_id: int, **fields) -> None:
     if not fields:
         return
     try:
         from app.db import postgres
+
         set_clauses = ", ".join(f"{k}=%s" for k in fields) + ", updated_at=NOW()"
         postgres.execute(
             f"UPDATE projects SET {set_clauses} WHERE id=%s",
@@ -652,6 +671,7 @@ def _slack_error(project_id: int, error: str) -> None:
     try:
         from app.db import postgres
         from app.integrations.slack_notifier import post_thread_reply_sync
+
         row = postgres.execute_one(
             "SELECT name, slack_channel, slack_thread_ts FROM projects WHERE id=%s",
             (project_id,),
@@ -659,7 +679,8 @@ def _slack_error(project_id: int, error: str) -> None:
         if row and row.get("slack_channel") and row.get("slack_thread_ts"):
             post_thread_reply_sync(
                 f"❌ *Deploy failed — {row['name']}*\n`{error[:400]}`",
-                row["slack_channel"], row["slack_thread_ts"],
+                row["slack_channel"],
+                row["slack_thread_ts"],
             )
     except Exception:
         pass

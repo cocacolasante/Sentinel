@@ -10,31 +10,33 @@ from __future__ import annotations
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
 _LEVEL_BADGE = {
-    "fatal":    "🔴",
+    "fatal": "🔴",
     "critical": "🔴",
-    "error":    "🟠",
-    "warning":  "🟡",
-    "info":     "🔵",
-    "debug":    "⚪",
+    "error": "🟠",
+    "warning": "🟡",
+    "info": "🔵",
+    "debug": "⚪",
 }
 
 
 class SentryReadSkill(BaseSkill):
-    name            = "sentry_read"
-    description     = "List and inspect Sentry error issues"
+    name = "sentry_read"
+    description = "List and inspect Sentry error issues"
     trigger_intents = ["sentry_read"]
 
     def is_available(self) -> bool:
         from app.integrations.sentry_client import SentryClient
+
         return SentryClient().is_configured()
 
     async def execute(self, params: dict, session_id: str, original_message: str) -> SkillResult:
         from app.integrations.sentry_client import SentryClient
-        client  = SentryClient()
-        action  = params.get("action", "list")
+
+        client = SentryClient()
+        action = params.get("action", "list")
         project = params.get("project")
-        query   = params.get("query", "is:unresolved")
-        limit   = int(params.get("limit", 20))
+        query = params.get("query", "is:unresolved")
+        limit = int(params.get("limit", 20))
 
         if action == "list":
             issues = await client.list_issues(project=project, query=query, limit=limit)
@@ -43,7 +45,7 @@ class SentryReadSkill(BaseSkill):
             lines = [f"**Sentry Issues** ({len(issues)} found)\n"]
             for i in issues:
                 badge = _LEVEL_BADGE.get(i["level"], "⚪")
-                last  = i["last_seen"][:10] if i.get("last_seen") else "N/A"
+                last = i["last_seen"][:10] if i.get("last_seen") else "N/A"
                 lines.append(f"{badge} `{i['id']}` [{i['level'].upper()}] **{i['title']}**")
                 lines.append(f"   Project: {i['project']} | Count: {i['count']} | Last seen: {last}")
                 if i.get("permalink"):
@@ -75,6 +77,7 @@ class SentryReadSkill(BaseSkill):
         if action == "db":
             try:
                 from app.db import postgres
+
                 rows = postgres.execute(
                     """
                     SELECT issue_id, title, level, status, project, count, category, received_at
@@ -89,7 +92,7 @@ class SentryReadSkill(BaseSkill):
                 lines = [f"**Tracked Sentry Issues** ({len(rows)} recent)\n"]
                 for r in rows:
                     badge = _LEVEL_BADGE.get(r["level"], "⚪")
-                    ts    = r["received_at"].strftime("%Y-%m-%d") if r.get("received_at") else "N/A"
+                    ts = r["received_at"].strftime("%Y-%m-%d") if r.get("received_at") else "N/A"
                     lines.append(f"{badge} `{r['issue_id']}` [{r['level'].upper()}] **{r['title']}**")
                     lines.append(f"   Project: {r['project']} | Count: {r['count']} | Category: {r['category']} | {ts}")
                 return SkillResult(data={"issues": rows}, summary="\n".join(lines))
@@ -100,17 +103,18 @@ class SentryReadSkill(BaseSkill):
 
 
 class SentryManageSkill(BaseSkill):
-    name              = "sentry_manage"
-    description       = "Resolve, ignore, assign, or comment on Sentry issues"
-    trigger_intents   = ["sentry_manage"]
+    name = "sentry_manage"
+    description = "Resolve, ignore, assign, or comment on Sentry issues"
+    trigger_intents = ["sentry_manage"]
     approval_category = ApprovalCategory.CRITICAL
 
     def is_available(self) -> bool:
         from app.integrations.sentry_client import SentryClient
+
         return SentryClient().is_configured()
 
     async def execute(self, params: dict, session_id: str, original_message: str) -> SkillResult:
-        action   = params.get("action", "")
+        action = params.get("action", "")
         issue_id = params.get("issue_id", "")
 
         if not issue_id:
@@ -124,9 +128,9 @@ class SentryManageSkill(BaseSkill):
 
         labels = {
             "resolve": f"Resolve Sentry issue `{issue_id}`",
-            "ignore":  f"Ignore Sentry issue `{issue_id}`",
-            "assign":  f"Assign Sentry issue `{issue_id}` to **{params.get('assignee', '?')}**",
-            "comment": f"Add comment to Sentry issue `{issue_id}`: \"{params.get('text', '')[:80]}\"",
+            "ignore": f"Ignore Sentry issue `{issue_id}`",
+            "assign": f"Assign Sentry issue `{issue_id}` to **{params.get('assignee', '?')}**",
+            "comment": f'Add comment to Sentry issue `{issue_id}`: "{params.get("text", "")[:80]}"',
         }
         label = labels.get(action, f"Perform `{action}` on Sentry issue `{issue_id}`")
 
@@ -134,8 +138,8 @@ class SentryManageSkill(BaseSkill):
             data={},
             summary=label,
             pending_action={
-                "action":   f"sentry_{action}",
-                "params":   params,
+                "action": f"sentry_{action}",
+                "params": params,
                 "original": original_message,
             },
         )

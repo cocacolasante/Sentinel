@@ -23,15 +23,15 @@ from datetime import datetime, timezone
 from app.evals.base import AgentEvalSummary, IntegrationEvalResult
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _INTEGRATIONS_ORDER = ["gmail", "calendar", "github", "n8n", "home_assistant"]
 _INTEGRATION_LABELS = {
-    "gmail":          "Gmail",
-    "calendar":       "Calendar",
-    "github":         "GitHub",
-    "n8n":            "n8n",
+    "gmail": "Gmail",
+    "calendar": "Calendar",
+    "github": "GitHub",
+    "n8n": "n8n",
     "home_assistant": "HA",
 }
 
@@ -56,7 +56,7 @@ def format_scorecard(
         prev = (previous_scores or {}).get(summary.agent_name)
         if prev is not None:
             delta = summary.avg_score - prev
-            sign  = "+" if delta >= 0 else ""
+            sign = "+" if delta >= 0 else ""
             delta_str = f"  ({sign}{delta:.1f} vs last week)"
             if delta < -0.5:
                 delta_str += " — *degraded*"
@@ -76,8 +76,8 @@ def format_scorecard(
 
         result_map = {r.integration: r for r in integration_results}
         for key in _INTEGRATIONS_ORDER:
-            label   = _INTEGRATION_LABELS.get(key, key)
-            uptime  = get_uptime_pct(key, days=7)
+            label = _INTEGRATION_LABELS.get(key, key)
+            uptime = get_uptime_pct(key, days=7)
             if uptime is None:
                 # Fall back to today's single result
                 r = result_map.get(key)
@@ -95,8 +95,7 @@ def format_scorecard(
         for result in summary.results:
             if not result.passed and not result.error:
                 failed_details.append(
-                    f"  • *{summary.agent_name}/{result.test_name}* "
-                    f"({result.score}/10): _{result.reasoning[:120]}_"
+                    f"  • *{summary.agent_name}/{result.test_name}* ({result.score}/10): _{result.reasoning[:120]}_"
                 )
 
     if failed_details:
@@ -135,10 +134,7 @@ async def post_integration_health_to_slack(
         target = channel or getattr(get_settings(), "slack_eval_channel", "brain-evals")
     else:
         # Failures → alert channel
-        fail_list = "\n".join(
-            f"  • *{r.integration}* — {r.error or 'check failed'}"
-            for r in failed
-        )
+        fail_list = "\n".join(f"  • *{r.integration}* — {r.error or 'check failed'}" for r in failed)
         text = (
             f"⚠️ *Nightly Integration Health — {len(failed)} Failing*\n"
             f"  {len(passed)}/{len(results)} healthy\n\n"
@@ -149,8 +145,9 @@ async def post_integration_health_to_slack(
 
     try:
         from slack_sdk.web.async_client import AsyncWebClient
+
         client = AsyncWebClient(token=get_settings().slack_bot_token)
-        resp   = await client.chat_postMessage(channel=target, text=text, mrkdwn=True)
+        resp = await client.chat_postMessage(channel=target, text=text, mrkdwn=True)
         return bool(resp.get("ok"))
     except Exception as exc:
         logger.error("Failed to post integration health to Slack: %s", exc)
@@ -159,6 +156,7 @@ async def post_integration_health_to_slack(
 
 def get_settings():
     from app.config import get_settings as _gs
+
     return _gs()
 
 
@@ -185,6 +183,7 @@ async def post_scorecard_to_slack(
 
     try:
         from slack_sdk.web.async_client import AsyncWebClient
+
         client = AsyncWebClient(token=settings.slack_bot_token)
         response = await client.chat_postMessage(
             channel=target_channel,

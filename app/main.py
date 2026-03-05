@@ -54,6 +54,7 @@ settings = get_settings()
 def _init_loguru() -> None:
     """Configure Loguru before anything else logs."""
     from app.observability.loguru_setup import configure
+
     configure(
         log_dir=settings.log_dir,
         level=settings.log_level,
@@ -77,7 +78,7 @@ def _init_sentry() -> None:
             environment=settings.environment,
             traces_sample_rate=0.2,
             profiles_sample_rate=0.1,
-            max_breadcrumbs=40,          # keep breadcrumb buffer small
+            max_breadcrumbs=40,  # keep breadcrumb buffer small
             integrations=[
                 FastApiIntegration(transaction_style="endpoint"),
                 AsyncioIntegration(),
@@ -131,22 +132,22 @@ def _sentry_before_breadcrumb(crumb, hint):
 _init_loguru()
 _init_sentry()
 
-from app.router import chat                                               # noqa: E402
-from app.router.integrations   import router as integrations_router      # noqa: E402
-from app.router.feedback       import router as feedback_router          # noqa: E402
-from app.router.observability  import router as observe_router           # noqa: E402
-from app.router.costs          import router as costs_router             # noqa: E402
-from app.router.tasks_control  import router as tasks_control_router     # noqa: E402
-from app.router.approval       import router as approval_router           # noqa: E402
-from app.router.whatsapp        import router as whatsapp_router          # noqa: E402
-from app.router.sentry_webhook  import router as sentry_webhook_router    # noqa: E402
-from app.router.task_board      import router as task_board_router         # noqa: E402
-from app.router.milestones      import router as milestones_router          # noqa: E402
-from app.services.error_api    import router as error_api_router             # noqa: E402
-from app.services.error_middleware import ErrorCollectionMiddleware          # noqa: E402
-from app.router.slack          import start_socket_mode                  # noqa: E402
-from app.observability.event_bus import event_bus                    # noqa: E402
-from prometheus_fastapi_instrumentator import Instrumentator          # noqa: E402
+from app.router import chat  # noqa: E402
+from app.router.integrations import router as integrations_router  # noqa: E402
+from app.router.feedback import router as feedback_router  # noqa: E402
+from app.router.observability import router as observe_router  # noqa: E402
+from app.router.costs import router as costs_router  # noqa: E402
+from app.router.tasks_control import router as tasks_control_router  # noqa: E402
+from app.router.approval import router as approval_router  # noqa: E402
+from app.router.whatsapp import router as whatsapp_router  # noqa: E402
+from app.router.sentry_webhook import router as sentry_webhook_router  # noqa: E402
+from app.router.task_board import router as task_board_router  # noqa: E402
+from app.router.milestones import router as milestones_router  # noqa: E402
+from app.services.error_api import router as error_api_router  # noqa: E402
+from app.services.error_middleware import ErrorCollectionMiddleware  # noqa: E402
+from app.router.slack import start_socket_mode  # noqa: E402
+from app.observability.event_bus import event_bus  # noqa: E402
+from prometheus_fastapi_instrumentator import Instrumentator  # noqa: E402
 
 
 @asynccontextmanager
@@ -161,6 +162,7 @@ async def lifespan(app: FastAPI):
     # Initialise PostgreSQL schema (creates tables if they don't exist)
     try:
         from app.db import postgres
+
         await asyncio.to_thread(postgres.init_schema)
         logger.info("PostgreSQL ready")
     except Exception as exc:
@@ -169,6 +171,7 @@ async def lifespan(app: FastAPI):
     # Initialise Qdrant collection
     try:
         from app.memory.qdrant_client import QdrantMemory
+
         qm = QdrantMemory(
             host=settings.qdrant_host,
             port=settings.qdrant_port,
@@ -185,6 +188,7 @@ async def lifespan(app: FastAPI):
     # Launch Loki error stream monitor (polls every 30 s, creates remediation tasks)
     if settings.log_monitor_enabled:
         from app.services.log_monitor import log_monitor
+
         asyncio.create_task(log_monitor.start_monitoring())
         logger.info("Loki log monitor started")
 
@@ -224,18 +228,18 @@ if settings.environment != "production":
         allow_headers=["Content-Type"],
     )
 
-app.include_router(chat.router,          prefix="/api/v1", tags=["chat"])
-app.include_router(integrations_router,  prefix="/api/v1", tags=["integrations"])
-app.include_router(feedback_router,      prefix="/api/v1", tags=["feedback"])
-app.include_router(observe_router,       prefix="/api/v1", tags=["observability"])
-app.include_router(costs_router,         prefix="/api/v1", tags=["costs"])
+app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
+app.include_router(integrations_router, prefix="/api/v1", tags=["integrations"])
+app.include_router(feedback_router, prefix="/api/v1", tags=["feedback"])
+app.include_router(observe_router, prefix="/api/v1", tags=["observability"])
+app.include_router(costs_router, prefix="/api/v1", tags=["costs"])
 app.include_router(tasks_control_router, prefix="/api/v1", tags=["tasks"])
-app.include_router(approval_router,      prefix="/api/v1", tags=["approval"])
-app.include_router(whatsapp_router,        prefix="/api/v1", tags=["whatsapp"])
-app.include_router(sentry_webhook_router,  prefix="/api/v1", tags=["sentry"])
-app.include_router(task_board_router,      prefix="/api/v1", tags=["tasks-board"])
-app.include_router(milestones_router,      prefix="/api/v1", tags=["milestones"])
-app.include_router(error_api_router,       prefix="/api/v1", tags=["errors"])
+app.include_router(approval_router, prefix="/api/v1", tags=["approval"])
+app.include_router(whatsapp_router, prefix="/api/v1", tags=["whatsapp"])
+app.include_router(sentry_webhook_router, prefix="/api/v1", tags=["sentry"])
+app.include_router(task_board_router, prefix="/api/v1", tags=["tasks-board"])
+app.include_router(milestones_router, prefix="/api/v1", tags=["milestones"])
+app.include_router(error_api_router, prefix="/api/v1", tags=["errors"])
 app.add_middleware(ErrorCollectionMiddleware)
 
 

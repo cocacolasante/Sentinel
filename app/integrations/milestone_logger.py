@@ -20,29 +20,29 @@ logger = logging.getLogger(__name__)
 
 # ── Action label map ──────────────────────────────────────────────────────────
 _ACTION_LABELS: dict[str, tuple[str, str]] = {
-    "write_file":            ("🔧", "Code Write"),
-    "patch_file":            ("🔧", "Code Patch"),
-    "commit":                ("📦", "Git Commit"),
-    "push":                  ("📦", "Git Push"),
-    "commit_push":           ("📦", "Git Commit & Push"),
-    "shell_exec":            ("💻", "Shell Exec"),
-    "deploy_brain":          ("🚀", "Brain Deploy"),
-    "send_email":            ("📧", "Email Sent"),
-    "reply_email":           ("📧", "Email Reply"),
+    "write_file": ("🔧", "Code Write"),
+    "patch_file": ("🔧", "Code Patch"),
+    "commit": ("📦", "Git Commit"),
+    "push": ("📦", "Git Push"),
+    "commit_push": ("📦", "Git Commit & Push"),
+    "shell_exec": ("💻", "Shell Exec"),
+    "deploy_brain": ("🚀", "Brain Deploy"),
+    "send_email": ("📧", "Email Sent"),
+    "reply_email": ("📧", "Email Reply"),
     "create_calendar_event": ("📅", "Calendar Event"),
-    "add_contact":           ("👤", "Contact Added"),
-    "update_contact":        ("👤", "Contact Updated"),
-    "delete_contact":        ("👤", "Contact Deleted"),
-    "send_whatsapp":         ("📱", "WhatsApp Sent"),
-    "trigger_workflow":      ("⚙️", "Workflow Triggered"),
-    "docker_restart":        ("🐳", "Docker Restart"),
-    "docker_compose":        ("🐳", "Docker Compose"),
-    "task_update":           ("📋", "Task Updated"),
-    "sentry_resolve":        ("🐛", "Sentry Resolved"),
-    "sentry_ignore":         ("🐛", "Sentry Ignored"),
-    "sentry_assign":         ("🐛", "Sentry Assigned"),
-    "sentry_comment":        ("🐛", "Sentry Note Added"),
-    "sentry_investigate":    ("🐛", "Sentry Investigated"),
+    "add_contact": ("👤", "Contact Added"),
+    "update_contact": ("👤", "Contact Updated"),
+    "delete_contact": ("👤", "Contact Deleted"),
+    "send_whatsapp": ("📱", "WhatsApp Sent"),
+    "trigger_workflow": ("⚙️", "Workflow Triggered"),
+    "docker_restart": ("🐳", "Docker Restart"),
+    "docker_compose": ("🐳", "Docker Compose"),
+    "task_update": ("📋", "Task Updated"),
+    "sentry_resolve": ("🐛", "Sentry Resolved"),
+    "sentry_ignore": ("🐛", "Sentry Ignored"),
+    "sentry_assign": ("🐛", "Sentry Assigned"),
+    "sentry_comment": ("🐛", "Sentry Note Added"),
+    "sentry_investigate": ("🐛", "Sentry Investigated"),
 }
 
 
@@ -62,8 +62,7 @@ def _get_label(action: str, intent: str) -> tuple[str, str]:
 
 def _build_summary(params: dict) -> str:
     """Extract the most meaningful fields from params for a one-line summary."""
-    priority_keys = ("path", "message", "to", "subject", "name",
-                     "service", "command", "reason", "workflow_id", "title")
+    priority_keys = ("path", "message", "to", "subject", "name", "service", "command", "reason", "workflow_id", "title")
     parts = []
     for key in priority_keys:
         val = params.get(key)
@@ -91,6 +90,7 @@ async def log_milestone(
     never disrupts the main conversation flow.
     """
     from app.config import get_settings
+
     settings = get_settings()
 
     emoji, label = _get_label(action, intent)
@@ -100,6 +100,7 @@ async def log_milestone(
     # ── 1. Database ───────────────────────────────────────────────────────────
     try:
         from app.db import postgres
+
         postgres.execute(
             """
             INSERT INTO ai_milestones
@@ -133,6 +134,7 @@ async def log_milestone(
 
     try:
         from app.integrations.slack_notifier import post_alert
+
         await post_alert(text, channel=channel)
         logger.debug("Milestone posted to Slack | channel=%s | action=%s", channel, action)
     except Exception as exc:

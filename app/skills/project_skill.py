@@ -27,45 +27,45 @@ from datetime import datetime
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
-_WORKSPACE  = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
-_PROJECTS   = f"{_WORKSPACE}/projects"
+_WORKSPACE = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
+_PROJECTS = f"{_WORKSPACE}/projects"
 
 _STATUS_EMOJI = {
-    "queued":     "🕐",
-    "building":   "🔨",
-    "built":      "✅",
-    "deploying":  "🚀",
-    "deployed":   "🌐",
-    "failed":     "❌",
+    "queued": "🕐",
+    "building": "🔨",
+    "built": "✅",
+    "deploying": "🚀",
+    "deployed": "🌐",
+    "failed": "❌",
 }
 
 _IONOS_LOCATIONS = {
-    "us":  "us/las",
+    "us": "us/las",
     "us-east": "us/ewr",
-    "eu":  "de/fra",
-    "de":  "de/fra",
-    "uk":  "gb/lhr",
+    "eu": "de/fra",
+    "de": "de/fra",
+    "uk": "gb/lhr",
     "de/fra": "de/fra",
     "us/las": "us/las",
     "gb/lhr": "gb/lhr",
 }
 
 _TECH_LABELS = {
-    "python":  "Python / FastAPI",
+    "python": "Python / FastAPI",
     "fastapi": "Python / FastAPI",
-    "flask":   "Python / Flask",
-    "django":  "Python / Django",
-    "node":    "Node.js / Express",
-    "nodejs":  "Node.js / Express",
+    "flask": "Python / Flask",
+    "django": "Python / Django",
+    "node": "Node.js / Express",
+    "nodejs": "Node.js / Express",
     "express": "Node.js / Express",
-    "react":   "React (Node.js)",
-    "nextjs":  "Next.js",
-    "next":    "Next.js",
-    "go":      "Go",
-    "golang":  "Go",
-    "rust":    "Rust",
-    "static":  "Static HTML/CSS/JS",
-    "html":    "Static HTML/CSS/JS",
+    "react": "React (Node.js)",
+    "nextjs": "Next.js",
+    "next": "Next.js",
+    "go": "Go",
+    "golang": "Go",
+    "rust": "Rust",
+    "static": "Static HTML/CSS/JS",
+    "html": "Static HTML/CSS/JS",
 }
 
 
@@ -77,6 +77,7 @@ def _slugify(name: str) -> str:
 
 def _ensure_table() -> None:
     from app.db import postgres
+
     postgres.execute(
         """
         CREATE TABLE IF NOT EXISTS projects (
@@ -104,10 +105,10 @@ def _ensure_table() -> None:
 
 
 def _fmt_project(row: dict) -> str:
-    emoji  = _STATUS_EMOJI.get(row.get("status", ""), "•")
-    label  = _TECH_LABELS.get(row.get("tech_stack", ""), row.get("tech_stack", ""))
+    emoji = _STATUS_EMOJI.get(row.get("status", ""), "•")
+    label = _TECH_LABELS.get(row.get("tech_stack", ""), row.get("tech_stack", ""))
     status = row.get("status", "unknown")
-    lines  = [
+    lines = [
         f"{emoji} **#{row['id']} — {row['name']}** ({label})",
         f"   Status: {status}  |  Path: `{row.get('path', '?')}`",
     ]
@@ -122,7 +123,7 @@ def _fmt_project(row: dict) -> str:
 
 
 class ProjectSkill(BaseSkill):
-    name        = "project"
+    name = "project"
     description = (
         "Create, build, and deploy full coding projects autonomously. "
         "Sentinel scaffolds the project in /root/projects/, writes code, runs tests, "
@@ -134,9 +135,12 @@ class ProjectSkill(BaseSkill):
         "Params for deploy: project_id or slug, ionos_location (us/eu/uk), server_cores, server_ram_gb. "
         "Tasks are queued to background workers — Sentinel reports back to Slack when done."
     )
-    trigger_intents   = [
-        "project_create", "project_build", "project_deploy",
-        "project_status", "project_list",
+    trigger_intents = [
+        "project_create",
+        "project_build",
+        "project_deploy",
+        "project_status",
+        "project_list",
     ]
     approval_category = ApprovalCategory.NONE  # IONOS deploy uses BREAKING per-action
 
@@ -163,21 +167,16 @@ class ProjectSkill(BaseSkill):
     async def _create(self, params: dict, original_message: str) -> SkillResult:
         from app.db import postgres
 
-        name        = (params.get("name") or params.get("project_name") or "").strip()
+        name = (params.get("name") or params.get("project_name") or "").strip()
         description = (params.get("description") or original_message or "").strip()
-        tech_stack  = (params.get("tech_stack") or "python").strip().lower()
+        tech_stack = (params.get("tech_stack") or "python").strip().lower()
         auto_deploy = str(params.get("deploy", "false")).lower() in ("true", "1", "yes")
-        session_id  = (params.get("session_id") or "").strip()
-        ionos_loc   = _IONOS_LOCATIONS.get(
-            (params.get("ionos_location") or "eu").lower().strip(), "de/fra"
-        )
+        session_id = (params.get("session_id") or "").strip()
+        ionos_loc = _IONOS_LOCATIONS.get((params.get("ionos_location") or "eu").lower().strip(), "de/fra")
 
         if not name:
             return SkillResult(
-                context_data=(
-                    "[project_create requires a project name. "
-                    "Ask: what should the project be called?]"
-                ),
+                context_data=("[project_create requires a project name. Ask: what should the project be called?]"),
                 skill_name=self.name,
             )
 
@@ -189,9 +188,10 @@ class ProjectSkill(BaseSkill):
         if session_id:
             try:
                 from app.memory.redis_client import RedisMemory
+
                 ctx = RedisMemory().get_slack_context(session_id)
                 if ctx:
-                    slack_channel   = ctx.get("channel")
+                    slack_channel = ctx.get("channel")
                     slack_thread_ts = ctx.get("thread_ts")
             except Exception:
                 pass
@@ -212,8 +212,14 @@ class ProjectSkill(BaseSkill):
                 RETURNING id, name, slug, status, tech_stack, path
                 """,
                 (
-                    name, slug, description, tech_stack, path,
-                    session_id or None, slack_channel, slack_thread_ts,
+                    name,
+                    slug,
+                    description,
+                    tech_stack,
+                    path,
+                    session_id or None,
+                    slack_channel,
+                    slack_thread_ts,
                 ),
             )
         except Exception as exc:
@@ -232,6 +238,7 @@ class ProjectSkill(BaseSkill):
 
         # Queue the build Celery task
         from app.worker.project_tasks import build_project
+
         result = build_project.apply_async(
             args=[project_id],
             kwargs={"auto_deploy": auto_deploy, "ionos_location": ionos_loc},
@@ -243,9 +250,8 @@ class ProjectSkill(BaseSkill):
         deploy_note = (
             "\n🚀 Auto-deploy to IONOS staging server is **enabled** — "
             "once the build passes I'll provision a server and send you the IP."
-            if auto_deploy else
-            "\n💡 To deploy to an IONOS staging server later, say "
-            f"\"deploy project {name}\"."
+            if auto_deploy
+            else f'\n💡 To deploy to an IONOS staging server later, say "deploy project {name}".'
         )
 
         context = (
@@ -265,7 +271,7 @@ class ProjectSkill(BaseSkill):
         from app.db import postgres
 
         project_id = params.get("project_id") or params.get("id")
-        slug       = (params.get("slug") or params.get("name") or "").strip()
+        slug = (params.get("slug") or params.get("name") or "").strip()
 
         row = None
         if project_id:
@@ -279,11 +285,10 @@ class ProjectSkill(BaseSkill):
                 skill_name=self.name,
             )
 
-        postgres.execute(
-            "UPDATE projects SET status='queued', updated_at=NOW() WHERE id=%s", (row["id"],)
-        )
+        postgres.execute("UPDATE projects SET status='queued', updated_at=NOW() WHERE id=%s", (row["id"],))
 
         from app.worker.project_tasks import build_project
+
         result = build_project.apply_async(args=[row["id"]], queue="tasks_workspace")
 
         return SkillResult(
@@ -300,7 +305,7 @@ class ProjectSkill(BaseSkill):
         from app.db import postgres
 
         project_id = params.get("project_id") or params.get("id")
-        slug       = (params.get("slug") or params.get("name") or "").strip()
+        slug = (params.get("slug") or params.get("name") or "").strip()
 
         row = None
         if project_id:
@@ -323,15 +328,17 @@ class ProjectSkill(BaseSkill):
                 skill_name=self.name,
             )
 
-        ionos_loc   = _IONOS_LOCATIONS.get(
-            (params.get("ionos_location") or "eu").lower().strip(), "de/fra"
-        )
-        cores   = max(1, int(params.get("server_cores", 2)))
-        ram_gb  = max(1, int(params.get("server_ram_gb", 2)))
-        ram_mb  = ram_gb * 1024
+        ionos_loc = _IONOS_LOCATIONS.get((params.get("ionos_location") or "eu").lower().strip(), "de/fra")
+        cores = max(1, int(params.get("server_cores", 2)))
+        ram_gb = max(1, int(params.get("server_ram_gb", 2)))
+        ram_mb = ram_gb * 1024
 
-        loc_label = {"de/fra": "🇩🇪 Frankfurt", "us/las": "🇺🇸 Las Vegas",
-                     "gb/lhr": "🇬🇧 London", "us/ewr": "🇺🇸 Newark"}.get(ionos_loc, ionos_loc)
+        loc_label = {
+            "de/fra": "🇩🇪 Frankfurt",
+            "us/las": "🇺🇸 Las Vegas",
+            "gb/lhr": "🇬🇧 London",
+            "us/ewr": "🇺🇸 Newark",
+        }.get(ionos_loc, ionos_loc)
 
         summary = (
             f"Deploy **#{row['id']} — {row['name']}** to a new IONOS server:\n\n"
@@ -344,14 +351,14 @@ class ProjectSkill(BaseSkill):
         )
 
         pending = {
-            "intent":   "project_deploy",
-            "action":   "project_deploy",
+            "intent": "project_deploy",
+            "action": "project_deploy",
             "params": {
-                "project_id":     row["id"],
+                "project_id": row["id"],
                 "ionos_location": ionos_loc,
-                "server_cores":   cores,
-                "server_ram_mb":  ram_mb,
-                "session_id":     params.get("session_id", ""),
+                "server_cores": cores,
+                "server_ram_mb": ram_mb,
+                "session_id": params.get("session_id", ""),
             },
             "original": original_message,
         }
@@ -369,7 +376,7 @@ class ProjectSkill(BaseSkill):
         from app.db import postgres
 
         project_id = params.get("project_id") or params.get("id")
-        slug       = (params.get("slug") or params.get("name") or "").strip()
+        slug = (params.get("slug") or params.get("name") or "").strip()
 
         if project_id:
             row = postgres.execute_one("SELECT * FROM projects WHERE id=%s", (int(project_id),))
@@ -379,9 +386,7 @@ class ProjectSkill(BaseSkill):
             return await self._list()
 
         if not row:
-            return SkillResult(
-                context_data="[Project not found.]", skill_name=self.name
-            )
+            return SkillResult(context_data="[Project not found.]", skill_name=self.name)
 
         lines = [_fmt_project(row)]
         if row.get("build_log"):
@@ -394,9 +399,8 @@ class ProjectSkill(BaseSkill):
 
     async def _list(self) -> SkillResult:
         from app.db import postgres
-        rows = postgres.execute(
-            "SELECT * FROM projects ORDER BY created_at DESC LIMIT 20"
-        )
+
+        rows = postgres.execute("SELECT * FROM projects ORDER BY created_at DESC LIMIT 20")
         if not rows:
             return SkillResult(
                 context_data="No projects yet. Say 'create a project' to get started!",

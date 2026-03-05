@@ -1,4 +1,5 @@
 """Unit tests for Dispatcher constants and DispatchResult dataclass."""
+
 import pytest
 
 from app.brain.dispatcher import (
@@ -10,6 +11,7 @@ from app.brain.dispatcher import (
 
 
 # ── DispatchResult dataclass ──────────────────────────────────────────────────
+
 
 def test_dispatch_result_minimal_construction():
     result = DispatchResult(reply="Hello", intent="chat", session_id="s1")
@@ -37,6 +39,7 @@ def test_dispatch_result_is_dataclass():
 
 # ── Confirmation trigger words ────────────────────────────────────────────────
 
+
 def test_confirm_words_covers_key_triggers():
     for word in ("yes", "confirm", "proceed", "go ahead", "send it"):
         assert word in _CONFIRM_WORDS, f"'{word}' should be in _CONFIRM_WORDS"
@@ -63,6 +66,7 @@ def test_cancel_words_are_lowercase():
 
 
 # ── PENDING_TTL sanity check ──────────────────────────────────────────────────
+
 
 def test_pending_ttl_is_reasonable():
     """Pending actions should time out between 1 minute and 1 hour."""

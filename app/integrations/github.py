@@ -18,7 +18,7 @@ import httpx
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _BASE = "https://api.github.com"
@@ -35,7 +35,7 @@ class GitHubClient:
     def _headers(self) -> dict:
         return {
             "Authorization": f"Bearer {settings.github_token}",
-            "Accept":        "application/vnd.github+json",
+            "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
 
@@ -65,10 +65,10 @@ class GitHubClient:
         data = await self._get("/notifications", params={"all": not only_unread})
         return [
             {
-                "id":     n.get("id"),
-                "repo":   n.get("repository", {}).get("full_name"),
-                "type":   n.get("subject", {}).get("type"),
-                "title":  n.get("subject", {}).get("title"),
+                "id": n.get("id"),
+                "repo": n.get("repository", {}).get("full_name"),
+                "type": n.get("subject", {}).get("type"),
+                "title": n.get("subject", {}).get("title"),
                 "reason": n.get("reason"),
                 "unread": n.get("unread"),
                 "updated_at": n.get("updated_at"),
@@ -82,14 +82,14 @@ class GitHubClient:
         data = await self._get(f"/repos/{repo}/issues", params={"state": state, "per_page": 20})
         return [
             {
-                "number":  i.get("number"),
-                "title":   i.get("title"),
-                "state":   i.get("state"),
-                "author":  i.get("user", {}).get("login"),
-                "labels":  [l.get("name") for l in i.get("labels", [])],
+                "number": i.get("number"),
+                "title": i.get("title"),
+                "state": i.get("state"),
+                "author": i.get("user", {}).get("login"),
+                "labels": [l.get("name") for l in i.get("labels", [])],
                 "created": i.get("created_at"),
-                "url":     i.get("html_url"),
-                "body":    (i.get("body") or "")[:300],
+                "url": i.get("html_url"),
+                "body": (i.get("body") or "")[:300],
             }
             for i in data
             if not i.get("pull_request")  # exclude PRs from issues list
@@ -101,16 +101,16 @@ class GitHubClient:
         data = await self._get(f"/repos/{repo}/pulls", params={"state": state, "per_page": 20})
         return [
             {
-                "number":    pr.get("number"),
-                "title":     pr.get("title"),
-                "state":     pr.get("state"),
-                "author":    pr.get("user", {}).get("login"),
-                "base":      pr.get("base", {}).get("ref"),
-                "head":      pr.get("head", {}).get("ref"),
-                "draft":     pr.get("draft"),
-                "created":   pr.get("created_at"),
-                "url":       pr.get("html_url"),
-                "body":      (pr.get("body") or "")[:300],
+                "number": pr.get("number"),
+                "title": pr.get("title"),
+                "state": pr.get("state"),
+                "author": pr.get("user", {}).get("login"),
+                "base": pr.get("base", {}).get("ref"),
+                "head": pr.get("head", {}).get("ref"),
+                "draft": pr.get("draft"),
+                "created": pr.get("created_at"),
+                "url": pr.get("html_url"),
+                "body": (pr.get("body") or "")[:300],
             }
             for pr in data
         ]
@@ -135,12 +135,14 @@ class GitHubClient:
         data = await self._post(f"/repos/{repo}/issues", json=payload)
         return {
             "number": data.get("number"),
-            "title":  data.get("title"),
-            "url":    data.get("html_url"),
-            "state":  data.get("state"),
+            "title": data.get("title"),
+            "url": data.get("html_url"),
+            "state": data.get("state"),
         }
 
-    async def trigger_workflow(self, repo: str, workflow_id: str, ref: str = "main", inputs: dict | None = None) -> dict:
+    async def trigger_workflow(
+        self, repo: str, workflow_id: str, ref: str = "main", inputs: dict | None = None
+    ) -> dict:
         """Dispatch a workflow_dispatch event to trigger a workflow manually."""
         if not repo:
             repo = settings.github_default_repo
@@ -159,12 +161,12 @@ class GitHubClient:
         data = await self._get("/user/repos", params={"per_page": per_page, "sort": "updated"})
         return [
             {
-                "name":        r.get("full_name"),
+                "name": r.get("full_name"),
                 "description": r.get("description", ""),
-                "language":    r.get("language"),
-                "stars":       r.get("stargazers_count"),
-                "updated":     r.get("updated_at"),
-                "private":     r.get("private"),
+                "language": r.get("language"),
+                "stars": r.get("stargazers_count"),
+                "updated": r.get("updated_at"),
+                "private": r.get("private"),
             }
             for r in data
         ]

@@ -24,17 +24,17 @@ from dataclasses import dataclass
 from loguru import logger
 
 from app.brain.cost_tracker import BudgetExceeded
-from app.brain.intent       import IntentClassifier
-from app.brain.llm_router   import LLMRouter
+from app.brain.intent import IntentClassifier
+from app.brain.llm_router import LLMRouter
 from app.brain.rate_limiter import RateLimitExceeded, rate_limiter
-from app.config             import get_settings
+from app.config import get_settings
 from app.observability.event_bus import event_bus
 
 settings = get_settings()
 
 # ── Confirmation trigger words ────────────────────────────────────────────────
 _CONFIRM_WORDS = {"confirm", "send", "yes", "do it", "proceed", "go ahead", "send it"}
-_CANCEL_WORDS  = {"cancel", "no", "stop", "abort", "nevermind", "never mind", "don't"}
+_CANCEL_WORDS = {"cancel", "no", "stop", "abort", "nevermind", "never mind", "don't"}
 
 PENDING_TTL = 300  # 5 minutes
 
@@ -43,6 +43,7 @@ def _capture_error(exc: Exception, context: dict | None = None) -> None:
     """Send exception to Sentry if configured, otherwise log it."""
     try:
         import sentry_sdk
+
         with sentry_sdk.push_scope() as scope:
             if context:
                 for k, v in context.items():
@@ -54,42 +55,42 @@ def _capture_error(exc: Exception, context: dict | None = None) -> None:
 
 @dataclass
 class DispatchResult:
-    reply:      str
-    intent:     str
+    reply: str
+    intent: str
     session_id: str
-    agent:      str = "default"
+    agent: str = "default"
 
 
 def _build_skill_registry():
     """Construct and return a fully-populated SkillRegistry."""
-    from app.skills.registry        import SkillRegistry
-    from app.skills.chat_skill      import ChatSkill
-    from app.skills.gmail_skill     import GmailReadSkill, GmailSendSkill
-    from app.skills.calendar_skill  import CalendarReadSkill, CalendarWriteSkill
-    from app.skills.github_skill    import GitHubReadSkill, GitHubWriteSkill
+    from app.skills.registry import SkillRegistry
+    from app.skills.chat_skill import ChatSkill
+    from app.skills.gmail_skill import GmailReadSkill, GmailSendSkill
+    from app.skills.calendar_skill import CalendarReadSkill, CalendarWriteSkill
+    from app.skills.github_skill import GitHubReadSkill, GitHubWriteSkill
     from app.skills.smart_home_skill import SmartHomeSkill
-    from app.skills.n8n_skill       import N8nSkill
-    from app.skills.research_skill          import ResearchSkill
-    from app.skills.code_skill             import CodeSkill
-    from app.skills.content_draft_skill    import ContentDraftSkill
-    from app.skills.social_caption_skill   import SocialCaptionSkill
-    from app.skills.ad_copy_skill          import AdCopySkill
+    from app.skills.n8n_skill import N8nSkill
+    from app.skills.research_skill import ResearchSkill
+    from app.skills.code_skill import CodeSkill
+    from app.skills.content_draft_skill import ContentDraftSkill
+    from app.skills.social_caption_skill import SocialCaptionSkill
+    from app.skills.ad_copy_skill import AdCopySkill
     from app.skills.content_repurpose_skill import ContentRepurposeSkill
     from app.skills.content_calendar_skill import ContentCalendarSkill
-    from app.skills.repo_skill      import RepoReadSkill, RepoWriteSkill, RepoCommitSkill, CodeChangeSkill
-    from app.skills.gmail_skill     import GmailReplySkill
-    from app.skills.contacts_skill  import ContactsReadSkill, ContactsWriteSkill
-    from app.skills.ionos_skill     import IONOSCloudSkill, IONOSDNSSkill
-    from app.skills.cicd_skill      import CICDReadSkill, CICDTriggerSkill
-    from app.skills.cicd_debug      import CicdDebugSkill
-    from app.skills.n8n_skill       import N8nManageSkill
-    from app.skills.whatsapp_skill  import WhatsAppReadSkill, WhatsAppSendSkill
-    from app.skills.skill_discovery    import SkillDiscoverySkill
-    from app.skills.sentry_skill       import SentryReadSkill, SentryManageSkill
+    from app.skills.repo_skill import RepoReadSkill, RepoWriteSkill, RepoCommitSkill, CodeChangeSkill
+    from app.skills.gmail_skill import GmailReplySkill
+    from app.skills.contacts_skill import ContactsReadSkill, ContactsWriteSkill
+    from app.skills.ionos_skill import IONOSCloudSkill, IONOSDNSSkill
+    from app.skills.cicd_skill import CICDReadSkill, CICDTriggerSkill
+    from app.skills.cicd_debug import CicdDebugSkill
+    from app.skills.n8n_skill import N8nManageSkill
+    from app.skills.whatsapp_skill import WhatsAppReadSkill, WhatsAppSendSkill
+    from app.skills.skill_discovery import SkillDiscoverySkill
+    from app.skills.sentry_skill import SentryReadSkill, SentryManageSkill
     from app.skills.server_shell_skill import ServerShellSkill
-    from app.skills.deploy_skill       import DeploySkill
-    from app.skills.task_skill         import TaskCreateSkill, TaskReadSkill, TaskUpdateSkill
-    from app.skills.project_skill      import ProjectSkill
+    from app.skills.deploy_skill import DeploySkill
+    from app.skills.task_skill import TaskCreateSkill, TaskReadSkill, TaskUpdateSkill
+    from app.skills.project_skill import ProjectSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -154,10 +155,10 @@ def _build_skill_registry():
 
 def _build_hook_registry():
     """Construct and return a fully-populated HookRegistry."""
-    from app.hooks.registry       import HookRegistry
-    from app.hooks.security_hook  import SecurityHook
-    from app.hooks.logging_hook   import LoggingHook
-    from app.hooks.session_hook   import SessionHook
+    from app.hooks.registry import HookRegistry
+    from app.hooks.security_hook import SecurityHook
+    from app.hooks.logging_hook import LoggingHook
+    from app.hooks.session_hook import SessionHook
 
     reg = HookRegistry()
     reg.register(SecurityHook())
@@ -168,15 +169,17 @@ def _build_hook_registry():
 
 class Dispatcher:
     def __init__(self) -> None:
-        self.llm    = LLMRouter()
+        self.llm = LLMRouter()
         self.intent = IntentClassifier()
         self.skills = _build_skill_registry()
-        self.hooks  = _build_hook_registry()
+        self.hooks = _build_hook_registry()
 
         from app.agents.registry import AgentRegistry
+
         self.agents = AgentRegistry()
 
         from app.memory.memory_manager import MemoryManager
+
         self.memory = MemoryManager(
             redis_host=settings.redis_host,
             redis_port=settings.redis_port,
@@ -200,6 +203,7 @@ class Dispatcher:
         except RateLimitExceeded as exc:
             try:
                 from app.observability.prometheus_metrics import RATE_LIMITED_TOTAL
+
                 window = "minute" if "minute" in str(exc) else "hour"
                 RATE_LIMITED_TOTAL.labels(window=window).inc()
             except Exception:
@@ -258,8 +262,8 @@ class Dispatcher:
             available_skills=available_skills,
             history=mem_ctx.hot_history or None,
         )
-        intent     = classified.get("intent", "chat")
-        params     = classified.get("params", {})
+        intent = classified.get("intent", "chat")
+        params = classified.get("params", {})
         confidence = classified.get("confidence", 1.0)
 
         # 4a. Contact resolution — if params contain a name (not an email/phone),
@@ -268,6 +272,7 @@ class Dispatcher:
 
         # 4b. Skill discovery — if confidence is very low and message looks action-oriented
         from app.skills.skill_discovery import SkillGapHandler
+
         if SkillGapHandler.should_trigger(intent, confidence, message):
             intent = "skill_discover"
             params = {}
@@ -276,31 +281,37 @@ class Dispatcher:
         agent = self.agents.select(intent, message)
 
         # 6. Execute skill
-        skill   = self.skills.get(intent)
-        sk_t0   = time.monotonic()
+        skill = self.skills.get(intent)
+        sk_t0 = time.monotonic()
         try:
-            params["session_id"] = session_id   # lets background skills post back to Slack
+            params["session_id"] = session_id  # lets background skills post back to Slack
             result = await skill.execute(params, message)
         except Exception as exc:
             _capture_error(exc, context={"intent": intent, "skill": skill.name, "session_id": session_id})
             logger.error("Skill {} failed for intent {}: {}", skill.name, intent, exc)
             result_context = f"[Skill error — {skill.name} failed: {exc}. Inform the user gracefully.]"
             from app.skills.base import SkillResult
+
             result = SkillResult(context_data=result_context, skill_name=skill.name)
 
         sk_latency = round((time.monotonic() - sk_t0) * 1000, 1)
-        await event_bus.publish({
-            "event":        "skill_dispatched",
-            "session_id":   session_id,
-            "intent":       intent,
-            "skill":        skill.name,
-            "has_context":  bool(result.context_data),
-            "needs_confirm": bool(result.pending_action),
-            "latency_ms":   sk_latency,
-        })
+        await event_bus.publish(
+            {
+                "event": "skill_dispatched",
+                "session_id": session_id,
+                "intent": intent,
+                "skill": skill.name,
+                "has_context": bool(result.context_data),
+                "needs_confirm": bool(result.pending_action),
+                "latency_ms": sk_latency,
+            }
+        )
         logger.debug(
             "SKILL | {} | intent={} | ctx={} | {}ms",
-            skill.name, intent, bool(result.context_data), sk_latency,
+            skill.name,
+            intent,
+            bool(result.context_data),
+            sk_latency,
         )
 
         # 6b. Task chaining — when a task is created, also infer and execute the
@@ -310,19 +321,22 @@ class Dispatcher:
             intent == "task_create"
             and result.context_data
             and "[task_create failed" not in (result.context_data or "")
-            and not result.pending_action   # only chain if no existing confirmation needed
+            and not result.pending_action  # only chain if no existing confirmation needed
         ):
-            _task_content = (
-                (params.get("title") or "") + " " + (params.get("description") or "")
-            ).strip() or message
+            _task_content = ((params.get("title") or "") + " " + (params.get("description") or "")).strip() or message
             try:
                 from app.skills.base import SkillResult as _SR
+
                 _sub = self.intent.classify(_task_content, history=None)
                 _sub_intent = _sub.get("intent", "chat")
                 _sub_params = _sub.get("params", {})
                 _NON_ACTIONABLE = {
-                    "chat", "task_create", "task_read", "task_update",
-                    "skill_discover", "code",
+                    "chat",
+                    "task_create",
+                    "task_read",
+                    "task_update",
+                    "skill_discover",
+                    "code",
                 }
                 if _sub_intent not in _NON_ACTIONABLE:
                     _sub_skill = self.skills.get(_sub_intent)
@@ -330,7 +344,9 @@ class Dispatcher:
                         _sub_result = await _sub_skill.execute(_sub_params, _task_content)
                         logger.info(
                             "Task chaining | task_intent={} | sub_intent={} | has_pending={}",
-                            intent, _sub_intent, bool(_sub_result.pending_action),
+                            intent,
+                            _sub_intent,
+                            bool(_sub_result.pending_action),
                         )
                         # Merge sub-skill context and (if present) its pending_action
                         result = _SR(
@@ -349,8 +365,11 @@ class Dispatcher:
 
         # 7. Build augmented prompt
         augmented = self._build_augmented(
-            message, intent, result.context_data,
-            mem_ctx.warm_summary, mem_ctx.cold_matches,
+            message,
+            intent,
+            result.context_data,
+            mem_ctx.warm_summary,
+            mem_ctx.cold_matches,
             mem_ctx.cross_session_context,
         )
 
@@ -360,6 +379,7 @@ class Dispatcher:
         except BudgetExceeded as exc:
             try:
                 from app.observability.prometheus_metrics import BUDGET_EXCEEDED_TOTAL
+
                 BUDGET_EXCEEDED_TOTAL.inc()
             except Exception:
                 pass
@@ -375,15 +395,17 @@ class Dispatcher:
                 agent=agent.name if agent else "default",
             )
         except Exception as exc:
-            _capture_error(exc, context={"intent": intent, "agent": agent.name if agent else "default", "session_id": session_id})
+            _capture_error(
+                exc, context={"intent": intent, "agent": agent.name if agent else "default", "session_id": session_id}
+            )
             logger.error("LLM routing failed for session {}: {}", session_id, exc)
             raise
 
         # 9. Approval-level gate — decide whether to confirm, auto-execute, or skip
         if result.pending_action:
             approval_level = self.memory.redis.get_approval_level()
-            needs_confirm  = self._needs_confirmation(skill, approval_level)
-            task_id        = str(uuid.uuid4())
+            needs_confirm = self._needs_confirmation(skill, approval_level)
+            task_id = str(uuid.uuid4())
 
             # Always log the write task for the dashboard audit trail
             self._log_write_task(task_id, session_id, result.pending_action, skill)
@@ -396,14 +418,19 @@ class Dispatcher:
 
                 # DM the owner so approval can happen outside the current thread
                 if settings.slack_owner_user_id:
-                    asyncio.create_task(self._dm_approval_request(
-                        task_id, result.pending_action, skill,
-                    ))
+                    asyncio.create_task(
+                        self._dm_approval_request(
+                            task_id,
+                            result.pending_action,
+                            skill,
+                        )
+                    )
             else:
                 # Auto-execute — approval level says this write doesn't need confirmation
                 logger.info(
                     "Auto-executing write action | action={} | level={} | category={}",
-                    result.pending_action.get("action"), approval_level,
+                    result.pending_action.get("action"),
+                    approval_level,
                     getattr(skill, "approval_category", "unknown"),
                 )
                 self._update_write_task_status(task_id, "executing")
@@ -411,17 +438,17 @@ class Dispatcher:
                     exec_reply = await self._execute_pending(result.pending_action, session_id)
                     self._update_write_task_status(task_id, "completed")
                     # Log milestone for auto-executed write actions
-                    asyncio.create_task(self._fire_milestone(
-                        result.pending_action, session_id,
-                        agent=agent.name if agent else "",
-                    ))
+                    asyncio.create_task(
+                        self._fire_milestone(
+                            result.pending_action,
+                            session_id,
+                            agent=agent.name if agent else "",
+                        )
+                    )
                     reply = exec_reply
                 except Exception as exc:
                     self._update_write_task_status(task_id, "failed", str(exc))
-                    reply = (
-                        f"Write action failed automatically: `{exc}`\n"
-                        "Nothing was sent or saved."
-                    )
+                    reply = f"Write action failed automatically: `{exc}`\nNothing was sent or saved."
 
         # 10. Persist turn
         await self.memory.persist_turn(session_id, message, reply, intent=intent)
@@ -474,8 +501,7 @@ class Dispatcher:
         if cross_session_context:
             parts.append(
                 "[Cross-interface context — recent activity from other sessions "
-                "(Slack / CLI / REST)]:\n"
-                + cross_session_context
+                "(Slack / CLI / REST)]:\n" + cross_session_context
             )
 
         if warm_summary:
@@ -483,6 +509,7 @@ class Dispatcher:
 
         if cold_matches:
             import json
+
             parts.append(f"[Relevant past context]:\n{json.dumps(cold_matches, indent=2)}")
 
         if context_data:
@@ -505,24 +532,26 @@ class Dispatcher:
             return False
 
         from app.skills.base import ApprovalCategory
+
         cat = getattr(skill, "approval_category", ApprovalCategory.NONE)
         if cat == ApprovalCategory.NONE:
             return False
         if cat == ApprovalCategory.BREAKING:
-            return True                   # always confirm (unless autonomy mode above)
+            return True  # always confirm (unless autonomy mode above)
         if cat == ApprovalCategory.CRITICAL:
-            return approval_level <= 2    # confirm at levels 1 & 2
+            return approval_level <= 2  # confirm at levels 1 & 2
         # STANDARD
-        return approval_level <= 1        # confirm only at level 1
+        return approval_level <= 1  # confirm only at level 1
 
     @staticmethod
     async def _dm_approval_request(task_id: str, pending: dict, skill) -> None:
         """DM the owner and post to brain-alerts when a write action needs confirmation."""
         try:
             from app.integrations.slack_notifier import post_dm, post_alert
+
             action_desc = pending.get("action") or pending.get("intent") or "unknown action"
-            cat_name    = getattr(getattr(skill, "approval_category", None), "value", "standard")
-            domain      = settings.domain or "sentinelai.cloud"
+            cat_name = getattr(getattr(skill, "approval_category", None), "value", "standard")
+            domain = settings.domain or "sentinelai.cloud"
             dm_text = (
                 f"🔐 *Approval needed — `{task_id[:8]}`*\n"
                 f"Action: {action_desc}\n"
@@ -545,6 +574,7 @@ class Dispatcher:
         """Fire-and-forget milestone log + Slack notification after a write action executes."""
         try:
             from app.integrations.milestone_logger import log_milestone
+
             await log_milestone(
                 action=pending.get("action", "unknown"),
                 intent=pending.get("intent", "unknown"),
@@ -562,8 +592,10 @@ class Dispatcher:
         try:
             from app.db import postgres
             from app.skills.base import ApprovalCategory
+
             cat = getattr(skill, "approval_category", ApprovalCategory.STANDARD).value
             import json
+
             postgres.execute(
                 """
                 INSERT INTO pending_write_tasks
@@ -587,6 +619,7 @@ class Dispatcher:
     def _update_write_task_status(task_id: str, status: str, error: str | None = None) -> None:
         try:
             from app.db import postgres
+
             postgres.execute(
                 "UPDATE pending_write_tasks SET status=%s, error=%s, updated_at=NOW() WHERE task_id=%s",
                 (status, error, task_id),
@@ -604,6 +637,7 @@ class Dispatcher:
         """
         try:
             from app.integrations.contacts import ContactsClient
+
             client = ContactsClient()
 
             # Email-based intents: resolve 'to' field
@@ -643,17 +677,18 @@ class Dispatcher:
     # ── Pending action execution ──────────────────────────────────────────────
 
     async def _execute_pending(self, pending: dict, session_id: str) -> str:
-        action   = pending.get("action")
-        params   = pending.get("params", {})
+        action = pending.get("action")
+        params = pending.get("params", {})
         original = pending.get("original", "")
 
         try:
             if action == "send_email":
                 from app.integrations.gmail import get_gmail_client
-                to      = params.get("to", "")
+
+                to = params.get("to", "")
                 subject = params.get("subject", "")
                 account = params.get("account")
-                client  = get_gmail_client(account_name=account)
+                client = get_gmail_client(account_name=account)
 
                 # Generate a properly written email body (not just the raw hint)
                 draft_prompt = (
@@ -668,7 +703,9 @@ class Dispatcher:
 
                 result = await client.send_email(to=to, subject=subject, body=body)
                 msg_id = result.get("id", "unknown")
-                logger.info("Email sent | account={} | to={} | subject={} | msg_id={}", client.account_name, to, subject, msg_id)
+                logger.info(
+                    "Email sent | account={} | to={} | subject={} | msg_id={}", client.account_name, to, subject, msg_id
+                )
                 task_id = pending.get("_task_id")
                 if task_id:
                     self._update_write_task_status(task_id, "completed")
@@ -677,14 +714,21 @@ class Dispatcher:
             if action == "create_calendar_event":
                 from app.integrations.google_calendar import get_calendar_client
                 from app.integrations.gmail import get_gmail_client
-                account  = params.get("account")
-                cal      = get_calendar_client(account_name=account)
-                result   = await cal.create_event(params)
-                title    = result.get("title", params.get("title", "Event"))
-                start    = result.get("start", "")
-                link     = result.get("link", "")
+
+                account = params.get("account")
+                cal = get_calendar_client(account_name=account)
+                result = await cal.create_event(params)
+                title = result.get("title", params.get("title", "Event"))
+                start = result.get("start", "")
+                link = result.get("link", "")
                 attendees = result.get("attendees", [])
-                logger.info("Calendar event created | account={} | title={} | start={} | attendees={}", cal.account_name, title, start, attendees)
+                logger.info(
+                    "Calendar event created | account={} | title={} | start={} | attendees={}",
+                    cal.account_name,
+                    title,
+                    start,
+                    attendees,
+                )
 
                 # Send a personal Gmail invite to each attendee (use same account)
                 # Google Calendar's sendUpdates="all" already delivers the native invite;
@@ -703,7 +747,8 @@ class Dispatcher:
                                     f"Keep it warm and concise — 2-3 sentences max. "
                                     "Output ONLY the email body."
                                 ),
-                                None, None,
+                                None,
+                                None,
                             )
                             await gmail_client.send_email(
                                 to=email,
@@ -718,8 +763,7 @@ class Dispatcher:
 
                 reply = (
                     f"Done! **{title}** has been added to the **{cal.account_name}** calendar.\n"
-                    f"Start: `{start}`\n"
-                    + (f"[Open in Google Calendar]({link})\n" if link else "")
+                    f"Start: `{start}`\n" + (f"[Open in Google Calendar]({link})\n" if link else "")
                 )
                 if gmail_results:
                     reply += f"\nInvite email sent from your Gmail to: {', '.join(gmail_results)}"
@@ -731,6 +775,7 @@ class Dispatcher:
 
             if action in ("write_file", "patch_file"):
                 from app.integrations.repo import RepoClient
+
                 client = RepoClient()
                 await client.ensure_repo()
                 if action == "patch_file":
@@ -752,6 +797,7 @@ class Dispatcher:
 
             if action in ("commit", "commit_push", "push"):
                 from app.integrations.repo import RepoClient
+
                 client = RepoClient()
                 await client.ensure_repo()
                 message = params.get("message", "Brain: automated update")
@@ -770,16 +816,17 @@ class Dispatcher:
 
             if action == "reply_email":
                 from app.integrations.gmail import get_gmail_client
+
                 account = params.get("account")
-                client  = get_gmail_client(account_name=account)
-                msg_id  = params.get("msg_id", "")
+                client = get_gmail_client(account_name=account)
+                msg_id = params.get("msg_id", "")
                 draft_prompt = (
                     f"Write a reply email.\n"
                     f"Context: {params.get('body_hint', original)}\n\n"
                     "Output ONLY the reply body — no subject line, no metadata. "
                     "Use an appropriate tone."
                 )
-                body   = await asyncio.to_thread(self.llm.route, draft_prompt, None, None)
+                body = await asyncio.to_thread(self.llm.route, draft_prompt, None, None)
                 result = await client.reply_email(msg_id=msg_id, body=body)
                 task_id = pending.get("_task_id")
                 if task_id:
@@ -791,6 +838,7 @@ class Dispatcher:
 
             if action == "code_change":
                 from app.skills.repo_skill import CodeChangeSkill
+
                 skill = CodeChangeSkill()
                 result = await asyncio.to_thread(
                     skill._run_workflow,
@@ -810,8 +858,9 @@ class Dispatcher:
 
             if action == "shell_exec":
                 from app.skills.server_shell_skill import _run_command
+
                 command = params.get("command", "").strip()
-                cwd     = params.get("cwd", "/root").rstrip("/") or "/root"
+                cwd = params.get("cwd", "/root").rstrip("/") or "/root"
                 if not command:
                     return "[shell_exec: no command provided]"
                 output, code = await _run_command(command, cwd)
@@ -832,13 +881,16 @@ class Dispatcher:
                 action in ("add", "update", "delete") and pending.get("intent") == "contacts_write"
             ):
                 from app.integrations.contacts import ContactsClient
+
                 client = ContactsClient()
                 real_action = params.get("action", action)
 
                 if real_action == "add":
                     name = params.get("name", "")
-                    extra = {k: params.get(k, "") for k in
-                             ("email", "phone", "whatsapp", "company", "github", "slack_id", "tags", "notes")}
+                    extra = {
+                        k: params.get(k, "")
+                        for k in ("email", "phone", "whatsapp", "company", "github", "slack_id", "tags", "notes")
+                    }
                     result = await client.add(name, **extra)
                     task_id = pending.get("_task_id")
                     if task_id:
@@ -847,8 +899,7 @@ class Dispatcher:
 
                 if real_action == "update":
                     contact_id = int(params.get("id", 0))
-                    fields     = {k: v for k, v in params.items()
-                                  if k not in ("action", "id") and v}
+                    fields = {k: v for k, v in params.items() if k not in ("action", "id") and v}
                     result = await client.update(contact_id, fields)
                     task_id = pending.get("_task_id")
                     if task_id:
@@ -865,7 +916,8 @@ class Dispatcher:
 
             if action == "send_whatsapp":
                 from app.integrations.whatsapp import WhatsAppClient
-                to   = params.get("to", "")
+
+                to = params.get("to", "")
                 body = params.get("body", "")
                 if not body:
                     draft_prompt = (
@@ -883,11 +935,12 @@ class Dispatcher:
             if action == "trigger_workflow":
                 from app.integrations.github import GitHubClient
                 from app.config import get_settings as _gs
+
                 _settings = _gs()
-                repo        = params.get("repo", _settings.github_default_repo)
+                repo = params.get("repo", _settings.github_default_repo)
                 workflow_id = params.get("workflow_id", params.get("workflow_name", ""))
-                ref         = params.get("ref", "main")
-                inputs      = params.get("inputs", {})
+                ref = params.get("ref", "main")
+                inputs = params.get("inputs", {})
                 result = await GitHubClient().trigger_workflow(repo, workflow_id, ref, inputs)
                 task_id = pending.get("_task_id")
                 if task_id:
@@ -900,7 +953,8 @@ class Dispatcher:
             if pending.get("intent") == "ionos_cloud":
                 from app.integrations.ionos import IONOSClient
                 import json as _json
-                client   = IONOSClient()
+
+                client = IONOSClient()
                 real_act = params.get("action", action)
 
                 # provision_server gets rich step-by-step output
@@ -928,8 +982,11 @@ class Dispatcher:
                         f"  • Server: `{res.get('server_id')}`\n"
                         f"  • Volume: `{res.get('volume_id')}`\n"
                         f"  • NIC: `{res.get('nic_id')}`\n\n"
-                        + (f"⚠️ Image password: `{res['image_password']}` (save this — shown once)\n\n"
-                           if res.get("image_password") else "")
+                        + (
+                            f"⚠️ Image password: `{res['image_password']}` (save this — shown once)\n\n"
+                            if res.get("image_password")
+                            else ""
+                        )
                         + f"_Note: {res.get('note', 'Server is provisioning — IP assigned within ~5 min.')}_"
                     )
 
@@ -952,24 +1009,33 @@ class Dispatcher:
             if pending.get("intent") == "ionos_dns":
                 from app.integrations.ionos_dns import IONOSDNSClient
                 import json as _json
-                client   = IONOSDNSClient()
-                zone_id  = params.get("zone_id", "")
+
+                client = IONOSDNSClient()
+                zone_id = params.get("zone_id", "")
                 real_act = params.get("action", action)
 
                 if real_act == "create_record":
                     res = await client.create_record(
-                        zone_id, params.get("name", "@"), params.get("type", "A"),
-                        params.get("content", ""), int(params.get("ttl", 3600)),
+                        zone_id,
+                        params.get("name", "@"),
+                        params.get("type", "A"),
+                        params.get("content", ""),
+                        int(params.get("ttl", 3600)),
                     )
                 elif real_act == "update_record":
-                    res = await client.update_record(zone_id, params.get("record_id", ""),
-                                                     {k: params[k] for k in ("content", "ttl", "enabled") if k in params})
+                    res = await client.update_record(
+                        zone_id,
+                        params.get("record_id", ""),
+                        {k: params[k] for k in ("content", "ttl", "enabled") if k in params},
+                    )
                 elif real_act == "delete_record":
                     res = await client.delete_record(zone_id, params.get("record_id", ""))
                 elif real_act == "upsert_record":
                     res = await client.upsert_record(
-                        params.get("zone_name", ""), params.get("name", "@"),
-                        params.get("type", "A"), params.get("content", ""),
+                        params.get("zone_name", ""),
+                        params.get("name", "@"),
+                        params.get("type", "A"),
+                        params.get("content", ""),
                         int(params.get("ttl", 3600)),
                     )
                 elif real_act == "create_zone":
@@ -985,9 +1051,10 @@ class Dispatcher:
             if pending.get("intent") == "n8n_manage":
                 from app.integrations.n8n_bridge import N8nBridge
                 import json as _json
-                bridge   = N8nBridge()
+
+                bridge = N8nBridge()
                 real_act = params.get("action", action)
-                wf_id    = params.get("workflow_id", "")
+                wf_id = params.get("workflow_id", "")
 
                 if real_act == "create":
                     res = await bridge.create_workflow(
@@ -1010,10 +1077,10 @@ class Dispatcher:
                 return f"n8n `{real_act}` completed:\n```json\n{_json.dumps(res, indent=2)}\n```"
 
             # ── Sentry issue management ──────────────────────────────────────
-            if action in ("sentry_resolve", "sentry_ignore", "sentry_assign",
-                          "sentry_comment", "sentry_investigate"):
+            if action in ("sentry_resolve", "sentry_ignore", "sentry_assign", "sentry_comment", "sentry_investigate"):
                 from app.integrations.sentry_client import SentryClient
-                client   = SentryClient()
+
+                client = SentryClient()
                 issue_id = params.get("issue_id", "")
 
                 if action == "sentry_investigate":
@@ -1022,13 +1089,13 @@ class Dispatcher:
                     except Exception:
                         issue = params  # fall back to webhook params if API not configured
 
-                    level     = issue.get("level", "error")
-                    title     = issue.get("title", params.get("title", ""))
-                    project   = issue.get("project", params.get("project", ""))
-                    count     = issue.get("count", params.get("count", 0))
+                    level = issue.get("level", "error")
+                    title = issue.get("title", params.get("title", ""))
+                    project = issue.get("project", params.get("project", ""))
+                    count = issue.get("count", params.get("count", 0))
                     permalink = issue.get("permalink", params.get("permalink", ""))
-                    platform  = issue.get("platform", params.get("platform", ""))
-                    culprit   = issue.get("culprit", "")
+                    platform = issue.get("platform", params.get("platform", ""))
+                    culprit = issue.get("culprit", "")
 
                     analysis_prompt = (
                         f"A {level.upper()} error has been reported in the {project} project.\n\n"
@@ -1085,35 +1152,43 @@ class Dispatcher:
             # ── Task board ──────────────────────────────────────────────────
             if action == "task_update":
                 from app.db import postgres
+
                 _task_id = params.get("id") or params.get("task_id")
                 if not _task_id:
                     return "[task_update: no task ID provided]"
 
                 _pri_to_text = {1: "low", 2: "low", 3: "normal", 4: "high", 5: "urgent"}
-                _pri_label   = {1: "Low", 2: "Minor", 3: "Normal", 4: "High", 5: "Critical"}
-                _apv_label   = {1: "auto-approve", 2: "needs review", 3: "requires sign-off"}
+                _pri_label = {1: "Low", 2: "Minor", 3: "Normal", 4: "High", 5: "Critical"}
+                _apv_label = {1: "auto-approve", 2: "needs review", 3: "requires sign-off"}
 
                 fields_sql: list[str] = []
-                upd_values: list      = []
+                upd_values: list = []
 
                 if params.get("status"):
                     fields_sql.append("status = %s")
                     upd_values.append(params["status"])
                 if params.get("priority") is not None:
                     pri_num = max(1, min(5, int(params["priority"])))
-                    fields_sql.append("priority_num = %s"); upd_values.append(pri_num)
-                    fields_sql.append("priority = %s");     upd_values.append(_pri_to_text[pri_num])
+                    fields_sql.append("priority_num = %s")
+                    upd_values.append(pri_num)
+                    fields_sql.append("priority = %s")
+                    upd_values.append(_pri_to_text[pri_num])
                 if params.get("approval_level") is not None:
                     alv = max(1, min(3, int(params["approval_level"])))
-                    fields_sql.append("approval_level = %s"); upd_values.append(alv)
+                    fields_sql.append("approval_level = %s")
+                    upd_values.append(alv)
                 if params.get("title"):
-                    fields_sql.append("title = %s"); upd_values.append(params["title"])
+                    fields_sql.append("title = %s")
+                    upd_values.append(params["title"])
                 if params.get("description"):
-                    fields_sql.append("description = %s"); upd_values.append(params["description"])
+                    fields_sql.append("description = %s")
+                    upd_values.append(params["description"])
                 if params.get("tags") is not None:
-                    fields_sql.append("tags = %s"); upd_values.append(params["tags"] or None)
+                    fields_sql.append("tags = %s")
+                    upd_values.append(params["tags"] or None)
                 if params.get("assigned_to") is not None:
-                    fields_sql.append("assigned_to = %s"); upd_values.append(params["assigned_to"] or None)
+                    fields_sql.append("assigned_to = %s")
+                    upd_values.append(params["assigned_to"] or None)
 
                 if not fields_sql:
                     return "[task_update: no changes to apply]"
@@ -1130,8 +1205,8 @@ class Dispatcher:
                     self._update_write_task_status(write_task_id, "completed")
                 logger.info("Task updated | id={} | changes={}", _task_id, fields_sql)
                 if upd_row:
-                    pri  = upd_row.get("priority_num") or 3
-                    alv  = upd_row.get("approval_level") or 2
+                    pri = upd_row.get("priority_num") or 3
+                    alv = upd_row.get("approval_level") or 2
                     return (
                         f"✅ Task **#{upd_row['id']} — {upd_row['title']}** updated.\n"
                         f"Status: {upd_row['status']} | "
@@ -1143,6 +1218,7 @@ class Dispatcher:
             if action == "deploy_brain":
                 try:
                     from app.worker.tasks import deploy_brain as _deploy_task
+
                     reason = params.get("reason", "user-requested deploy")
                     _deploy_task.delay(reason)
                     logger.info("deploy_brain task queued | reason={}", reason)
@@ -1177,8 +1253,4 @@ class Dispatcher:
                 if type(exc).__name__ in _CREDENTIAL_ERRORS
                 else "Check `.env` credentials and try again, or report this error."
             )
-            return (
-                f"Something went wrong executing **{action}**.\n"
-                f"Error: `{type(exc).__name__}: {exc}`\n\n"
-                f"{hint}"
-            )
+            return f"Something went wrong executing **{action}**.\nError: `{type(exc).__name__}: {exc}`\n\n{hint}"

@@ -8,34 +8,36 @@ integration calls, LLM augmentation, and Redis memory.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.brain.dispatcher    import Dispatcher
-from app.brain.llm_router    import get_telos_loader
-from app.config              import get_settings
+from app.brain.dispatcher import Dispatcher
+from app.brain.llm_router import get_telos_loader
+from app.config import get_settings
 from app.memory.redis_client import RedisMemory
 
-router   = APIRouter()
+router = APIRouter()
 dispatch = Dispatcher()
-memory   = RedisMemory()
+memory = RedisMemory()
 settings = get_settings()
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class ChatRequest(BaseModel):
-    message:    str = Field(..., min_length=1, max_length=8000)
+    message: str = Field(..., min_length=1, max_length=8000)
     # If omitted or "default", the primary shared session is used so that
     # REST API requests participate in cross-interface memory.
     session_id: str = Field(default="", max_length=128)
 
 
 class ChatResponse(BaseModel):
-    reply:      str
+    reply: str
     session_id: str
-    intent:     str
-    agent:      str = "default"
+    intent: str
+    agent: str = "default"
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
@@ -89,6 +91,7 @@ async def telos_reload():
 async def list_agents():
     """List all registered agent personalities."""
     from app.agents.registry import AgentRegistry
+
     registry = AgentRegistry()
     return {"agents": registry.list_agents()}
 
@@ -97,11 +100,12 @@ async def list_agents():
 async def health():
     import os
     from app.db import postgres
+
     return {
-        "status":   "ok",
-        "redis":    memory.ping(),
+        "status": "ok",
+        "redis": memory.ping(),
         "postgres": postgres.ping(),
-        "sha":      os.environ.get("GIT_SHA", "dev"),
+        "sha": os.environ.get("GIT_SHA", "dev"),
     }
 
 
@@ -109,11 +113,12 @@ async def health():
 async def version():
     import os
     from datetime import datetime, timezone
+
     return {
-        "app":         "sentinel-brain",
-        "version":     "2.1.0",
-        "sha":         os.environ.get("GIT_SHA", "dev"),
+        "app": "sentinel-brain",
+        "version": "2.1.0",
+        "sha": os.environ.get("GIT_SHA", "dev"),
         "environment": settings.environment,
-        "built_at":    os.environ.get("BUILD_TIMESTAMP", "unknown"),
-        "checked_at":  datetime.now(timezone.utc).isoformat(),
+        "built_at": os.environ.get("BUILD_TIMESTAMP", "unknown"),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
     }

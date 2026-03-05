@@ -16,7 +16,7 @@ import psycopg2.extras
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -45,10 +45,7 @@ class PostgresMemory:
         """Bulk-insert conversation turns into the `conversations` table."""
         if not turns:
             return
-        rows = [
-            (session_id, t["role"], t["content"], intent)
-            for t in turns
-        ]
+        rows = [(session_id, t["role"], t["content"], intent) for t in turns]
         sql = """
             INSERT INTO conversations (session_id, role, content, intent)
             VALUES %s
@@ -124,9 +121,7 @@ class PostgresMemory:
         """Use Haiku to generate a concise session summary from turn history."""
         if not turns:
             return ""
-        conversation_text = "\n".join(
-            f"{t['role'].upper()}: {t['content']}" for t in turns[-20:]
-        )
+        conversation_text = "\n".join(f"{t['role'].upper()}: {t['content']}" for t in turns[-20:])
         try:
             response = self._ai_client.messages.create(
                 model="claude-haiku-4-5-20251001",

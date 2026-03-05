@@ -5,12 +5,14 @@ Uses the `client` fixture from conftest.py which provides a TestClient
 with all external services (PostgreSQL, Redis, Qdrant, Slack) mocked.
 Endpoint-level dependencies are patched inside individual test functions.
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 
 # ── Root endpoint ──────────────────────────────────────────────────────────────
+
 
 def test_root_returns_alive(client):
     resp = client.get("/")
@@ -21,6 +23,7 @@ def test_root_returns_alive(client):
 
 
 # ── Health endpoint ────────────────────────────────────────────────────────────
+
 
 def test_health_ok(client):
     with (
@@ -59,6 +62,7 @@ def test_health_degraded_postgres_down(client):
 
 
 # ── Chat endpoint ──────────────────────────────────────────────────────────────
+
 
 def test_chat_returns_reply(client):
     from app.brain.dispatcher import DispatchResult
@@ -128,6 +132,7 @@ def test_chat_propagates_dispatcher_error(client):
 
 # ── Clear session endpoint ─────────────────────────────────────────────────────
 
+
 def test_clear_session(client):
     import app.router.chat as chat_module
 
@@ -142,6 +147,7 @@ def test_clear_session(client):
 
 
 # ── Agents list endpoint ───────────────────────────────────────────────────────
+
 
 def test_list_agents(client):
     mock_registry = MagicMock()

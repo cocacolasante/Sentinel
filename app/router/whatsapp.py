@@ -37,6 +37,7 @@ async def whatsapp_incoming(
     Returns 200 immediately if WhatsApp is not configured (so Twilio won't retry).
     """
     from app.integrations.whatsapp import WhatsAppClient
+
     if not WhatsAppClient().is_configured():
         logger.debug("WhatsApp incoming webhook hit but Twilio is not configured — ignoring")
         return PlainTextResponse("", status_code=200)
@@ -44,8 +45,8 @@ async def whatsapp_incoming(
     from app.brain.dispatcher import Dispatcher
 
     # Twilio sends From as "whatsapp:+12125551234"
-    sender   = From.replace("whatsapp:", "").strip() or WaId
-    body     = Body.strip()
+    sender = From.replace("whatsapp:", "").strip() or WaId
+    body = Body.strip()
     media_ct = int(NumMedia or 0)
 
     if not body and not media_ct:
@@ -61,7 +62,7 @@ async def whatsapp_incoming(
 
     try:
         dispatcher = Dispatcher()
-        result     = await dispatcher.process(body, session_id)
+        result = await dispatcher.process(body, session_id)
         reply_text = result.reply
 
         # Send reply via Twilio
@@ -84,5 +85,6 @@ async def whatsapp_incoming(
 async def whatsapp_status():
     """Check WhatsApp integration status."""
     from app.integrations.whatsapp import WhatsAppClient
+
     configured = WhatsAppClient().is_configured()
     return {"configured": configured}

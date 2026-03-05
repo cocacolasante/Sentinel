@@ -20,7 +20,7 @@ _timers: dict[str, float] = {}
 
 
 class LoggingHook(BaseHook):
-    name   = "logging"
+    name = "logging"
     events = [HookEvent.PRE_PROCESS, HookEvent.POST_PROCESS]
 
     async def handle(self, ctx: HookContext) -> HookContext:
@@ -28,9 +28,9 @@ class LoggingHook(BaseHook):
             _timers[ctx.session_id] = time.monotonic()
 
             event = {
-                "event":      "request_received",
+                "event": "request_received",
                 "session_id": ctx.session_id,
-                "source":     ctx.metadata.get("source", "unknown"),
+                "source": ctx.metadata.get("source", "unknown"),
                 "message_preview": ctx.message[:120],
             }
             logger.info(
@@ -42,19 +42,19 @@ class LoggingHook(BaseHook):
             await event_bus.publish(event)
 
         elif ctx.event == HookEvent.POST_PROCESS:
-            start   = _timers.pop(ctx.session_id, time.monotonic())
+            start = _timers.pop(ctx.session_id, time.monotonic())
             elapsed = round((time.monotonic() - start) * 1000, 1)  # ms
 
             success = not ctx.metadata.get("error")
             event = {
-                "event":        "response_delivered",
-                "session_id":   ctx.session_id,
-                "intent":       ctx.intent,
-                "agent":        ctx.agent_name,
-                "latency_ms":   elapsed,
+                "event": "response_delivered",
+                "session_id": ctx.session_id,
+                "intent": ctx.intent,
+                "agent": ctx.agent_name,
+                "latency_ms": elapsed,
                 "reply_length": len(ctx.reply),
-                "success":      success,
-                "error":        ctx.metadata.get("error_message") if not success else None,
+                "success": success,
+                "error": ctx.metadata.get("error_message") if not success else None,
             }
             if success:
                 logger.info(

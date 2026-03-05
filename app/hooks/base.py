@@ -14,29 +14,29 @@ from enum import Enum
 
 
 class HookEvent(str, Enum):
-    PRE_PROCESS   = "pre_process"
-    POST_PROCESS  = "post_process"
+    PRE_PROCESS = "pre_process"
+    POST_PROCESS = "post_process"
     SESSION_START = "session_start"
-    SESSION_END   = "session_end"
-    SKILL_START   = "skill_start"
-    SKILL_END     = "skill_end"
+    SESSION_END = "session_end"
+    SKILL_START = "skill_start"
+    SKILL_END = "skill_end"
 
 
 @dataclass
 class HookContext:
-    session_id: str  = ""
-    message:    str  = ""
-    reply:      str  = ""
-    intent:     str  = ""
-    agent_name: str  = "default"
-    event:      HookEvent = HookEvent.PRE_PROCESS
-    metadata:   dict = field(default_factory=dict)
+    session_id: str = ""
+    message: str = ""
+    reply: str = ""
+    intent: str = ""
+    agent_name: str = "default"
+    event: HookEvent = HookEvent.PRE_PROCESS
+    metadata: dict = field(default_factory=dict)
 
 
 class BaseHook(ABC):
     """Abstract base class for all lifecycle hooks."""
 
-    name:   str             = "base"
+    name: str = "base"
     events: list[HookEvent] = []
 
     @abstractmethod

@@ -27,6 +27,7 @@ class ContactsClient:
 
     def _search_sync(self, query: str, limit: int = 10) -> list[dict]:
         from app.db import postgres
+
         q = f"%{query.lower()}%"
         rows = postgres.execute(
             """
@@ -45,6 +46,7 @@ class ContactsClient:
 
     def _get_all_sync(self, limit: int = 100) -> list[dict]:
         from app.db import postgres
+
         rows = postgres.execute(
             "SELECT id, name, email, phone, whatsapp, company, github, slack_id, tags, notes "
             "FROM contacts ORDER BY name LIMIT %s",
@@ -54,6 +56,7 @@ class ContactsClient:
 
     def _get_by_id_sync(self, contact_id: int) -> dict | None:
         from app.db import postgres
+
         rows = postgres.execute(
             "SELECT id, name, email, phone, whatsapp, company, github, slack_id, tags, notes "
             "FROM contacts WHERE id = %s",
@@ -63,6 +66,7 @@ class ContactsClient:
 
     def _get_by_email_sync(self, email: str) -> dict | None:
         from app.db import postgres
+
         rows = postgres.execute(
             "SELECT id, name, email, phone, whatsapp, company, github, slack_id, tags, notes "
             "FROM contacts WHERE lower(email) = lower(%s) LIMIT 1",
@@ -73,6 +77,7 @@ class ContactsClient:
     def _get_by_name_sync(self, name: str) -> list[dict]:
         """Return contacts whose name contains the query (case-insensitive)."""
         from app.db import postgres
+
         q = f"%{name.lower()}%"
         rows = postgres.execute(
             "SELECT id, name, email, phone, whatsapp, company, github, slack_id, tags, notes "
@@ -94,26 +99,36 @@ class ContactsClient:
         notes: str = "",
     ) -> dict:
         from app.db import postgres
+
         rows = postgres.execute(
             """
             INSERT INTO contacts (name, email, phone, whatsapp, company, github, slack_id, tags, notes)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, name, email, phone, whatsapp, company
             """,
-            (name, email or None, phone or None, whatsapp or None,
-             company or None, github or None, slack_id or None,
-             tags or None, notes or None),
+            (
+                name,
+                email or None,
+                phone or None,
+                whatsapp or None,
+                company or None,
+                github or None,
+                slack_id or None,
+                tags or None,
+                notes or None,
+            ),
         )
         return dict(rows[0]) if rows else {"error": "insert failed"}
 
     def _update_sync(self, contact_id: int, fields: dict) -> dict:
         from app.db import postgres
+
         allowed = {"name", "email", "phone", "whatsapp", "company", "github", "slack_id", "tags", "notes"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return {"error": "no valid fields to update"}
         set_clause = ", ".join(f"{k} = %s" for k in updates)
-        values     = list(updates.values()) + [contact_id]
+        values = list(updates.values()) + [contact_id]
         postgres.execute(
             f"UPDATE contacts SET {set_clause}, updated_at = NOW() WHERE id = %s",
             values,
@@ -122,6 +137,7 @@ class ContactsClient:
 
     def _delete_sync(self, contact_id: int) -> dict:
         from app.db import postgres
+
         postgres.execute("DELETE FROM contacts WHERE id = %s", (contact_id,))
         return {"deleted": True, "id": contact_id}
 

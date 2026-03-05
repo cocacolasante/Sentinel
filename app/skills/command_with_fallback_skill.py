@@ -35,25 +35,25 @@ from app.skills.server_shell_skill import (
     _touches_protected_path,
 )
 
-_MAX_ERROR_CONTEXT = 1_200   # chars of error output forwarded to the fix prompt
-_MAX_STEP_OUTPUT   = 600     # chars shown per step in the summary
+_MAX_ERROR_CONTEXT = 1_200  # chars of error output forwarded to the fix prompt
+_MAX_STEP_OUTPUT = 600  # chars shown per step in the summary
 
 
 # ── Error signature parser ─────────────────────────────────────────────────────
 
 _ERROR_PATTERNS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"command not found", re.I),       "missing_binary"),
+    (re.compile(r"command not found", re.I), "missing_binary"),
     (re.compile(r"no such file or directory", re.I), "missing_path"),
-    (re.compile(r"permission denied", re.I),        "permission_denied"),
+    (re.compile(r"permission denied", re.I), "permission_denied"),
     (re.compile(r"authentication failed|could not read.*password", re.I), "auth_failure"),
     (re.compile(r"connection refused|could not connect", re.I), "connection_refused"),
     (re.compile(r"name or service not known|network unreachable", re.I), "dns_or_network"),
     (re.compile(r"syntax error|parse error|unexpected token", re.I), "syntax_error"),
     (re.compile(r"exit status \d+|returned non-zero exit status", re.I), "subprocess_error"),
-    (re.compile(r"npm err|yarn error", re.I),        "npm_error"),
+    (re.compile(r"npm err|yarn error", re.I), "npm_error"),
     (re.compile(r"pip.*error|could not install", re.I), "pip_error"),
     (re.compile(r"docker.*error|no such container", re.I), "docker_error"),
-    (re.compile(r"git.*error|fatal:", re.I),         "git_error"),
+    (re.compile(r"git.*error|fatal:", re.I), "git_error"),
 ]
 
 
@@ -80,6 +80,7 @@ def _format_step(index: int, command: str, output: str, code: int, fix_info: str
 
 # ── Auto-fix helper ────────────────────────────────────────────────────────────
 
+
 async def _attempt_autofix(
     failed_cmd: str,
     error_output: str,
@@ -92,6 +93,7 @@ async def _attempt_autofix(
     (fix_summary_text, fix_command_or_empty).
     """
     from app.brain.llm_router import LLMRouter
+
     llm = LLMRouter()
 
     truncated = error_output[:_MAX_ERROR_CONTEXT]
@@ -125,8 +127,7 @@ async def _attempt_autofix(
     fix_output, fix_code = await _run_command(fix_cmd, cwd)
     if fix_code == 0:
         summary = (
-            f"🔧 **Auto-fix applied** — `{fix_cmd}`\n"
-            f"```\n{fix_output[:_MAX_STEP_OUTPUT].strip() or '(no output)'}\n```"
+            f"🔧 **Auto-fix applied** — `{fix_cmd}`\n```\n{fix_output[:_MAX_STEP_OUTPUT].strip() or '(no output)'}\n```"
         )
     else:
         snippet = fix_output[:_MAX_STEP_OUTPUT].strip()
@@ -139,6 +140,7 @@ async def _attempt_autofix(
 
 # ── Task creation helper ───────────────────────────────────────────────────────
 
+
 def _create_failure_task(
     failed_cmd: str,
     error_output: str,
@@ -149,6 +151,7 @@ def _create_failure_task(
     """Insert a task into the DB for the failed step. Returns a short status string."""
     try:
         from app.db import postgres
+
         title = f"Auto-fix needed: {error_type} in step {step_index + 1}"
         description = (
             f"Command: {failed_cmd}\n"
@@ -173,8 +176,9 @@ def _create_failure_task(
 
 # ── Skill ──────────────────────────────────────────────────────────────────────
 
+
 class CommandWithFallbackSkill(BaseSkill):
-    name        = "command_with_fallback"
+    name = "command_with_fallback"
     description = (
         "Execute a sequence of shell commands with automatic error recovery. "
         "Each step: ✅ success → continue, ❌ failure → parse error, create a task, "
@@ -183,7 +187,7 @@ class CommandWithFallbackSkill(BaseSkill):
         "Use this for multi-step workflows (git ops, builds, deploys) where you need "
         "structured success/failure tracking."
     )
-    trigger_intents   = ["command_with_fallback"]
+    trigger_intents = ["command_with_fallback"]
     approval_category = ApprovalCategory.NONE  # individual command safety checked per-step
 
     def is_available(self) -> bool:
@@ -206,12 +210,12 @@ class CommandWithFallbackSkill(BaseSkill):
                 skill_name=self.name,
             )
 
-        cwd           = (params.get("cwd") or _DEFAULT_CWD).rstrip("/") or _DEFAULT_CWD
+        cwd = (params.get("cwd") or _DEFAULT_CWD).rstrip("/") or _DEFAULT_CWD
         chain_context = (params.get("context") or "").strip()
-        auto_fix      = str(params.get("auto_fix", "true")).lower() not in ("false", "0", "no")
+        auto_fix = str(params.get("auto_fix", "true")).lower() not in ("false", "0", "no")
 
-        step_reports:  list[str] = []
-        steps_passed   = 0
+        step_reports: list[str] = []
+        steps_passed = 0
         failed_at: int | None = None
 
         for i, cmd in enumerate(raw_commands):
@@ -232,8 +236,7 @@ class CommandWithFallbackSkill(BaseSkill):
 
             if _is_forbidden(cmd):
                 step_reports.append(
-                    f"**Step {i + 1}** — `{cmd}`\n"
-                    "Status: ❌ Blocked — low-level disk operation not permitted."
+                    f"**Step {i + 1}** — `{cmd}`\nStatus: ❌ Blocked — low-level disk operation not permitted."
                 )
                 failed_at = i
                 break
@@ -249,18 +252,16 @@ class CommandWithFallbackSkill(BaseSkill):
                 fix_info = task_status
 
                 if auto_fix:
-                    fix_summary, _ = await _attempt_autofix(
-                        cmd, output, error_type, cwd, chain_context
-                    )
+                    fix_summary, _ = await _attempt_autofix(cmd, output, error_type, cwd, chain_context)
                     fix_info += f"\n{fix_summary}"
 
                 step_reports.append(_format_step(i, cmd, output, code, fix_info))
                 failed_at = i
-                break   # stop chain on first failure
+                break  # stop chain on first failure
 
         # Summary header
-        total   = len([c for c in raw_commands if c.strip()])
-        ran     = steps_passed + (1 if failed_at is not None else 0)
+        total = len([c for c in raw_commands if c.strip()])
+        ran = steps_passed + (1 if failed_at is not None else 0)
         skipped = total - ran
 
         if failed_at is None:
@@ -268,8 +269,7 @@ class CommandWithFallbackSkill(BaseSkill):
         else:
             header = (
                 f"❌ **Chain stopped at step {failed_at + 1} of {total}.**  "
-                f"{steps_passed} step(s) passed before failure."
-                + (f"  {skipped} step(s) skipped." if skipped else "")
+                f"{steps_passed} step(s) passed before failure." + (f"  {skipped} step(s) skipped." if skipped else "")
             )
 
         divider = "─" * 48

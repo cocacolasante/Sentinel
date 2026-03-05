@@ -25,7 +25,7 @@ import httpx
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _TIMEOUT = 30.0
@@ -72,11 +72,14 @@ class N8nBridge:
 
     async def send_email(self, to: str, subject: str, body: str) -> dict:
         """Convenience wrapper — trigger the 'brain/send-email' n8n workflow."""
-        return await self.trigger("brain/send-email", {
-            "to":      to,
-            "subject": subject,
-            "body":    body,
-        })
+        return await self.trigger(
+            "brain/send-email",
+            {
+                "to": to,
+                "subject": subject,
+                "body": body,
+            },
+        )
 
     async def create_calendar_event(self, event: dict) -> dict:
         """Convenience wrapper — trigger the 'brain/calendar-create' n8n workflow."""
@@ -91,12 +94,17 @@ class N8nBridge:
     def _api_client(self) -> "httpx.AsyncClient":
         """Separate client for n8n REST API (different base URL + API key auth)."""
         import httpx as _httpx
+
         base = f"{settings.n8n_webhook_url}"
         headers: dict = {"Content-Type": "application/json"}
         if settings.n8n_api_key:
             headers["X-N8N-API-KEY"] = settings.n8n_api_key
-        return _httpx.AsyncClient(base_url=base, headers=headers, timeout=30.0,
-                                  auth=(settings.n8n_user, settings.n8n_password) if not settings.n8n_api_key else None)
+        return _httpx.AsyncClient(
+            base_url=base,
+            headers=headers,
+            timeout=30.0,
+            auth=(settings.n8n_user, settings.n8n_password) if not settings.n8n_api_key else None,
+        )
 
     async def list_workflows(self) -> list[dict]:
         """List all workflows via the n8n REST API."""
@@ -107,10 +115,10 @@ class N8nBridge:
             items = data if isinstance(data, list) else data.get("data", [])
             return [
                 {
-                    "id":     w.get("id"),
-                    "name":   w.get("name"),
+                    "id": w.get("id"),
+                    "name": w.get("name"),
                     "active": w.get("active", False),
-                    "nodes":  len(w.get("nodes", [])),
+                    "nodes": len(w.get("nodes", [])),
                 }
                 for w in items
             ]
@@ -124,11 +132,11 @@ class N8nBridge:
     async def create_workflow(self, name: str, nodes: list[dict], connections: dict | None = None) -> dict:
         """Create a new n8n workflow via the REST API."""
         body = {
-            "name":        name,
-            "nodes":       nodes,
+            "name": name,
+            "nodes": nodes,
             "connections": connections or {},
-            "settings":    {"executionOrder": "v1"},
-            "staticData":  None,
+            "settings": {"executionOrder": "v1"},
+            "staticData": None,
         }
         async with self._api_client() as c:
             r = await c.post("/api/v1/workflows", json=body)

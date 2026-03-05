@@ -14,13 +14,15 @@ class N8nSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.n8n_bridge import N8nBridge
+
         return N8nBridge().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.n8n_bridge import N8nBridge
+
         workflow = params.get("workflow", "")
-        payload  = params.get("payload", {})
-        result   = await N8nBridge().trigger(workflow, payload)
+        payload = params.get("payload", {})
+        result = await N8nBridge().trigger(workflow, payload)
         return SkillResult(context_data=json.dumps(result, indent=2), skill_name=self.name)
 
 
@@ -36,10 +38,12 @@ class N8nManageSkill(BaseSkill):
 
     def is_available(self) -> bool:
         from app.integrations.n8n_bridge import N8nBridge
+
         return N8nBridge().is_configured()
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.n8n_bridge import N8nBridge
+
         bridge = N8nBridge()
         action = params.get("action", "list")
 
@@ -51,7 +55,7 @@ class N8nManageSkill(BaseSkill):
             except Exception as exc:
                 return SkillResult(
                     context_data=f"[n8n API error — list_workflows failed: {exc}. "
-                                 "Ensure N8N_API_KEY is set in .env for management endpoints.]",
+                    "Ensure N8N_API_KEY is set in .env for management endpoints.]",
                     skill_name=self.name,
                 )
 
@@ -64,17 +68,17 @@ class N8nManageSkill(BaseSkill):
 
         # Write actions → confirmation
         pending = {
-            "intent":   "n8n_manage",
-            "action":   action,
-            "params":   params,
+            "intent": "n8n_manage",
+            "action": action,
+            "params": params,
             "original": original_message,
         }
 
         descriptions = {
-            "create":     f"Create new n8n workflow: **{params.get('name', '?')}**",
-            "activate":   f"Activate workflow `{params.get('workflow_id', '?')}`",
+            "create": f"Create new n8n workflow: **{params.get('name', '?')}**",
+            "activate": f"Activate workflow `{params.get('workflow_id', '?')}`",
             "deactivate": f"Deactivate workflow `{params.get('workflow_id', '?')}`",
-            "delete":     f"**DELETE** workflow `{params.get('workflow_id', '?')}` — this cannot be undone",
+            "delete": f"**DELETE** workflow `{params.get('workflow_id', '?')}` — this cannot be undone",
         }
         description = descriptions.get(action, f"n8n action: {action}")
         context = (

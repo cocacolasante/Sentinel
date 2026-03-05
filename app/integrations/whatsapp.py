@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 from app.config import get_settings
 
-logger   = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -33,6 +33,7 @@ class WhatsAppClient:
             return False
         try:
             import twilio  # noqa: F401 — check lib is installed
+
             return True
         except ImportError:
             return False
@@ -42,9 +43,7 @@ class WhatsAppClient:
             try:
                 from twilio.rest import Client
             except ImportError:
-                raise RuntimeError(
-                    "twilio library not installed. Run: pip install twilio"
-                )
+                raise RuntimeError("twilio library not installed. Run: pip install twilio")
             self._client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
         return self._client
 
@@ -60,10 +59,10 @@ class WhatsAppClient:
             body=body,
         )
         return {
-            "sid":    msg.sid,
+            "sid": msg.sid,
             "status": msg.status,
-            "to":     msg.to,
-            "body":   msg.body,
+            "to": msg.to,
+            "body": msg.body,
         }
 
     def _list_messages_sync(self, to: str | None = None, limit: int = 20) -> list[dict]:
@@ -76,13 +75,13 @@ class WhatsAppClient:
         messages = client.messages.list(**kwargs)
         return [
             {
-                "sid":         m.sid,
-                "from":        m.from_,
-                "to":          m.to,
-                "body":        m.body,
-                "status":      m.status,
-                "direction":   m.direction,
-                "date_sent":   m.date_sent.isoformat() if m.date_sent else None,
+                "sid": m.sid,
+                "from": m.from_,
+                "to": m.to,
+                "body": m.body,
+                "status": m.status,
+                "direction": m.direction,
+                "date_sent": m.date_sent.isoformat() if m.date_sent else None,
             }
             for m in messages
             if "whatsapp" in (m.from_ or "").lower() or "whatsapp" in (m.to or "").lower()
@@ -92,11 +91,11 @@ class WhatsAppClient:
         client = self._build_client()
         m = client.messages(sid).fetch()
         return {
-            "sid":       m.sid,
-            "from":      m.from_,
-            "to":        m.to,
-            "body":      m.body,
-            "status":    m.status,
+            "sid": m.sid,
+            "from": m.from_,
+            "to": m.to,
+            "body": m.body,
+            "status": m.status,
             "direction": m.direction,
             "date_sent": m.date_sent.isoformat() if m.date_sent else None,
         }

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class SessionHook(BaseHook):
-    name   = "session"
+    name = "session"
     events = [HookEvent.SESSION_START, HookEvent.SESSION_END]
 
     async def handle(self, ctx: HookContext) -> HookContext:
@@ -28,6 +28,7 @@ class SessionHook(BaseHook):
             try:
                 from app.config import get_settings
                 from app.memory.memory_manager import MemoryManager
+
                 settings = get_settings()
                 mm = MemoryManager(
                     redis_host=settings.redis_host,
