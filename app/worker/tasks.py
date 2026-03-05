@@ -1595,7 +1595,16 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
             logger.error("Repo patch/commit/push failed: %s", exc, exc_info=True)
 
     # ── 5. Resolve in Sentry ──────────────────────────────────────────────────
-    if fix_plan.get("resolve_in_sentry") and patches_applied and settings.sentry_auth_token and issue_id:
+    # Resolve when patches were applied, OR when the LLM confirmed the fix is
+    # already deployed (fixable=False + resolve_in_sentry=True means "nothing
+    # to patch, it's already fixed").
+    _should_resolve = (
+        fix_plan.get("resolve_in_sentry")
+        and (patches_applied or not fix_plan.get("fixable"))
+        and settings.sentry_auth_token
+        and issue_id
+    )
+    if _should_resolve:
         try:
             import httpx
 
@@ -1620,6 +1629,8 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
             status_line = f"⚠️ *Partially fixed* — {len(patches_applied)} patched, {len(patch_errors)} failed"
         elif fix_plan.get("fixable") and patch_errors:
             status_line = f"❌ *Fix failed* — {patch_errors[0][:120]}"
+        elif not fix_plan.get("fixable") and fix_plan.get("resolve_in_sentry"):
+            status_line = "✅ *Fix already deployed* — resolving in Sentry"
         else:
             status_line = "🔍 *Investigated* — not auto-fixable (environmental or complex)"
 
