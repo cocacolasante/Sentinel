@@ -27,7 +27,12 @@ celery_app = Celery(
     "brain",
     broker=_broker,
     backend=_backend,
-    include=["app.worker.tasks", "app.worker.project_tasks", "app.worker.sentry_tasks"],
+    include=[
+        "app.worker.tasks",
+        "app.worker.project_tasks",
+        "app.worker.sentry_tasks",
+        "app.worker.bug_hunter_tasks",
+    ],
 )
 
 celery_app.conf.update(
@@ -102,5 +107,13 @@ celery_app.conf.beat_schedule = {
         "task": "app.worker.sentry_tasks.ingest_and_triage_top_errors",
         "schedule": crontab(minute=0, hour="0,6,12,18"),
         "options": {"queue": "celery"},
+    },
+    # Every 6h at :30 — autonomous log scan: cluster errors, LLM root-cause
+    # analysis, Slack report, auto-create fix tasks for high-severity bugs
+    "autonomous-bug-hunt": {
+        "task": "app.worker.bug_hunter_tasks.run_bug_hunt",
+        "schedule": crontab(minute=30, hour="*/6"),
+        "options": {"queue": "tasks_general"},
+        "kwargs": {"hours": 6},
     },
 }

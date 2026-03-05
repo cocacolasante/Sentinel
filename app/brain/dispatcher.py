@@ -91,6 +91,7 @@ def _build_skill_registry():
     from app.skills.server_shell_skill import ServerShellSkill
     from app.skills.deploy_skill import DeploySkill
     from app.skills.task_skill import TaskCreateSkill, TaskReadSkill, TaskUpdateSkill
+    from app.skills.bug_hunter_skill import BugHunterSkill
     from app.skills.project_skill import ProjectSkill
 
     reg = SkillRegistry()
@@ -148,6 +149,7 @@ def _build_skill_registry():
     reg.register(DeploySkill())
     # Task board — create, list, and update tracked tasks
     reg.register(TaskCreateSkill())
+    reg.register(BugHunterSkill())
     reg.register(TaskReadSkill())
     reg.register(TaskUpdateSkill())
     # Project — scaffold, build, and deploy coding projects

@@ -104,6 +104,7 @@ Intent-specific param examples:
   task_read:      {{"action": "list" | "get", "status": "pending" | "in_progress" | "done" | "cancelled" | "", "priority": 4, "id": "", "limit": 20}}
   task_update:    {{"id": 42, "status": "in_progress" | "done" | "cancelled" | "pending", "priority": 4, "approval_level": 1, "title": "", "description": "", "tags": "", "assigned_to": ""}}
   deep_research:  {{"topic": "quantum computing", "context": "focus on near-term applications", "email": ""}}
+  bug_hunt:       {{"hours": 24, "focus": "auth module"}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
@@ -157,6 +158,7 @@ Routing guidance:
   - Requests to edit/create a specific file with a path → repo_write
   - Ambiguous improvement requests without a specific file → code (let LLM suggest approach)
   - "research X", "do a deep dive on X", "research and send me X", "investigate X in depth", "write a research report on X", "look into X and email me", "deep research X" → deep_research with topic=X
+  - "scan logs", "analyze errors", "hunt for bugs", "check for errors", "bug hunt", "analyze errors from last Xh", "find bugs", "what errors are happening", "scan for issues", "run bug hunt", "SRE scan" → bug_hunt with hours extracted from message (default 24)
   - "create a task", "add a task", "track this", "new task", "remember to", "log a task" → task_create
   - "list tasks", "show tasks", "what tasks", "my tasks", "view tasks", "open tasks", "pending tasks" → task_read
   - "mark task done", "complete task", "update task", "change priority", "close task", "set task status" → task_update
