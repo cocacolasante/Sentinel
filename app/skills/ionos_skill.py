@@ -50,6 +50,7 @@ _READ_ACTIONS: frozenset[str] = frozenset(
         "get_k8s_kubeconfig",
         "get_request_status",
         "get_server_console",
+        "list_templates",
     }
 )
 
@@ -89,6 +90,7 @@ _CONFIRM_ACTIONS: frozenset[str] = frozenset(
         "ssh_exec",
         "deploy_docker",
         "configure_server",
+        "deploy_website",
     }
 )
 
@@ -128,9 +130,21 @@ def _describe_action(action: str, params: dict) -> str:
         "provision_server": (
             f"Provision Ubuntu {params.get('ubuntu_version', '22')} server "
             f"**{params.get('name', 'brain-server')}** "
-            f"({params.get('cores', 2)} cores, {params.get('ram_mb', 2048)} MB RAM, "
-            f"{params.get('storage_gb', 20)} GB) in {_dc_ctx}. "
-            "Steps: DC → image → volume → server → attach → LAN → NIC."
+            + (
+                f"(CUBE: {params.get('cube_template', '')}) "
+                if params.get("cube_template") else
+                f"({params.get('cores', 2)} cores, {params.get('ram_mb', 2048)} MB RAM, {params.get('storage_gb', 20)} GB) "
+            )
+            + f"in {_dc_ctx}"
+            + (" with **static IP**" if params.get("static_ip") else "")
+            + (" — will wait for RUNNING state" if params.get("wait_for_ready") else "")
+            + ". Steps: DC → image → IP reservation → volume → server → LAN → NIC."
+        ),
+        "deploy_website": (
+            f"Deploy **{params.get('repo_url', '?')}** on server `{params.get('host', '?')}` "
+            f"via Apache2"
+            + (f" (domain: {params.get('domain')})" if params.get("domain") else "")
+            + ". Steps: apt install apache2+git → clone repo → set permissions → restart Apache."
         ),
         "create_server": f"Create server **{params.get('name', '?')}** ({params.get('cores', 2)} cores, {params.get('ram_mb', 2048)} MB RAM) in `{dc}`",
         "update_server": f"Update server `{srv}` in `{dc}`",

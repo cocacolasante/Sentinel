@@ -977,26 +977,60 @@ class Dispatcher:
                         ubuntu_version=str(params.get("ubuntu_version", "22")),
                         ssh_keys=params.get("ssh_keys") or None,
                         datacenter_id=params.get("datacenter_id", ""),
+                        cube_template=params.get("cube_template", ""),
+                        static_ip=bool(params.get("static_ip", False)),
+                        wait_for_ready=bool(params.get("wait_for_ready", False)),
+                        wait_timeout=int(params.get("wait_timeout", 300)),
                     )
                     steps = res.pop("steps", [])
                     task_id = pending.get("_task_id")
                     if task_id:
                         self._update_write_task_status(task_id, "completed")
                     summary = "\n".join(f"  ✓ {s}" for s in steps)
+                    public_ip = res.get("static_ip") or res.get("public_ip", "")
                     return (
-                        f"Ubuntu server **{res.get('name')}** provisioned successfully!\n\n"
+                        f"Server **{res.get('name')}** provisioned successfully!\n\n"
                         f"{summary}\n\n"
                         f"**IDs:**\n"
                         f"  • Datacenter: `{res.get('datacenter_id')}`\n"
                         f"  • Server: `{res.get('server_id')}`\n"
                         f"  • Volume: `{res.get('volume_id')}`\n"
-                        f"  • NIC: `{res.get('nic_id')}`\n\n"
+                        f"  • NIC: `{res.get('nic_id')}`\n"
+                        + (f"  • Static IP: `{public_ip}`\n" if public_ip and public_ip != "(DHCP — assigned within ~5 min)" else "")
+                        + "\n"
                         + (
                             f"⚠️ Image password: `{res['image_password']}` (save this — shown once)\n\n"
                             if res.get("image_password")
                             else ""
                         )
-                        + f"_Note: {res.get('note', 'Server is provisioning — IP assigned within ~5 min.')}_"
+                        + f"_Note: {res.get('note', 'Server is provisioning.')}_"
+                    )
+
+                # deploy_website gets a clean success/failure report
+                if real_act == "deploy_website":
+                    res = await client.deploy_website(
+                        host=params.get("host", ""),
+                        repo_url=params.get("repo_url", ""),
+                        domain=params.get("domain", ""),
+                        username=params.get("username", "root"),
+                        branch=params.get("branch", "main"),
+                    )
+                    task_id = pending.get("_task_id")
+                    if task_id:
+                        self._update_write_task_status(task_id, "completed")
+                    status_icon = "✅" if res.get("success") else "⚠️"
+                    step_summary = ""
+                    for i, step in enumerate(res.get("steps", []), 1):
+                        exit_code = step.get("exit_code", "?")
+                        icon = "✓" if exit_code == 0 else "✗"
+                        cmd = (step.get("command", "")[:60] + "…") if len(step.get("command", "")) > 60 else step.get("command", "")
+                        step_summary += f"  {icon} [{exit_code}] {cmd}\n"
+                    return (
+                        f"{status_icon} Website deployed from **{res.get('repo')}**\n\n"
+                        f"{step_summary}\n"
+                        f"🌐 **Public IP:** `{res.get('public_ip')}`\n"
+                        f"🔗 **URL:** {res.get('url')}\n\n"
+                        "_Visit the URL in your browser to view the site._"
                     )
 
                 # All other actions use the unified execute_action dispatch

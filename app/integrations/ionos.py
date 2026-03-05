@@ -27,18 +27,14 @@ _BASE = "https://api.ionos.com/cloudapi/v6"
 _TIMEOUT = 60.0
 
 
-def _get_token() -> str:
-    """Return the IONOS bearer token, checking both IONOS_TOKEN and IONOS_API_TOKEN."""
-    import os
-
-    return settings.ionos_token or os.environ.get("IONOS_API_TOKEN", "")
-
-
 def _auth_headers() -> dict:
-    token = _get_token()
+    """Return auth headers, reading fresh settings each call to avoid stale credentials."""
+    import os
+    s = get_settings()
+    token = s.ionos_token or os.environ.get("IONOS_TOKEN", "") or os.environ.get("IONOS_API_TOKEN", "")
     if token:
         return {"Authorization": f"Bearer {token}"}
-    creds = base64.b64encode(f"{settings.ionos_username}:{settings.ionos_password}".encode()).decode()
+    creds = base64.b64encode(f"{s.ionos_username}:{s.ionos_password}".encode()).decode()
     return {"Authorization": f"Basic {creds}"}
 
 
@@ -354,6 +350,71 @@ class IONOSClient:
         images.sort(key=lambda x: x["name"], reverse=True)
         return images[0]["id"]
 
+    # ── CUBE server templates ─────────────────────────────────────────────────
+
+    # Known CUBE template UUIDs (fetched 2026-03-05 from /templates endpoint)
+    CUBE_TEMPLATES: dict[str, str] = {
+        "Basic Cube XS":   "72e73b81-8551-4e74-b398-fc63b39994af",  # 1c 2GB 60GB
+        "Basic Cube S":    "864c2c89-ea4d-4bf9-9a27-9acfeb436666",  # 2c 4GB 120GB
+        "Basic Cube M":    "eda8d3b1-4d71-4502-8f22-2452adac0dc5",  # 4c 8GB 240GB
+        "Basic Cube L":    "253eef63-b8b8-4c8e-9084-3ca298b3593f",  # 8c 16GB 480GB
+        "Basic Cube XL":   "6382dca7-d4de-4238-b138-bdc600dc733b",  # 16c 32GB 960GB
+        "Memory Cube S":   "987fb209-cc10-4acb-82d7-07833919f40f",  # 2c 8GB 120GB
+        "Memory Cube M":   "e8a56b84-b717-42d9-85f6-123d12ed212e",  # 4c 16GB 240GB
+        "Memory Cube L":   "639f65b6-48e5-4b12-b447-947385276a52",  # 8c 32GB 480GB
+        "Memory Cube XL":  "8937cbb6-11a0-4e98-b2a5-d076cbaba3af",  # 16c 64GB 960GB
+    }
+
+    async def list_templates(self) -> list[dict]:
+        """Return all available CUBE server templates with specs."""
+        data = await self._get("/templates")
+        out = []
+        for item in data.get("items", []):
+            tid = item["id"]
+            detail = await self._get(f"/templates/{tid}")
+            p = detail.get("properties", {})
+            out.append({
+                "id": tid,
+                "name": p.get("name", ""),
+                "cores": p.get("cores"),
+                "ram_mb": p.get("ram"),
+                "storage_gb": p.get("storageSize"),
+                "category": p.get("category", ""),
+            })
+        return out
+
+    async def _wait_for_server_running(
+        self,
+        dc_id: str,
+        server_id: str,
+        timeout: int = 300,
+        poll_interval: int = 10,
+    ) -> dict:
+        """
+        Poll until the server's vmState == 'RUNNING' or timeout expires.
+        Returns the server status dict.
+        Raises TimeoutError if the server doesn't reach RUNNING within timeout seconds.
+        """
+        elapsed = 0
+        while elapsed < timeout:
+            srv = await self.get_server(dc_id, server_id)
+            props = srv.get("properties", {})
+            meta = srv.get("metadata", {})
+            vmstate = props.get("vmState", "")
+            state = meta.get("state", "")
+            logger.info(
+                "Waiting for server | id={} | state={} | vmstate={} | elapsed={}s",
+                server_id, state, vmstate, elapsed,
+            )
+            if vmstate == "RUNNING":
+                return {"vmState": vmstate, "state": state, "elapsed_s": elapsed}
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        raise TimeoutError(
+            f"Server {server_id} did not reach RUNNING state within {timeout}s. "
+            "Check IONOS DCD for provisioning errors."
+        )
+
     # ── Full server provisioning ──────────────────────────────────────────────
 
     async def provision_server(
@@ -366,20 +427,28 @@ class IONOSClient:
         ubuntu_version: str = "22",
         ssh_keys: list[str] | None = None,
         datacenter_id: str = "",
+        cube_template: str = "",
+        static_ip: bool = False,
+        wait_for_ready: bool = False,
+        wait_timeout: int = 300,
     ) -> dict:
         """
         Full Ubuntu server provisioning workflow:
           1. Create datacenter (if datacenter_id not supplied)
           2. Find the latest Ubuntu public image in the target location
-          3. Create a boot volume with that image
-          4. Create the server
-          5. Attach the volume to the server
-          6. Create a public LAN
-          7. Create a NIC connected to that LAN
+          3. Optionally reserve a static IP block
+          4. Create a boot volume with that image
+          5. Create the server (ENTERPRISE or CUBE depending on cube_template)
+          6. Attach the volume to the server
+          7. Create a public LAN
+          8. Create a NIC with static IP (or DHCP)
+          9. Optionally wait until vmState == RUNNING
 
-        Returns a summary dict with all created resource IDs + the public NIC
-        info (IP will be assigned by IONOS within a few minutes of boot).
+        cube_template: name like "Basic Cube M" or UUID — uses CUBE server type.
+        static_ip: reserve a dedicated IP block and assign to the NIC.
+        wait_for_ready: block until the server is RUNNING (up to wait_timeout seconds).
         """
+        s = get_settings()
         result: dict = {"name": name, "location": location, "steps": []}
 
         # ── 1. Datacenter ─────────────────────────────────────────────────────
@@ -395,6 +464,8 @@ class IONOSClient:
             result["datacenter_name"] = dc.get("name")
             result["steps"].append(f"Created datacenter {dc_id}")
             logger.info("Provisioning: datacenter created | id={}", dc_id)
+            # Wait briefly for DC to be AVAILABLE
+            await asyncio.sleep(5)
         else:
             result["datacenter_id"] = dc_id
             result["steps"].append(f"Using existing datacenter {dc_id}")
@@ -407,13 +478,49 @@ class IONOSClient:
                 "Try list_images to see what is available."
             )
         result["image_id"] = image_id
-        result["steps"].append(f"Found Ubuntu image {image_id}")
+        result["steps"].append(f"Found Ubuntu {ubuntu_version} image {image_id}")
 
-        # ── 3. Create boot volume ─────────────────────────────────────────────
+        # ── 3. Reserve static IP (optional) ───────────────────────────────────
+        static_ip_addr: str = ""
+        if static_ip:
+            ip_block = await self.reserve_ip(location=location, size=1, name=f"{name}-ip")
+            ip_block_id = ip_block.get("id", "")
+            ips = ip_block.get("ips", [])
+            static_ip_addr = ips[0] if ips else ""
+            result["ip_block_id"] = ip_block_id
+            result["static_ip"] = static_ip_addr
+            result["steps"].append(f"Reserved static IP: {static_ip_addr} (block {ip_block_id})")
+            logger.info("Provisioning: reserved IP={}", static_ip_addr)
+
+        # ── 4. Create boot volume ─────────────────────────────────────────────
+        # CUBE servers require DAS volumes; ENTERPRISE uses HDD/SSD
+        is_cube = bool(cube_template)
+        vol_type = "DAS" if is_cube else "HDD"
+        if is_cube:
+            # Resolve template: accept name or UUID
+            template_uuid = self.CUBE_TEMPLATES.get(cube_template, cube_template)
+            template_name = next(
+                (k for k, v in self.CUBE_TEMPLATES.items() if v == template_uuid),
+                cube_template,
+            )
+            # Cube storage size is fixed by template
+            template_storage = {
+                "72e73b81-8551-4e74-b398-fc63b39994af": 60,   # XS
+                "864c2c89-ea4d-4bf9-9a27-9acfeb436666": 120,  # S
+                "eda8d3b1-4d71-4502-8f22-2452adac0dc5": 240,  # M
+                "253eef63-b8b8-4c8e-9084-3ca298b3593f": 480,  # L
+                "6382dca7-d4de-4238-b138-bdc600dc773b": 960,  # XL
+                "987fb209-cc10-4acb-82d7-07833919f40f": 120,  # Memory S
+                "e8a56b84-b717-42d9-85f6-123d12ed212e": 240,  # Memory M
+                "639f65b6-48e5-4b12-b447-947385276a52": 480,  # Memory L
+                "8937cbb6-11a0-4e98-b2a5-d076cbaba3af": 960,  # Memory XL
+            }
+            storage_gb = template_storage.get(template_uuid, storage_gb)
+
         vol_body: dict = {
             "properties": {
                 "name": f"{name}-boot",
-                "type": "HDD",
+                "type": vol_type,
                 "size": storage_gb,
                 "image": image_id,
                 "licenceType": "LINUX",
@@ -421,65 +528,157 @@ class IONOSClient:
         }
         if ssh_keys:
             vol_body["properties"]["sshKeys"] = ssh_keys
-        elif settings.ionos_ssh_public_key:
-            vol_body["properties"]["sshKeys"] = [settings.ionos_ssh_public_key]
+        elif s.ionos_ssh_public_key:
+            vol_body["properties"]["sshKeys"] = [s.ionos_ssh_public_key]
         else:
-            # IONOS requires either sshKeys or imagePassword for Linux images
             import secrets
-
             tmp_pass = secrets.token_urlsafe(16)
             vol_body["properties"]["imagePassword"] = tmp_pass
             result["image_password"] = tmp_pass
-            result["steps"].append("Note: no SSH key configured — image password generated")
+            result["steps"].append("Note: no SSH key — image password generated (save this!)")
 
         vol = await self._post(f"/datacenters/{dc_id}/volumes", vol_body)
         vol_id = vol["id"]
         result["volume_id"] = vol_id
-        result["steps"].append(f"Created boot volume {vol_id} ({storage_gb} GB)")
+        result["steps"].append(f"Created {vol_type} boot volume {vol_id} ({storage_gb} GB)")
 
-        # ── 4. Create server ──────────────────────────────────────────────────
-        srv = await self.create_server(dc_id, name, cores, ram_mb)
-        server_id = srv["id"]
-        result["server_id"] = server_id
-        result["steps"].append(f"Created server {server_id} ({cores} cores, {ram_mb} MB RAM)")
+        # ── 5. Create server ──────────────────────────────────────────────────
+        if is_cube:
+            srv_body = {
+                "properties": {
+                    "name": name,
+                    "templateUuid": template_uuid,
+                    "type": "CUBE",
+                }
+            }
+            srv_raw = await self._post(f"/datacenters/{dc_id}/servers", srv_body)
+            server_id = srv_raw["id"]
+            result["server_id"] = server_id
+            result["steps"].append(f"Created CUBE server {server_id} ({template_name})")
+        else:
+            srv = await self.create_server(dc_id, name, cores, ram_mb)
+            server_id = srv["id"]
+            result["server_id"] = server_id
+            result["steps"].append(f"Created server {server_id} ({cores} cores, {ram_mb} MB RAM)")
 
-        # ── 5. Attach volume ──────────────────────────────────────────────────
-        await self._post(f"/datacenters/{dc_id}/servers/{server_id}/volumes/{vol_id}", {})
+        # ── 6. Attach volume ──────────────────────────────────────────────────
+        # IONOS attach endpoint: POST /datacenters/{dc}/servers/{srv}/volumes  body={"id": vol_id}
+        await self._post(
+            f"/datacenters/{dc_id}/servers/{server_id}/volumes",
+            {"id": vol_id},
+        )
         result["steps"].append("Attached boot volume to server")
 
-        # ── 6. Create LAN ──────────────────────────────────────────────────────
+        # ── 7. Create LAN ─────────────────────────────────────────────────────
         lan_body = {"properties": {"name": f"{name}-public", "public": True}}
         lan = await self._post(f"/datacenters/{dc_id}/lans", lan_body)
         lan_id = lan.get("id") or lan.get("properties", {}).get("id", "1")
         result["lan_id"] = lan_id
         result["steps"].append(f"Created public LAN {lan_id}")
 
-        # ── 7. Create NIC ─────────────────────────────────────────────────────
-        nic_body = {
-            "properties": {
-                "name": f"{name}-nic",
-                "lan": int(lan_id) if str(lan_id).isdigit() else 1,
-                "dhcp": True,
-            }
+        # ── 8. Create NIC ─────────────────────────────────────────────────────
+        nic_props: dict = {
+            "name": f"{name}-nic",
+            "lan": int(lan_id) if str(lan_id).isdigit() else 1,
         }
-        nic = await self._post(f"/datacenters/{dc_id}/servers/{server_id}/nics", nic_body)
+        if static_ip_addr:
+            nic_props["dhcp"] = False
+            nic_props["ips"] = [static_ip_addr]
+        else:
+            nic_props["dhcp"] = True
+
+        nic = await self._post(
+            f"/datacenters/{dc_id}/servers/{server_id}/nics",
+            {"properties": nic_props},
+        )
         nic_id = nic["id"]
         result["nic_id"] = nic_id
-        result["steps"].append(f"Created NIC {nic_id} (DHCP enabled)")
+        ip_note = f"static IP {static_ip_addr}" if static_ip_addr else "DHCP"
+        result["steps"].append(f"Created NIC {nic_id} ({ip_note})")
 
-        result["status"] = "provisioning"
+        # ── 9. Optionally wait for RUNNING ────────────────────────────────────
+        if wait_for_ready:
+            result["steps"].append("Waiting for server to reach RUNNING state...")
+            status = await self._wait_for_server_running(dc_id, server_id, timeout=wait_timeout)
+            result["steps"].append(f"Server RUNNING after {status['elapsed_s']}s")
+            result["status"] = "running"
+        else:
+            result["status"] = "provisioning"
+
+        result["public_ip"] = static_ip_addr or "(DHCP — assigned within ~5 min)"
         result["note"] = (
-            "Server is provisioning — boot + IP assignment typically takes 3–5 minutes. "
-            f"Use list_servers with datacenter_id={dc_id} to check status."
+            f"Server ready at {static_ip_addr}. SSH: ssh root@{static_ip_addr}"
+            if static_ip_addr and wait_for_ready
+            else "Server is provisioning. Use list_servers to check status and get IP."
         )
         logger.info(
-            "Provisioning complete | server={} | dc={} | vol={} | nic={}",
-            server_id,
-            dc_id,
-            vol_id,
-            nic_id,
+            "Provisioning complete | server={} | dc={} | vol={} | nic={} | ip={}",
+            server_id, dc_id, vol_id, nic_id, static_ip_addr or "dhcp",
         )
         return result
+
+    # ── Website deployment ────────────────────────────────────────────────────
+
+    async def deploy_website(
+        self,
+        host: str,
+        repo_url: str,
+        domain: str = "",
+        username: str = "root",
+        branch: str = "main",
+    ) -> dict:
+        """
+        Deploy a static/PHP website on a fresh Ubuntu server via SSH:
+          1. Update packages + install Apache2, git
+          2. Clone the repo to /var/www/html
+          3. Configure Apache ServerName if domain provided
+          4. Enable site and restart Apache
+
+        Returns a dict with each step's exit code and output.
+        """
+        web_root = "/var/www/html"
+        commands = [
+            # System update + Apache + git
+            "export DEBIAN_FRONTEND=noninteractive && apt-get update -q && apt-get install -yq apache2 git curl",
+            # Remove Apache default page
+            f"rm -rf {web_root}/*",
+            # Clone repo
+            f"git clone --depth 1 --branch {branch} {repo_url} {web_root}",
+            # Fix permissions
+            f"chown -R www-data:www-data {web_root} && chmod -R 755 {web_root}",
+            # Apache ServerName (if domain provided)
+            *(
+                [
+                    f"echo 'ServerName {domain}' >> /etc/apache2/apache2.conf",
+                    f"sed -i 's|#ServerName .*|ServerName {domain}|' /etc/apache2/sites-available/000-default.conf || true",
+                ]
+                if domain else []
+            ),
+            # Enable mod_rewrite + restart
+            "a2enmod rewrite && systemctl enable apache2 && systemctl restart apache2",
+            # Status check
+            "systemctl is-active apache2 && echo 'Apache is running'",
+            # Print public IP
+            "curl -s ifconfig.me || hostname -I | awk '{print $1}'",
+        ]
+
+        results = await self.configure_server(host, commands, username)
+        success = all(r.get("exit_code", 1) == 0 for r in results)
+
+        # Grab public IP from last command
+        public_ip = host
+        last = results[-1] if results else {}
+        if last.get("stdout", "").strip():
+            public_ip = last["stdout"].strip().split()[0]
+
+        return {
+            "success": success,
+            "host": host,
+            "repo": repo_url,
+            "public_ip": public_ip,
+            "url": f"http://{public_ip}",
+            "steps": results,
+        }
 
     # ── Datacenter update ─────────────────────────────────────────────────────
 
@@ -1059,6 +1258,10 @@ class IONOSClient:
         req = params.get("request_id", "")
         loc = params.get("location", "us/las")
 
+        # ── Templates (CUBE) ──────────────────────────────────────────────────
+        if action == "list_templates":
+            return await self.list_templates()
+
         # ── Datacenters ───────────────────────────────────────────────────────
         if action == "list_datacenters":
             return await self.list_datacenters()
@@ -1137,6 +1340,29 @@ class IONOSClient:
                 params.get("host", ""),
                 params.get("commands", []),
                 params.get("username", "root"),
+            )
+        if action == "deploy_website":
+            return await self.deploy_website(
+                host=params.get("host", ""),
+                repo_url=params.get("repo_url", ""),
+                domain=params.get("domain", ""),
+                username=params.get("username", "root"),
+                branch=params.get("branch", "main"),
+            )
+        if action == "provision_server":
+            return await self.provision_server(
+                name=params.get("name", "brain-server"),
+                location=params.get("location", "us/las"),
+                cores=int(params.get("cores", 2)),
+                ram_mb=int(params.get("ram_mb", 2048)),
+                storage_gb=int(params.get("storage_gb", 20)),
+                ubuntu_version=str(params.get("ubuntu_version", "22")),
+                ssh_keys=params.get("ssh_keys") or None,
+                datacenter_id=params.get("datacenter_id", ""),
+                cube_template=params.get("cube_template", ""),
+                static_ip=bool(params.get("static_ip", False)),
+                wait_for_ready=bool(params.get("wait_for_ready", False)),
+                wait_timeout=int(params.get("wait_timeout", 300)),
             )
 
         # ── Volumes ───────────────────────────────────────────────────────────

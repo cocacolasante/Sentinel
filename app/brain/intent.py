@@ -78,8 +78,9 @@ Intent-specific param examples:
   ionos_cloud:    {{"action": "<action>", ...params}}
     Datacenter: list_datacenters | get_datacenter | create_datacenter | update_datacenter | delete_datacenter  (params: datacenter_id, name, location, description)
     Server: list_servers | get_server | server_status | create_server | update_server | start_server | stop_server | reboot_server | suspend_server | delete_server | get_server_console  (params: datacenter_id, server_id, name, cores, ram_mb, cpu_family)
-    Provision: provision_server  (params: name, location, cores, ram_mb, storage_gb, ubuntu_version, datacenter_id)
-    SSH/Deploy: ssh_exec | deploy_docker | configure_server  (params: host, command, username, image, container_name, port_map)
+    Provision: provision_server  (params: name, location, cores, ram_mb, storage_gb, ubuntu_version, datacenter_id, cube_template="Basic Cube M"|"Basic Cube L"|etc, static_ip=true/false, wait_for_ready=true/false)
+    SSH/Deploy: ssh_exec | deploy_docker | configure_server | deploy_website  (params: host, command, username, image, container_name, port_map, repo_url, domain, branch)
+    Templates: list_templates
     Volume: list_volumes | get_volume | create_volume | update_volume | delete_volume | list_attached_volumes | attach_volume | detach_volume | create_volume_snapshot | restore_snapshot  (params: datacenter_id, volume_id, server_id, name, size_gb, volume_type, image_id, snapshot_id)
     NIC: list_nics | get_nic | create_nic | update_nic | delete_nic  (params: datacenter_id, server_id, nic_id, lan_id, dhcp, ips)
     LAN: list_lans | get_lan | create_lan | update_lan | delete_lan  (params: datacenter_id, lan_id, name, public)
@@ -143,6 +144,9 @@ Routing guidance:
   - "check request status X", "what's the status of IONOS request X" → ionos_cloud action=get_request_status
   - "SSH into server at IP X", "run command X on server" → ionos_cloud action=ssh_exec
   - "deploy docker container X on server" → ionos_cloud action=deploy_docker
+  - "deploy website", "deploy portfolio", "deploy site to server", "clone repo and configure apache", "pull repo and set up web server" → ionos_cloud action=deploy_website with host, repo_url, domain
+  - "spin up a cube server", "provision a cube m", "deploy a cube", "cube m server" → ionos_cloud action=provision_server with cube_template="Basic Cube M", static_ip=true, wait_for_ready=true
+  - "list cube templates", "what cube servers are available", "show server templates" → ionos_cloud action=list_templates
   - When the user asks to do MULTIPLE things in one message (e.g. "create a task AND set up a server"), pick the most complex/actionable intent. Mention in context_data that you will handle others afterward.
   - "deploy", "rebuild", "restart the brain", "redeploy", "apply changes", "push and deploy", "deploy the changes" → deploy
   - "update X and deploy", "change X and ship it", "fix X and push", "make a code change to X", "edit X and create a PR" → code_change (full workflow: branch + patch + PR + auto-merge)
