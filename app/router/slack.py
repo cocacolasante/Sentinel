@@ -24,6 +24,17 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Suppress the SDK's noisy ERROR-level logs for transient session-monitor
+# failures — the SDK handles reconnection internally, so these are not
+# actionable and create false Sentry alerts.
+class _SuppressSocketMonitorErrors(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "Failed to check the cur" not in record.getMessage()
+
+logging.getLogger("slack_sdk.socket_mode.aiohttp").addFilter(
+    _SuppressSocketMonitorErrors()
+)
+
 dispatch = Dispatcher()
 
 # Phrases that trigger the built-in skills/help listing (no LLM call)
@@ -250,25 +261,30 @@ def _build_app() -> AsyncApp:
 async def start_socket_mode() -> None:
     if not settings.slack_app_token or not settings.slack_bot_token:
         logger.warning(
-            "Slack tokens not configured — bot will not start. Set SLACK_BOT_TOKEN and SLACK_APP_TOKEN in .env"
+            "Slack tokens not configured — bot will not start. "
+            "Set SLACK_BOT_TOKEN and SLACK_APP_TOKEN in .env"
         )
         return
+
     slack_app = _build_app()
-    handler = AsyncSocketModeHandler(slack_app, settings.slack_app_token)
-    logger.info("Slack Socket Mode connecting...")
-    try:
-        await handler.start_async()
-    except Exception as exc:
-        # The SDK reconnects automatically on transient WebSocket errors.
-        # Log unexpected failures without propagating them — propagating would
-        # kill the Brain's lifespan task and take down the whole server.
-        exc_name = type(exc).__name__
-        if exc_name in (
-            "ClientConnectionResetError",
-            "ConnectionResetError",
-            "ServerConnectionError",
-            "CancelledError",
-        ):
-            logger.debug("Slack socket closed ({}): SDK will reconnect", exc_name)
-        else:
-            logger.error("Slack Socket Mode exited unexpectedly ({}): {}", exc_name, exc)
+    backoff = 5  # seconds; doubles on each consecutive failure, caps at 300
+
+    while True:
+        handler = AsyncSocketModeHandler(slack_app, settings.slack_app_token)
+        logger.info("Slack Socket Mode connecting...")
+        try:
+            await handler.start_async()
+            # start_async() only returns if the connection is cleanly closed
+            logger.warning("Slack Socket Mode connection closed — reconnecting in %ds", backoff)
+        except asyncio.CancelledError:
+            logger.info("Slack Socket Mode cancelled — shutting down")
+            return
+        except Exception as exc:
+            exc_name = type(exc).__name__
+            logger.error(
+                "Slack Socket Mode exited unexpectedly (%s): %s — reconnecting in %ds",
+                exc_name, exc, backoff,
+            )
+
+        await asyncio.sleep(backoff)
+        backoff = min(backoff * 2, 300)
