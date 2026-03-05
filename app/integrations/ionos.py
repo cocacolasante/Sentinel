@@ -65,6 +65,49 @@ class IONOSClient:
         r.raise_for_status()
         return r.json()
 
+    async def _post_tracked(self, path: str, body: dict) -> tuple[dict, str]:
+        """POST and return (json_body, request_id) for async request tracking."""
+        r = await self.client.post(path, json=body)
+        r.raise_for_status()
+        # IONOS returns the request ID in the Location header or X-Request-Id
+        request_id = r.headers.get("X-Request-Id", "")
+        location = r.headers.get("Location", "")
+        if not request_id and location:
+            # Location is like /requests/{id}/status
+            parts = location.rstrip("/").split("/")
+            if "requests" in parts:
+                idx = parts.index("requests")
+                if idx + 1 < len(parts):
+                    request_id = parts[idx + 1]
+        return r.json(), request_id
+
+    async def _wait_for_request(
+        self,
+        request_id: str,
+        timeout: int = 300,
+        poll_interval: int = 10,
+    ) -> dict:
+        """Poll /requests/{id}/status until status is DONE or FAILED.
+        Response shape: {"metadata": {"status": "DONE"|"FAILED"|"RUNNING", "message": ...}}
+        """
+        if not request_id:
+            return {"status": "unknown", "elapsed_s": 0}
+        elapsed = 0
+        while elapsed < timeout:
+            try:
+                data = await self._get(f"/requests/{request_id}/status")
+                meta = data.get("metadata", {})
+                status = meta.get("status", "")
+                message = meta.get("message", "")
+                logger.info("Request %s status=%s elapsed=%ss", request_id, status, elapsed)
+                if status in ("DONE", "FAILED"):
+                    return {"status": status, "elapsed_s": elapsed, "message": message}
+            except Exception as exc:
+                logger.warning("Request status poll error: %s", exc)
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        return {"status": "timeout", "elapsed_s": elapsed}
+
     async def _put(self, path: str, body: dict) -> dict:
         r = await self.client.put(path, json=body)
         r.raise_for_status()
@@ -216,18 +259,24 @@ class IONOSClient:
 
     # ── SSH Remote Execution ──────────────────────────────────────────────────
 
-    def _ssh_exec_sync(self, host: str, command: str, username: str = "root", port: int = 22) -> dict:
+    def _ssh_exec_sync(
+        self,
+        host: str,
+        command: str,
+        username: str = "root",
+        port: int = 22,
+        timeout: int = 120,
+    ) -> dict:
         """
         Execute a command on a remote server via SSH using the private key from settings.
         Returns stdout, stderr, and exit code.
         """
         import subprocess, tempfile, os
 
-        key_pem = settings.ionos_ssh_private_key
+        key_pem = get_settings().ionos_ssh_private_key
         if not key_pem:
             raise ValueError("IONOS_SSH_PRIVATE_KEY not set in .env")
 
-        # Write key to temp file (paramiko-style, but using subprocess SSH)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as tf:
             tf.write(key_pem.strip() + "\n")
             tf.flush()
@@ -236,26 +285,22 @@ class IONOSClient:
         try:
             os.chmod(key_path, 0o600)
             cmd = [
-                "ssh",
-                "-i",
-                key_path,
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-o",
-                "ConnectTimeout=15",
-                "-p",
-                str(port),
+                "ssh", "-i", key_path,
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "ConnectTimeout=20",
+                "-o", "ServerAliveInterval=30",
+                "-p", str(port),
                 f"{username}@{host}",
                 command,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
             return {
                 "stdout": result.stdout.strip(),
                 "stderr": result.stderr.strip(),
                 "exit_code": result.returncode,
                 "host": host,
+                "command": command[:120],
             }
         finally:
             try:
@@ -263,9 +308,16 @@ class IONOSClient:
             except Exception:
                 pass
 
-    async def ssh_exec(self, host: str, command: str, username: str = "root", port: int = 22) -> dict:
+    async def ssh_exec(
+        self,
+        host: str,
+        command: str,
+        username: str = "root",
+        port: int = 22,
+        timeout: int = 120,
+    ) -> dict:
         """Run a command on a remote IONOS server via SSH."""
-        return await asyncio.to_thread(self._ssh_exec_sync, host, command, username, port)
+        return await asyncio.to_thread(self._ssh_exec_sync, host, command, username, port, timeout)
 
     # ── Deployment helpers ────────────────────────────────────────────────────
 
@@ -287,14 +339,20 @@ class IONOSClient:
         )
         return await self.ssh_exec(host, cmd, username)
 
-    async def configure_server(self, host: str, commands: list[str], username: str = "root") -> list[dict]:
+    async def configure_server(
+        self,
+        host: str,
+        commands: list[str],
+        username: str = "root",
+        timeout: int = 300,
+    ) -> list[dict]:
         """Run a list of shell commands sequentially on a remote server."""
         results = []
         for cmd in commands:
-            result = await self.ssh_exec(host, cmd, username)
+            result = await self.ssh_exec(host, cmd, username, timeout=timeout)
             results.append(result)
             if result["exit_code"] != 0:
-                logger.warning("Server config cmd failed on {}: {}", host, cmd)
+                logger.warning("Server config cmd failed on %s: %s", host, cmd)
         return results
 
     # ── Image catalogue ───────────────────────────────────────────────────────
@@ -335,20 +393,37 @@ class IONOSClient:
             )
         return out
 
+    # Locations that support the CUBE server type
+    CUBE_LOCATIONS: frozenset[str] = frozenset({
+        "de/fra", "de/fra/2", "de/txl", "gb/lhr", "gb/bhx",
+        "us/ewr", "us/mci", "fr/par", "es/vit",
+    })
+
     async def _find_ubuntu_image(self, location: str, version: str = "22") -> str | None:
         """
-        Return the image ID of the latest Ubuntu image for a given location.
-        Searches for 'Ubuntu-{version}' in the image name.
+        Return the image ID of the latest Ubuntu image for the given location.
+        Filters strictly by props.location to avoid cross-location mismatches.
         """
-        images = await self.list_images(location=location, name_filter=f"Ubuntu-{version}")
-        if not images:
-            # Broader search — sometimes named differently
-            images = await self.list_images(location=location, name_filter="Ubuntu")
-        if not images:
+        data = await self._get("/images", params={"depth": 1})
+        items = data.get("items", [])
+
+        def _match(item: dict, ver: str) -> bool:
+            p = item.get("properties", {})
+            return (
+                p.get("public") is True
+                and p.get("imageType") == "HDD"
+                and p.get("location") == location
+                and ver.lower() in p.get("name", "").lower()
+            )
+
+        candidates = [i for i in items if _match(i, f"ubuntu-{version}")]
+        if not candidates:
+            # Try any Ubuntu version in that location
+            candidates = [i for i in items if _match(i, "ubuntu")]
+        if not candidates:
             return None
-        # Sort by name descending to get the latest version
-        images.sort(key=lambda x: x["name"], reverse=True)
-        return images[0]["id"]
+        candidates.sort(key=lambda x: x["properties"]["name"], reverse=True)
+        return candidates[0]["id"]
 
     # ── CUBE server templates ─────────────────────────────────────────────────
 
@@ -382,6 +457,45 @@ class IONOSClient:
                 "category": p.get("category", ""),
             })
         return out
+
+    async def _wait_for_server_available(
+        self,
+        dc_id: str,
+        server_id: str,
+        timeout: int = 300,
+        poll_interval: int = 10,
+    ) -> dict:
+        """
+        Poll until the server's metadata.state != 'BUSY' (i.e. 'AVAILABLE').
+        Required before adding NICs to a freshly-created CUBE server.
+        Returns the server status dict.
+        Raises TimeoutError if the server doesn't leave BUSY within timeout seconds.
+        """
+        elapsed = 0
+        while elapsed < timeout:
+            try:
+                srv = await self.get_server(dc_id, server_id)
+                props = srv.get("properties", {})
+                meta = srv.get("metadata", {})
+                vmstate = props.get("vmState", "")
+                state = meta.get("state", "")
+                logger.info(
+                    "Waiting for server AVAILABLE | id={} | state={} | vmstate={} | elapsed={}s",
+                    server_id, state, vmstate, elapsed,
+                )
+                if state.upper() != "BUSY":
+                    return {"vmState": vmstate, "state": state, "elapsed_s": elapsed}
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 404:
+                    logger.info("Server %s not yet visible (404) — still provisioning", server_id)
+                else:
+                    raise
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        raise TimeoutError(
+            f"Server {server_id} did not leave BUSY state within {timeout}s. "
+            "Check IONOS DCD for provisioning errors."
+        )
 
     async def _wait_for_server_running(
         self,
@@ -492,82 +606,117 @@ class IONOSClient:
             result["steps"].append(f"Reserved static IP: {static_ip_addr} (block {ip_block_id})")
             logger.info("Provisioning: reserved IP={}", static_ip_addr)
 
-        # ── 4. Create boot volume ─────────────────────────────────────────────
-        # CUBE servers require DAS volumes; ENTERPRISE uses HDD/SSD
         is_cube = bool(cube_template)
-        vol_type = "DAS" if is_cube else "HDD"
+
+        # ── 4 & 5. Create server (+ DAS volume inline for CUBE) ───────────────
         if is_cube:
-            # Resolve template: accept name or UUID
+            # Validate CUBE location
+            if location not in self.CUBE_LOCATIONS:
+                raise ValueError(
+                    f"Location '{location}' does not support CUBE servers. "
+                    f"Supported locations: {', '.join(sorted(self.CUBE_LOCATIONS))}"
+                )
+            # Resolve template name → UUID
             template_uuid = self.CUBE_TEMPLATES.get(cube_template, cube_template)
             template_name = next(
                 (k for k, v in self.CUBE_TEMPLATES.items() if v == template_uuid),
                 cube_template,
             )
-            # Cube storage size is fixed by template
-            template_storage = {
-                "72e73b81-8551-4e74-b398-fc63b39994af": 60,   # XS
-                "864c2c89-ea4d-4bf9-9a27-9acfeb436666": 120,  # S
-                "eda8d3b1-4d71-4502-8f22-2452adac0dc5": 240,  # M
-                "253eef63-b8b8-4c8e-9084-3ca298b3593f": 480,  # L
-                "6382dca7-d4de-4238-b138-bdc600dc773b": 960,  # XL
-                "987fb209-cc10-4acb-82d7-07833919f40f": 120,  # Memory S
-                "e8a56b84-b717-42d9-85f6-123d12ed212e": 240,  # Memory M
-                "639f65b6-48e5-4b12-b447-947385276a52": 480,  # Memory L
-                "8937cbb6-11a0-4e98-b2a5-d076cbaba3af": 960,  # Memory XL
-            }
-            storage_gb = template_storage.get(template_uuid, storage_gb)
-
-        vol_body: dict = {
-            "properties": {
+            # DAS volume properties (no size — fixed by template)
+            das_vol_props: dict = {
                 "name": f"{name}-boot",
-                "type": vol_type,
-                "size": storage_gb,
+                "type": "DAS",
                 "image": image_id,
-                "licenceType": "LINUX",
             }
-        }
-        if ssh_keys:
-            vol_body["properties"]["sshKeys"] = ssh_keys
-        elif s.ionos_ssh_public_key:
-            vol_body["properties"]["sshKeys"] = [s.ionos_ssh_public_key]
-        else:
-            import secrets
-            tmp_pass = secrets.token_urlsafe(16)
-            vol_body["properties"]["imagePassword"] = tmp_pass
-            result["image_password"] = tmp_pass
-            result["steps"].append("Note: no SSH key — image password generated (save this!)")
+            if ssh_keys:
+                das_vol_props["sshKeys"] = ssh_keys
+            elif s.ionos_ssh_public_key:
+                das_vol_props["sshKeys"] = [s.ionos_ssh_public_key]
+            else:
+                import secrets
+                tmp_pass = secrets.token_urlsafe(16)
+                das_vol_props["imagePassword"] = tmp_pass
+                result["image_password"] = tmp_pass
+                result["steps"].append("Note: no SSH key — image password generated (save this!)")
 
-        vol = await self._post(f"/datacenters/{dc_id}/volumes", vol_body)
-        vol_id = vol["id"]
-        result["volume_id"] = vol_id
-        result["steps"].append(f"Created {vol_type} boot volume {vol_id} ({storage_gb} GB)")
-
-        # ── 5. Create server ──────────────────────────────────────────────────
-        if is_cube:
+            # CUBE servers require a composite call: server + DAS volume in entities
             srv_body = {
                 "properties": {
                     "name": name,
                     "templateUuid": template_uuid,
                     "type": "CUBE",
+                },
+                "entities": {
+                    "volumes": {
+                        "items": [{"properties": das_vol_props}]
+                    }
+                },
+            }
+            srv_raw, req_id = await self._post_tracked(f"/datacenters/{dc_id}/servers", srv_body)
+            server_id = srv_raw["id"]
+            # Extract the DAS volume ID from the response
+            vol_items = (
+                srv_raw.get("entities", {})
+                .get("volumes", {})
+                .get("items", [])
+            )
+            vol_id = vol_items[0]["id"] if vol_items else ""
+            result["server_id"] = server_id
+            result["volume_id"] = vol_id
+            result["steps"].append(
+                f"Created CUBE server {server_id} ({template_name}) with DAS boot volume"
+            )
+            # Wait for the async provisioning request to complete (server won't be
+            # reachable via GET until the request is DONE)
+            result["steps"].append("Waiting for CUBE provisioning request to complete...")
+            req_status = await self._wait_for_request(req_id, timeout=300)
+            result["steps"].append(
+                f"Provisioning request {req_status['status']} after {req_status['elapsed_s']}s"
+            )
+            if req_status["status"] == "FAILED":
+                raise RuntimeError(f"CUBE server provisioning failed: {req_status.get('message', '')}")
+            # Extra wait for server to become AVAILABLE in case request completes before resource is ready
+            result["steps"].append("Waiting for CUBE server to become AVAILABLE...")
+            avail = await self._wait_for_server_available(dc_id, server_id, timeout=120)
+            result["steps"].append(f"Server AVAILABLE after {avail['elapsed_s']}s (state={avail['state']})")
+        else:
+            # ENTERPRISE: create volume and server separately, then attach
+            vol_body: dict = {
+                "properties": {
+                    "name": f"{name}-boot",
+                    "type": "HDD",
+                    "size": storage_gb,
+                    "image": image_id,
+                    "licenceType": "LINUX",
                 }
             }
-            srv_raw = await self._post(f"/datacenters/{dc_id}/servers", srv_body)
-            server_id = srv_raw["id"]
-            result["server_id"] = server_id
-            result["steps"].append(f"Created CUBE server {server_id} ({template_name})")
-        else:
+            if ssh_keys:
+                vol_body["properties"]["sshKeys"] = ssh_keys
+            elif s.ionos_ssh_public_key:
+                vol_body["properties"]["sshKeys"] = [s.ionos_ssh_public_key]
+            else:
+                import secrets
+                tmp_pass = secrets.token_urlsafe(16)
+                vol_body["properties"]["imagePassword"] = tmp_pass
+                result["image_password"] = tmp_pass
+                result["steps"].append("Note: no SSH key — image password generated (save this!)")
+
+            vol = await self._post(f"/datacenters/{dc_id}/volumes", vol_body)
+            vol_id = vol["id"]
+            result["volume_id"] = vol_id
+            result["steps"].append(f"Created HDD boot volume {vol_id} ({storage_gb} GB)")
+
             srv = await self.create_server(dc_id, name, cores, ram_mb)
             server_id = srv["id"]
             result["server_id"] = server_id
             result["steps"].append(f"Created server {server_id} ({cores} cores, {ram_mb} MB RAM)")
 
-        # ── 6. Attach volume ──────────────────────────────────────────────────
-        # IONOS attach endpoint: POST /datacenters/{dc}/servers/{srv}/volumes  body={"id": vol_id}
-        await self._post(
-            f"/datacenters/{dc_id}/servers/{server_id}/volumes",
-            {"id": vol_id},
-        )
-        result["steps"].append("Attached boot volume to server")
+            # Attach volume: POST .../servers/{id}/volumes  body={"id": vol_id}
+            await self._post(
+                f"/datacenters/{dc_id}/servers/{server_id}/volumes",
+                {"id": vol_id},
+            )
+            result["steps"].append("Attached boot volume to server")
 
         # ── 7. Create LAN ─────────────────────────────────────────────────────
         lan_body = {"properties": {"name": f"{name}-public", "public": True}}
@@ -577,15 +726,17 @@ class IONOSClient:
         result["steps"].append(f"Created public LAN {lan_id}")
 
         # ── 8. Create NIC ─────────────────────────────────────────────────────
+        # Note: do NOT set dhcp=False even when pinning a static IP.
+        # IONOS uses its own DHCP to assign the reserved IP to the NIC, and the
+        # cloud-init on the server uses DHCP to pick it up. Setting dhcp=False
+        # breaks cloud-init networking (server becomes unreachable).
         nic_props: dict = {
             "name": f"{name}-nic",
             "lan": int(lan_id) if str(lan_id).isdigit() else 1,
         }
         if static_ip_addr:
-            nic_props["dhcp"] = False
             nic_props["ips"] = [static_ip_addr]
-        else:
-            nic_props["dhcp"] = True
+        # Leave dhcp unset (null) to use IONOS DHCP
 
         nic = await self._post(
             f"/datacenters/{dc_id}/servers/{server_id}/nics",
@@ -642,8 +793,8 @@ class IONOSClient:
             "export DEBIAN_FRONTEND=noninteractive && apt-get update -q && apt-get install -yq apache2 git curl",
             # Remove Apache default page
             f"rm -rf {web_root}/*",
-            # Clone repo
-            f"git clone --depth 1 --branch {branch} {repo_url} {web_root}",
+            # Clone repo (try specified branch, fall back to default if branch missing)
+            f"git clone --depth 1 --branch {branch} {repo_url} {web_root} || git clone --depth 1 {repo_url} {web_root}",
             # Fix permissions
             f"chown -R www-data:www-data {web_root} && chmod -R 755 {web_root}",
             # Apache ServerName (if domain provided)
@@ -662,7 +813,7 @@ class IONOSClient:
             "curl -s ifconfig.me || hostname -I | awk '{print $1}'",
         ]
 
-        results = await self.configure_server(host, commands, username)
+        results = await self.configure_server(host, commands, username, timeout=300)
         success = all(r.get("exit_code", 1) == 0 for r in results)
 
         # Grab public IP from last command
