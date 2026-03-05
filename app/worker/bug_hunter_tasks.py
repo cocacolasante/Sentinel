@@ -323,23 +323,29 @@ def _analyze_cluster(cluster: dict, hours: int) -> dict | None:
 
 
 def _create_fix_task(cluster: dict, analysis: dict) -> int | None:
-    """Create a board task for auto-fixable high/critical bugs. Returns task_id or None."""
+    """
+    Create a board task for every non-noise bug found. Returns task_id or None.
+
+    approval_level:
+      1 = auto_fixable → Sentinel executes immediately
+      2 = not auto_fixable → DMs owner for approval before any code changes
+    """
     from app.db import postgres
 
-    severity = analysis.get("severity", "low")
-    if severity not in ("critical", "high"):
-        return None
-    if not analysis.get("auto_fixable"):
-        return None
     if analysis.get("is_noise"):
         return None
+
+    severity = analysis.get("severity", "low")
+    auto_fixable = bool(analysis.get("auto_fixable"))
+    approval_level = 1 if auto_fixable else 2
 
     title = f"[BugHunt] {cluster['service']} — {cluster['fingerprint'][:80]}"
     description = (
         f"Detected by Autonomous Bug Hunter\n"
         f"Service: {cluster['service']}\n"
         f"Frequency: {cluster['count']}x\n"
-        f"Fingerprint: {cluster['fingerprint']}\n\n"
+        f"Fingerprint: {cluster['fingerprint']}\n"
+        f"Auto-fixable: {auto_fixable}\n\n"
         f"Root cause: {analysis.get('root_cause', '')}\n"
         f"Affected component: {analysis.get('affected_component', '')}\n"
         f"Proposed fix: {analysis.get('proposed_fix', '')}\n"
@@ -347,17 +353,20 @@ def _create_fix_task(cluster: dict, analysis: dict) -> int | None:
         f"Sample log lines:\n" + "\n".join(cluster["lines"][:3])
     )
     try:
+        priority_num = {"critical": 5, "high": 4, "medium": 3, "low": 2}.get(severity, 2)
+        priority_str = "high" if severity == "critical" else severity
         row = postgres.execute_one(
             """
             INSERT INTO tasks (title, description, status, priority, priority_num,
                                approval_level, source, tags)
-            VALUES (%s, %s, 'pending', %s, %s, 1, 'bug-hunter', %s::jsonb)
+            VALUES (%s, %s, 'pending', %s, %s, %s, 'bug-hunter', %s::jsonb)
             RETURNING id
             """,
             (
                 title, description,
-                "high" if severity == "critical" else severity,
-                4 if severity == "critical" else 3,
+                priority_str,
+                priority_num,
+                approval_level,
                 json.dumps(["bug-hunter", cluster["service"], severity]),
             ),
         )

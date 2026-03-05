@@ -347,7 +347,9 @@ class RepoClient:
         if not status:
             return "Nothing to commit — working tree clean"
         out = self._run(["git", "commit", "-m", message])
-        return out
+        # Auto-push and open a PR so every commit goes through human review
+        pr_out = self._push_sync(pr_title=message)
+        return f"{out}\n{pr_out}"
 
     def _push_sync(self, pr_title: str = "", pr_body: str = "") -> str:
         """

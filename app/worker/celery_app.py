@@ -32,6 +32,7 @@ celery_app = Celery(
         "app.worker.project_tasks",
         "app.worker.sentry_tasks",
         "app.worker.bug_hunter_tasks",
+        "app.worker.pr_tasks",
     ],
 )
 
@@ -115,5 +116,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute=30, hour="*/6"),
         "options": {"queue": "tasks_general"},
         "kwargs": {"hours": 6},
+    },
+    # Every 15 min — poll for open sentinel/* PRs and trigger review tasks.
+    # Acts as a fallback for any PRs that missed the GitHub webhook.
+    "poll-sentinel-prs": {
+        "task": "app.worker.pr_tasks.poll_open_sentinel_prs",
+        "schedule": crontab(minute="*/15"),
+        "options": {"queue": "celery"},
     },
 }
