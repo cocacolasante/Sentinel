@@ -146,7 +146,9 @@ class IONOSClient:
                 "description": description,
             }
         }
-        result = await self._post("/datacenters", body)
+        result, req_id = await self._post_tracked("/datacenters", body)
+        if req_id:
+            await self._wait_for_request(req_id, timeout=120)
         return {
             "id": result["id"],
             "name": result["properties"].get("name"),
@@ -273,9 +275,11 @@ class IONOSClient:
         """
         import subprocess, tempfile, os
 
-        key_pem = get_settings().ionos_ssh_private_key
+        _s = get_settings()
+        # Prefer the unencrypted automation key; fall back to user key
+        key_pem = _s.ionos_ssh_auto_private_key or _s.ionos_ssh_private_key
         if not key_pem:
-            raise ValueError("IONOS_SSH_PRIVATE_KEY not set in .env")
+            raise ValueError("IONOS_SSH_AUTO_PRIVATE_KEY (or IONOS_SSH_PRIVATE_KEY) not set in .env")
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as tf:
             tf.write(key_pem.strip() + "\n")
@@ -480,7 +484,7 @@ class IONOSClient:
                 vmstate = props.get("vmState", "")
                 state = meta.get("state", "")
                 logger.info(
-                    "Waiting for server AVAILABLE | id={} | state={} | vmstate={} | elapsed={}s",
+                    "Waiting for server AVAILABLE | id=%s | state=%s | vmstate=%s | elapsed=%ss",
                     server_id, state, vmstate, elapsed,
                 )
                 if state.upper() != "BUSY":
@@ -517,7 +521,7 @@ class IONOSClient:
             vmstate = props.get("vmState", "")
             state = meta.get("state", "")
             logger.info(
-                "Waiting for server | id={} | state={} | vmstate={} | elapsed={}s",
+                "Waiting for server | id=%s | state=%s | vmstate=%s | elapsed=%ss",
                 server_id, state, vmstate, elapsed,
             )
             if vmstate == "RUNNING":
@@ -577,9 +581,16 @@ class IONOSClient:
             result["datacenter_id"] = dc_id
             result["datacenter_name"] = dc.get("name")
             result["steps"].append(f"Created datacenter {dc_id}")
-            logger.info("Provisioning: datacenter created | id={}", dc_id)
-            # Wait briefly for DC to be AVAILABLE
-            await asyncio.sleep(5)
+            logger.info("Provisioning: datacenter created | id=%s", dc_id)
+            # Poll until the DC is AVAILABLE before creating resources inside it
+            for _attempt in range(30):
+                await asyncio.sleep(5)
+                try:
+                    dc_state = await self._get(f"/datacenters/{dc_id}", params={"depth": 0})
+                    if dc_state.get("metadata", {}).get("state", "").upper() == "AVAILABLE":
+                        break
+                except Exception:
+                    pass
         else:
             result["datacenter_id"] = dc_id
             result["steps"].append(f"Using existing datacenter {dc_id}")
@@ -604,7 +615,7 @@ class IONOSClient:
             result["ip_block_id"] = ip_block_id
             result["static_ip"] = static_ip_addr
             result["steps"].append(f"Reserved static IP: {static_ip_addr} (block {ip_block_id})")
-            logger.info("Provisioning: reserved IP={}", static_ip_addr)
+            logger.info("Provisioning: reserved IP=%s", static_ip_addr)
 
         is_cube = bool(cube_template)
 
@@ -628,10 +639,14 @@ class IONOSClient:
                 "type": "DAS",
                 "image": image_id,
             }
+            # Prefer the unencrypted automation key for cloud-init; fall back to user key
+            _pub_key = (
+                s.ionos_ssh_auto_public_key or s.ionos_ssh_public_key
+            ) if not ssh_keys else ""
             if ssh_keys:
                 das_vol_props["sshKeys"] = ssh_keys
-            elif s.ionos_ssh_public_key:
-                das_vol_props["sshKeys"] = [s.ionos_ssh_public_key]
+            elif _pub_key:
+                das_vol_props["sshKeys"] = [_pub_key]
             else:
                 import secrets
                 tmp_pass = secrets.token_urlsafe(16)
@@ -690,10 +705,13 @@ class IONOSClient:
                     "licenceType": "LINUX",
                 }
             }
+            _pub_key = (
+                s.ionos_ssh_auto_public_key or s.ionos_ssh_public_key
+            ) if not ssh_keys else ""
             if ssh_keys:
                 vol_body["properties"]["sshKeys"] = ssh_keys
-            elif s.ionos_ssh_public_key:
-                vol_body["properties"]["sshKeys"] = [s.ionos_ssh_public_key]
+            elif _pub_key:
+                vol_body["properties"]["sshKeys"] = [_pub_key]
             else:
                 import secrets
                 tmp_pass = secrets.token_urlsafe(16)
@@ -758,12 +776,12 @@ class IONOSClient:
 
         result["public_ip"] = static_ip_addr or "(DHCP — assigned within ~5 min)"
         result["note"] = (
-            f"Server ready at {static_ip_addr}. SSH: ssh root@{static_ip_addr}"
+            f"Server ready at {static_ip_addr}. SSH: ssh -i ~/.ssh/ionos_auto root@{static_ip_addr}"
             if static_ip_addr and wait_for_ready
             else "Server is provisioning. Use list_servers to check status and get IP."
         )
         logger.info(
-            "Provisioning complete | server={} | dc={} | vol={} | nic={} | ip={}",
+            "Provisioning complete | server=%s | dc=%s | vol=%s | nic=%s | ip=%s",
             server_id, dc_id, vol_id, nic_id, static_ip_addr or "dhcp",
         )
         return result
@@ -779,41 +797,70 @@ class IONOSClient:
         branch: str = "main",
     ) -> dict:
         """
-        Deploy a static/PHP website on a fresh Ubuntu server via SSH:
-          1. Update packages + install Apache2, git
-          2. Clone the repo to /var/www/html
-          3. Configure Apache ServerName if domain provided
-          4. Enable site and restart Apache
+        Deploy a website on a fresh Ubuntu server via SSH.
 
+        Detects project type:
+          - Node.js/React (package.json with build script): installs Node.js, runs
+            npm install + npm run build, serves the build/ directory via Apache.
+          - Static/PHP: clones directly to /var/www/html.
+
+        Apache is configured with AllowOverride All and mod_rewrite for SPA routing.
         Returns a dict with each step's exit code and output.
         """
         web_root = "/var/www/html"
+        clone_dir = "/opt/app_src"
+
         commands = [
-            # System update + Apache + git
+            # System update + Apache + git + curl
             "export DEBIAN_FRONTEND=noninteractive && apt-get update -q && apt-get install -yq apache2 git curl",
-            # Remove Apache default page
-            f"rm -rf {web_root}/*",
-            # Clone repo (try specified branch, fall back to default if branch missing)
-            f"git clone --depth 1 --branch {branch} {repo_url} {web_root} || git clone --depth 1 {repo_url} {web_root}",
-            # Fix permissions
-            f"chown -R www-data:www-data {web_root} && chmod -R 755 {web_root}",
-            # Apache ServerName (if domain provided)
-            *(
-                [
-                    f"echo 'ServerName {domain}' >> /etc/apache2/apache2.conf",
-                    f"sed -i 's|#ServerName .*|ServerName {domain}|' /etc/apache2/sites-available/000-default.conf || true",
-                ]
-                if domain else []
-            ),
-            # Enable mod_rewrite + restart
-            "a2enmod rewrite && systemctl enable apache2 && systemctl restart apache2",
+            # Clone repo into staging dir (try branch, fall back to default)
+            f"rm -rf {clone_dir} && "
+            f"(git clone --depth 1 --branch {branch} {repo_url} {clone_dir} 2>/dev/null || "
+            f"git clone --depth 1 {repo_url} {clone_dir})",
+            # Detect Node.js project and build, OR copy static files
+            # If package.json + build script exists: install Node, npm install, npm build
+            f"if [ -f {clone_dir}/package.json ] && grep -q '\"build\"' {clone_dir}/package.json; then "
+            f"  curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && "
+            f"  apt-get install -yq nodejs && "
+            f"  cd {clone_dir} && npm install --legacy-peer-deps && npm run build && "
+            # CRA outputs to build/, Vite outputs to dist/
+            f"  BUILD_DIR=$([ -d {clone_dir}/build ] && echo {clone_dir}/build || echo {clone_dir}/dist) && "
+            f"  rm -rf {web_root}/* && cp -r $BUILD_DIR/. {web_root}/; "
+            f"else "
+            f"  rm -rf {web_root}/* && cp -r {clone_dir}/. {web_root}/; "
+            f"fi",
+            # Apache: AllowOverride All for .htaccess + SPA fallback
+            f"cat > /etc/apache2/sites-available/000-default.conf << 'APACHEEOF'\n"
+            f"<VirtualHost *:80>\n"
+            f"    ServerAdmin webmaster@localhost\n"
+            f"    DocumentRoot {web_root}\n"
+            + (f"    ServerName {domain}\n" if domain else "")
+            + f"    <Directory {web_root}>\n"
+            f"        Options -Indexes +FollowSymLinks\n"
+            f"        AllowOverride All\n"
+            f"        Require all granted\n"
+            f"    </Directory>\n"
+            f"    ErrorLog ${{APACHE_LOG_DIR}}/error.log\n"
+            f"    CustomLog ${{APACHE_LOG_DIR}}/access.log combined\n"
+            f"</VirtualHost>\n"
+            f"APACHEEOF",
+            # .htaccess for React Router (SPA fallback to index.html)
+            f"cat > {web_root}/.htaccess << 'HTEOF'\n"
+            f"Options -MultiViews\n"
+            f"RewriteEngine On\n"
+            f"RewriteCond %{{REQUEST_FILENAME}} !-f\n"
+            f"RewriteRule ^ index.html [QSA,L]\n"
+            f"HTEOF",
+            # Fix permissions + enable modules + restart
+            f"chown -R www-data:www-data {web_root} && chmod -R 755 {web_root} && "
+            f"a2enmod rewrite && systemctl enable apache2 && systemctl restart apache2",
             # Status check
             "systemctl is-active apache2 && echo 'Apache is running'",
             # Print public IP
             "curl -s ifconfig.me || hostname -I | awk '{print $1}'",
         ]
 
-        results = await self.configure_server(host, commands, username, timeout=300)
+        results = await self.configure_server(host, commands, username, timeout=600)
         success = all(r.get("exit_code", 1) == 0 for r in results)
 
         # Grab public IP from last command
