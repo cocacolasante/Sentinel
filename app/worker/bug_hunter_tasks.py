@@ -31,14 +31,24 @@ logger = logging.getLogger(__name__)
 
 _LOKI_URL = "http://loki:3100"
 
-# Only fetch genuine error-level lines — exclude nginx 404 scanner noise
-# and known benign patterns that are not actionable.
+# Fetch error-level lines; exclude:
+# - "level=info" — Go-service info logs (Loki/Prometheus) whose embedded query
+#   strings contain "error"/"exception" and false-match the include filter
+# - HTTP access log noise from nginx scanner traffic
+# - Loki internal query metric fields
 _ERROR_QUERY = (
-    '{job="docker"} |~ "(?i)(traceback|\\berror\\b|exception|critical)" '
-    '!~ "(?i)(GET /|POST /|PUT /|DELETE /|No such file or directory|favicon)"'
+    '{job="docker"} '
+    '|~ "(?i)(traceback|error|exception|critical)" '
+    '!~ "level=info" '
+    '!~ "GET /" '
+    '!~ "POST /" '
+    '!~ "PUT /" '
+    '!~ "No such file or directory" '
+    '!~ "query_hash=" '
+    '!~ "throughput="'
 )
 
-_MAX_LOKI_LINES = 5_000
+_MAX_LOKI_LINES = 5_000  # Loki default max_entries_limit_per_query
 _MAX_CLUSTERS = 10      # clusters to rank
 _MAX_ANALYZE = 6        # clusters to send to LLM
 _MAX_SAMPLE_LINES = 8   # log lines per cluster sent to LLM
@@ -130,13 +140,61 @@ def _get_container_service_map() -> dict[str, str]:
         return {}
 
 
+# Caller filename → service name for Go-binary services
+_GO_CALLER_SERVICE = {
+    "scheduler_processor": "loki",
+    "frontend_processor": "loki",
+    "ring_watcher":        "loki",
+    "compactor":           "loki",
+    "ingester":            "loki",
+    "engine.go":           "loki",
+    "roundtrip.go":        "loki",
+    "worker.go":           "loki",
+    "nginx":               "nginx",
+    "prometheus":          "prometheus",
+    "grafana":             "grafana",
+}
+
+
+def _infer_service_from_log(line: str) -> str | None:
+    """
+    Attempt to infer the service name from the log line content when the
+    container ID is not in the Docker map (e.g. recently rebuilt containers).
+    """
+    # Go-format: "caller=scheduler_processor.go:106"
+    caller_match = re.search(r"caller=([\w./]+\.go):", line)
+    if caller_match:
+        fname = caller_match.group(1).lower()
+        for key, svc in _GO_CALLER_SERVICE.items():
+            if key in fname:
+                return svc
+        return "go-service"
+
+    # Python/Loguru: "| ERROR | app.skills.xxx:method:42"
+    if re.search(r"\|\s*(ERROR|CRITICAL|WARNING)\s*\|\s*app\.", line):
+        # try to get the module
+        mod = re.search(r"\|\s*\w+\s*\|\s*app\.([\w.]+):", line)
+        if mod:
+            parts = mod.group(1).split(".")
+            if "worker" in parts:
+                return "celery-worker"
+            return "brain"
+        return "brain"
+
+    # Nginx error format: "2026/03/05 15:06:13 [error] 30#30:"
+    if re.search(r"\[\s*error\s*\]\s+\d+#\d+:", line):
+        return "nginx"
+
+    return None
+
+
 def _service_from_filename(filename: str, container_map: dict[str, str]) -> str:
-    """Extract service name from Loki filename label."""
+    """Extract service name from Loki filename label, with content-based fallback."""
     match = re.search(r"/containers/([a-f0-9]{64})/", filename)
     if match:
         short_id = match.group(1)[:12]
-        return container_map.get(short_id, short_id[:8])
-    return "unknown"
+        return container_map.get(short_id, "")  # empty = unresolved
+    return ""
 
 
 def _normalize_line(line: str) -> str:
@@ -187,9 +245,17 @@ def _fetch_loki_errors(hours: int) -> dict[str, list[str]]:
         labels = stream.get("stream", {})
         filename = labels.get("filename", "")
         service = _service_from_filename(filename, container_map)
-        if service == "unknown":
-            continue
-        for _ts, line in stream.get("values", []):
+        values = stream.get("values", [])
+        if not service and values:
+            # Container ID not in map — infer from first non-empty log line
+            for _ts, sample in values[:5]:
+                inferred = _infer_service_from_log(sample)
+                if inferred:
+                    service = inferred
+                    break
+        if not service:
+            continue  # truly unidentifiable — skip
+        for _ts, line in values:
             service_lines[service].append(line)
 
     return dict(service_lines)
