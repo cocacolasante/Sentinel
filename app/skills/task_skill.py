@@ -82,7 +82,9 @@ class TaskCreateSkill(BaseSkill):
         title = (params.get("title") or "").strip()
         description = params.get("description", "")
         priority_num = max(1, min(5, int(params.get("priority", 3))))
-        approval_level = max(1, min(3, int(params.get("approval_level", 2))))
+        # Default to auto-approve (1) so scan_pending_tasks picks the task up within 1 min.
+        # Use 2 (needs review) or 3 (requires sign-off) only when the caller explicitly requests it.
+        approval_level = max(1, min(3, int(params.get("approval_level", 1))))
         due_date = params.get("due_date") or None
         source = params.get("source", "brain")
         tags = params.get("tags") or None

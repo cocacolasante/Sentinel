@@ -500,8 +500,10 @@ class Dispatcher:
         # Cross-interface context — comes first so the LLM has full picture
         if cross_session_context:
             parts.append(
-                "[Cross-interface context — recent activity from other sessions "
-                "(Slack / CLI / REST)]:\n" + cross_session_context
+                "[Your own prior activity — cross-interface memory (Slack / CLI / REST sessions)]:\n"
+                "This is YOUR activity log: tasks you created, actions you took, conversations you "
+                "had across other sessions. Treat it as your own memory, not external data.\n"
+                + cross_session_context
             )
 
         if warm_summary:
