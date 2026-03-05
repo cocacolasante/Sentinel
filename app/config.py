@@ -179,8 +179,10 @@ class Settings(BaseSettings):
     ionos_token: str = ""  # Bearer token (preferred)
     ionos_username: str = ""  # Basic auth fallback
     ionos_password: str = ""
-    ionos_ssh_private_key: str = ""  # PEM-encoded SSH key for server access
-    ionos_ssh_public_key: str = ""  # Corresponding public key
+    ionos_ssh_private_key: str = ""  # PEM-encoded SSH key for server access (user key)
+    ionos_ssh_public_key: str = ""  # Corresponding public key (user key)
+    ionos_ssh_auto_private_key: str = ""  # Unencrypted key for automated provisioning
+    ionos_ssh_auto_public_key: str = ""   # Corresponding public key for automated provisioning
 
     # ── Twilio / WhatsApp ───────────────────────────────────────
     twilio_account_sid: str = ""
