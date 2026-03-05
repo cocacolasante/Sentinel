@@ -1,5 +1,7 @@
 # Sentinel Skills Reference
 
+> **37 skills** across 9 categories. All triggered via natural language in Slack, the CLI (`brain chat`), or the REST API (`POST /api/v1/chat`).
+
 All skills are triggered via natural language in Slack, the CLI (`brain chat`), or the REST API (`POST /api/v1/chat`). The intent classifier maps your message to the right skill automatically.
 
 ---
