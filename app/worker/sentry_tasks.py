@@ -24,7 +24,6 @@ def ingest_top_10_sentry_errors() -> dict:
         dict with top_10_errors list containing rank, error title, and frequency
     """
     from app.integrations.sentry_client import SentryClient
-    from app.db.postgres import get_db
     import json
     
     logger.info("Starting ingestion of top 10 Sentry errors")
@@ -71,4 +70,3 @@ def ingest_top_10_sentry_errors() -> dict:
     except Exception as e:
         logger.error(f"Error ingesting Sentry errors: {e}", exc_info=True)
         return {'error': str(e), 'top_10_errors': [], 'success': False}
-
