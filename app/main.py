@@ -143,6 +143,7 @@ from app.router.whatsapp import router as whatsapp_router  # noqa: E402
 from app.router.sentry_webhook import router as sentry_webhook_router  # noqa: E402
 from app.router.task_board import router as task_board_router  # noqa: E402
 from app.router.milestones import router as milestones_router  # noqa: E402
+from app.router.graph import router as graph_router  # noqa: E402
 from app.services.error_api import router as error_api_router  # noqa: E402
 from app.services.error_middleware import ErrorCollectionMiddleware  # noqa: E402
 from app.router.slack import start_socket_mode  # noqa: E402
@@ -181,6 +182,18 @@ async def lifespan(app: FastAPI):
         logger.info("Qdrant ready | collection={}", settings.qdrant_collection)
     except Exception as exc:
         logger.error("Qdrant init failed (non-fatal): {}", exc)
+
+    # Initialise Neo4j schema (indexes + constraints — idempotent, non-fatal)
+    try:
+        from app.integrations.knowledge_graph import get_kg_client
+        kg = get_kg_client()
+        if kg.is_configured():
+            await kg.init_schema()
+            logger.info("Neo4j knowledge graph ready")
+        else:
+            logger.info("Neo4j not configured — knowledge graph disabled")
+    except Exception as exc:
+        logger.warning("Neo4j init failed (non-fatal): {}", exc)
 
     # Launch Slack Socket Mode in the background (non-blocking)
     asyncio.create_task(start_socket_mode())
@@ -239,6 +252,7 @@ app.include_router(whatsapp_router, prefix="/api/v1", tags=["whatsapp"])
 app.include_router(sentry_webhook_router, prefix="/api/v1", tags=["sentry"])
 app.include_router(task_board_router, prefix="/api/v1", tags=["tasks-board"])
 app.include_router(milestones_router, prefix="/api/v1", tags=["milestones"])
+app.include_router(graph_router, prefix="/api/v1", tags=["knowledge-graph"])
 app.include_router(error_api_router, prefix="/api/v1", tags=["errors"])
 app.add_middleware(ErrorCollectionMiddleware)
 

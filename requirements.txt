@@ -49,3 +49,6 @@ twilio==9.4.1
 
 # Form parsing for webhooks (required for WhatsApp + any multipart endpoint)
 python-multipart==0.0.20
+
+# Knowledge Graph
+neo4j>=5.0

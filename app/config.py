@@ -200,6 +200,11 @@ class Settings(BaseSettings):
     auto_create_remediation_tasks: bool = True
     error_log_path: str = "/tmp/sentinel_errors.json"
 
+    # ── Neo4j Knowledge Graph ───────────────────────────────────
+    neo4j_uri: str = "bolt://neo4j:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = ""
+
     # ── Memory ─────────────────────────────────────────────────
     openai_embedding_model: str = "text-embedding-3-small"
     qdrant_collection: str = "brain_memories"

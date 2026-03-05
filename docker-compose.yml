@@ -86,6 +86,23 @@ services:
     networks:
       - brain-net
 
+  # ── Neo4j (Knowledge Graph) ──────────────────────────────────
+  neo4j:
+    image: neo4j:5-community
+    container_name: ai-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-changeme}
+      NEO4J_dbms_memory_pagecache_size: 256M
+      NEO4J_dbms_memory_heap_max__size: 512M
+    volumes:
+      - neo4j-data:/data
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+    networks:
+      - brain-net
+
   # ── n8n (Action Executor — NOT the Brain) ────────────────────
   n8n:
     image: n8nio/n8n:latest
@@ -435,6 +452,7 @@ volumes:
   postgres-data:
   redis-data:
   qdrant-data:
+  neo4j-data:
   n8n-data:
   celery-beat-data:
   prometheus-data:

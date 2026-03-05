@@ -19,6 +19,7 @@ Intents:
   project_deploy   — deploy a project to an IONOS staging server
   project_status   — check the status of a project
   project_list     — list all projects
+  knowledge_graph  — query or update the personal knowledge graph (projects, repos, servers, clients, ideas)
   chat             — general reasoning / writing / coding (no external action)
   arch_advisor     — analyse system architecture and produce an evolution report
 """
@@ -108,6 +109,7 @@ Intent-specific param examples:
   deep_research:  {{"topic": "quantum computing", "context": "focus on near-term applications", "email": ""}}
   bug_hunt:       {{"hours": 24, "focus": "auth module"}}
   arch_advisor:   {{"target": "Sentinel AI platform", "focus": "scalability", "description": "optional free-text description if analysing an external system", "email": ""}}
+  knowledge_graph: {{"action": "add" | "connect" | "show" | "search" | "stats" | "visualize", "label": "Project" | "Repo" | "Server" | "Client" | "Idea" | "Person" | "Tech", "name": "MyApp", "from": "SentinelAI", "to": "sentinel-repo", "relationship": "USES", "query": "search term"}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
@@ -195,6 +197,13 @@ Routing guidance:
   - "rebuild project", "re-run the build", "try building again", "restart the build" → project_build
   - "project status", "how is the build going", "check project ...", "is ... done building" → project_status
   - "list my projects", "show projects", "what projects exist", "all projects" → project_list
+  - "add project X", "add repo X", "add node X", "register project X" → knowledge_graph with action=add, label=<type>, name=X
+  - "connect X to Y", "link X to Y", "X uses Y", "X runs on Y" → knowledge_graph with action=connect, from=X, to=Y, relationship=<inferred>
+  - "show relationships for X", "what is X connected to", "graph for X" → knowledge_graph with action=show, name=X
+  - "search graph for X", "find X in the graph", "is X in the graph" → knowledge_graph with action=search, query=X
+  - "knowledge graph stats", "how many nodes", "graph overview" → knowledge_graph with action=stats
+  - "show the knowledge graph", "open the graph", "visualize the graph", "knowledge graph visualization" → knowledge_graph with action=visualize
+  - "what's in my knowledge graph", "show all graph nodes", "graph summary" → knowledge_graph with action=stats
   Tech stack detection for project_create:
     - "python", "fastapi", "flask", "django", "rest api" in description → tech_stack=python or fastapi/flask/django
     - "react", "frontend", "ui" → tech_stack=react
@@ -241,6 +250,7 @@ deploy          — rebuild the Sentinel Docker image with latest committed code
 task_create     — create a new tracked task with title, priority (1–5), and approval level (1–3)
 task_read       — list, filter, or view existing tasks; check task status or priority
 task_update     — update a task's status, priority, approval level, or description
+knowledge_graph — personal knowledge graph: add nodes (projects/repos/servers/ideas/people), connect them, search, visualize
 code            — software engineering help, code review, debugging, architecture — no file edits
 skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
 chat            — anything else: analysis, writing, questions, conversation"""

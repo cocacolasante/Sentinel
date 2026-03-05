@@ -275,6 +275,7 @@ async def _build_project(
     description = row.get("description") or ""
     tech_stack = (row.get("tech_stack") or "python").lower()
     path = row.get("path") or f"{_PROJECTS}/{row['slug']}"
+    slug = row["slug"]
     channel = row.get("slack_channel") or ""
     thread_ts = row.get("slack_thread_ts") or ""
 
@@ -282,11 +283,20 @@ async def _build_project(
 
     _update_project(project_id, status="building")
 
+    # ── Create GitHub repo ────────────────────────────────────────────────────
+    github_url = await _create_github_repo(slug, description or name)
+    if github_url:
+        postgres.execute(
+            "UPDATE projects SET deploy_url=%s, updated_at=NOW() WHERE id=%s",
+            (github_url, project_id),
+        )
+
     if channel and thread_ts:
+        repo_note = f"\n📦 Repo: {github_url}" if github_url else ""
         post_thread_reply_sync(
             f"🔨 *Building project: {name}*\n"
-            f"Tech stack: {tech_stack} | Path: `{path}`\n"
-            "_Writing code autonomously — I'll update this thread as I go..._",
+            f"Tech stack: {tech_stack} | Path: `{path}`{repo_note}\n"
+            "_Writing code, tests, and docs — I'll update this thread as I go..._",
             channel,
             thread_ts,
         )
@@ -417,12 +427,32 @@ async def _build_project(
     full_log = "\n\n".join(build_log)
     _update_project(project_id, status=final_status, build_log=full_log)
 
+    # ── Post-build: tests + README + git push + KG ────────────────────────────
+    if all_good:
+        await _post_build(
+            project_id=project_id,
+            name=name,
+            slug=slug,
+            description=description,
+            tech_stack=tech_stack,
+            path=path,
+            github_url=github_url,
+            channel=channel,
+            thread_ts=thread_ts,
+            client=client,
+            settings=settings,
+        )
+
     # Post Slack summary
     if channel and thread_ts:
         if all_good:
             header = f"✅ *{name}* — build complete!"
-            log_tail = "\n".join(build_log[-5:])
-            body = f"Project built at `{path}`\n```\n{log_tail}\n```\n" + (
+            log_tail = "\n".join(build_log[-4:])
+            repo_line = f"\n📦 {github_url}" if github_url else ""
+            body = (
+                f"Code built at `{path}`{repo_line}\n"
+                f"```\n{log_tail}\n```\n"
+            ) + (
                 "🚀 Queuing IONOS deploy next..."
                 if auto_deploy
                 else f"_Say 'deploy project {name}' to spin up a staging server._"
@@ -442,6 +472,178 @@ async def _build_project(
         )
 
     return {"project_id": project_id, "status": final_status, "rounds": round_num + 1}
+
+
+async def _create_github_repo(slug: str, description: str, private: bool = True) -> str | None:
+    """Create a GitHub repo. Returns clone URL or None."""
+    import httpx
+    from app.config import get_settings
+
+    token = get_settings().github_token
+    if not token:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.post(
+                "https://api.github.com/user/repos",
+                headers={"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"},
+                json={"name": slug, "description": description, "private": private, "auto_init": False},
+            )
+            if r.status_code == 201:
+                return r.json().get("clone_url") or r.json().get("html_url")
+            if r.status_code == 422:  # already exists
+                user_r = await c.get(
+                    "https://api.github.com/user",
+                    headers={"Authorization": f"token {token}"},
+                )
+                username = user_r.json().get("login", "")
+                return f"https://github.com/{username}/{slug}.git"
+    except Exception as exc:
+        logger.warning("GitHub repo creation failed (non-fatal): %s", exc)
+    return None
+
+
+async def _push_to_github(path: str, repo_url: str, commit_msg: str) -> bool:
+    """Init git, commit all files, push to GitHub. Returns True on success."""
+    from app.config import get_settings
+
+    token = get_settings().github_token
+    if not token or not repo_url:
+        return False
+    auth_url = repo_url.replace("https://", f"https://{token}@")
+    steps = [
+        f"git -C {path} init -b main 2>/dev/null || git -C {path} checkout -b main 2>/dev/null || true",
+        f"git -C {path} config user.email 'sentinel@sentinelai.cloud'",
+        f"git -C {path} config user.name 'Sentinel AI'",
+        f"git -C {path} add -A",
+        f"git -C {path} commit -m '{commit_msg}' --allow-empty",
+        f"git -C {path} remote remove origin 2>/dev/null || true",
+        f"git -C {path} remote add origin {auth_url}",
+        f"git -C {path} push -u origin main --force",
+    ]
+    for cmd in steps:
+        proc = await asyncio.create_subprocess_shell(
+            cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+        if proc.returncode not in (0, 1):  # 1 = nothing to commit is OK
+            logger.warning("git push step non-zero: %s\n%s", cmd.split()[0:3], (out or b"").decode()[:200])
+            if "push" in cmd:
+                return False
+    return True
+
+
+async def _post_build(
+    project_id: int,
+    name: str,
+    slug: str,
+    description: str,
+    tech_stack: str,
+    path: str,
+    github_url: str | None,
+    channel: str,
+    thread_ts: str,
+    client,
+    settings,
+) -> None:
+    """After main build: generate tests + README, push to GitHub, register in KG."""
+    import anthropic
+    from app.integrations.slack_notifier import post_thread_reply_sync
+
+    def _post(msg: str) -> None:
+        if channel and thread_ts:
+            post_thread_reply_sync(msg, channel, thread_ts)
+
+    # ── List generated files ──────────────────────────────────────────────────
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            f"find {path} -type f | grep -v __pycache__ | grep -v .git | head -30",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        out, _ = await proc.communicate()
+        file_list = (out or b"").decode().strip()
+    except Exception:
+        file_list = ""
+
+    # ── Generate tests ────────────────────────────────────────────────────────
+    try:
+        test_resp = await asyncio.to_thread(
+            client.messages.create,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Project: {name} ({tech_stack})\nDescription: {description}\n"
+                    f"Files:\n{file_list}\n\n"
+                    "Write a complete test file for this project. "
+                    "Output ONLY the file content, no explanation. "
+                    "For Python use pytest. For Node use Jest. For Go use testing package."
+                ),
+            }],
+        )
+        test_code = test_resp.content[0].text.strip()
+        if test_code.startswith("```"):
+            test_code = test_code.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+        test_filename = {
+            "python": "tests/test_main.py", "fastapi": "tests/test_main.py",
+            "flask": "tests/test_main.py", "django": "tests/test_main.py",
+            "node": "tests/app.test.js", "nodejs": "tests/app.test.js",
+            "express": "tests/app.test.js", "go": "main_test.go", "golang": "main_test.go",
+        }.get(tech_stack, "tests/test_main.py")
+
+        test_path = os.path.join(path, test_filename)
+        os.makedirs(os.path.dirname(test_path), exist_ok=True)
+        with open(test_path, "w") as f:
+            f.write(test_code)
+        _post(f"🧪 *Tests generated* — `{test_filename}`")
+    except Exception as exc:
+        logger.warning("Test generation failed (non-fatal): %s", exc)
+
+    # ── Generate README ───────────────────────────────────────────────────────
+    try:
+        readme_resp = await asyncio.to_thread(
+            client.messages.create,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1500,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Write a README.md for this project:\n"
+                    f"Name: {name}\nDescription: {description}\nTech: {tech_stack}\n"
+                    f"Files:\n{file_list}\n\n"
+                    "Include: overview, setup instructions, usage, API endpoints if applicable. "
+                    "Output ONLY the markdown, no preamble."
+                ),
+            }],
+        )
+        readme = readme_resp.content[0].text.strip()
+        with open(os.path.join(path, "README.md"), "w") as f:
+            f.write(readme)
+        _post("📄 *README.md generated*")
+    except Exception as exc:
+        logger.warning("README generation failed (non-fatal): %s", exc)
+
+    # ── Push to GitHub ────────────────────────────────────────────────────────
+    if github_url:
+        pushed = await _push_to_github(path, github_url, f"feat: initial build by Sentinel AI\n\n{description}")
+        if pushed:
+            _post(f"🚀 *Pushed to GitHub:* {github_url}")
+        else:
+            _post("⚠️ GitHub push failed — code is still in the workspace.")
+
+    # ── Register in Knowledge Graph ───────────────────────────────────────────
+    try:
+        from app.integrations.knowledge_graph import auto_register_project
+        await auto_register_project(
+            name=name,
+            repo_url=github_url or "",
+            tech=tech_stack,
+            description=description,
+        )
+    except Exception as exc:
+        logger.debug("KG registration skipped (non-fatal): %s", exc)
 
 
 # ── deploy_project Celery task ─────────────────────────────────────────────────
