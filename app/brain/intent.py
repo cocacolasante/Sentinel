@@ -20,6 +20,7 @@ Intents:
   project_status   — check the status of a project
   project_list     — list all projects
   chat             — general reasoning / writing / coding (no external action)
+  arch_advisor     — analyse system architecture and produce an evolution report
 """
 
 import json
@@ -105,6 +106,7 @@ Intent-specific param examples:
   task_update:    {{"id": 42, "status": "in_progress" | "done" | "cancelled" | "pending", "priority": 4, "approval_level": 1, "title": "", "description": "", "tags": "", "assigned_to": ""}}
   deep_research:  {{"topic": "quantum computing", "context": "focus on near-term applications", "email": ""}}
   bug_hunt:       {{"hours": 24, "focus": "auth module"}}
+  arch_advisor:   {{"target": "Sentinel AI platform", "focus": "scalability", "description": "optional free-text description if analysing an external system", "email": ""}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
@@ -159,6 +161,7 @@ Routing guidance:
   - Ambiguous improvement requests without a specific file → code (let LLM suggest approach)
   - "research X", "do a deep dive on X", "research and send me X", "investigate X in depth", "write a research report on X", "look into X and email me", "deep research X" → deep_research with topic=X
   - "scan logs", "analyze errors", "hunt for bugs", "check for errors", "bug hunt", "analyze errors from last Xh", "find bugs", "what errors are happening", "scan for issues", "run bug hunt", "SRE scan" → bug_hunt with hours extracted from message (default 24)
+  - "analyse architecture", "analyze architecture", "architecture review", "architecture advice", "system design review", "review my architecture", "architecture improvements", "what are the bottlenecks", "system bottlenecks", "scale my system", "architecture evolution", "suggest architecture improvements", "analyse sentinel architecture", "analyze sentinel" → arch_advisor with target extracted (default "Sentinel AI platform"), focus extracted if mentioned (e.g. "scalability", "security", "performance", "reliability")
   - "create a task", "add a task", "track this", "new task", "remember to", "log a task" → task_create
   - "list tasks", "show tasks", "what tasks", "my tasks", "view tasks", "open tasks", "pending tasks" → task_read
   - "mark task done", "complete task", "update task", "change priority", "close task", "set task status" → task_update
