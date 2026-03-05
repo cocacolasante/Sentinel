@@ -48,6 +48,8 @@ class SentryClient:
         project: str | None = None,
         query: str = "is:unresolved",
         limit: int = 25,
+        sort: str = "date",
+        stats_period: str | None = None,
     ) -> list[dict]:
         proj = project or self._project
         if proj:
@@ -55,8 +57,12 @@ class SentryClient:
         else:
             url = f"{SENTRY_BASE}/organizations/{self._org}/issues/"
 
+        params: dict = {"query": query, "limit": limit, "sort": sort}
+        if stats_period:
+            params["statsPeriod"] = stats_period
+
         with httpx.Client(timeout=15) as client:
-            r = client.get(url, headers=self._headers(), params={"query": query, "limit": limit})
+            r = client.get(url, headers=self._headers(), params=params)
             r.raise_for_status()
             return [self._format_issue(i) for i in r.json()]
 
@@ -108,8 +114,12 @@ class SentryClient:
         project: str | None = None,
         query: str = "is:unresolved",
         limit: int = 25,
+        sort: str = "date",
+        stats_period: str | None = None,
     ) -> list[dict]:
-        return await asyncio.to_thread(self._list_issues_sync, project, query, limit)
+        return await asyncio.to_thread(
+            self._list_issues_sync, project, query, limit, sort, stats_period
+        )
 
     async def get_issue(self, issue_id: str) -> dict:
         return await asyncio.to_thread(self._get_issue_sync, issue_id)

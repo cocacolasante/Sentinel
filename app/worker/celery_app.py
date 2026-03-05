@@ -27,7 +27,7 @@ celery_app = Celery(
     "brain",
     broker=_broker,
     backend=_backend,
-    include=["app.worker.tasks", "app.worker.project_tasks"],
+    include=["app.worker.tasks", "app.worker.project_tasks", "app.worker.sentry_tasks"],
 )
 
 celery_app.conf.update(
@@ -95,5 +95,11 @@ celery_app.conf.beat_schedule = {
     "aggregate-error-metrics": {
         "task": "app.worker.error_tasks.aggregate_error_metrics",
         "schedule": crontab(minute=0),
+    },
+    # Every 6 hours — fetch top 10 Sentry errors, create tasks, investigate+fix
+    "sentry-error-triage": {
+        "task": "app.worker.sentry_tasks.ingest_and_triage_top_errors",
+        "schedule": crontab(minute=0, hour="*/6"),
+        "options": {"queue": "celery"},
     },
 }

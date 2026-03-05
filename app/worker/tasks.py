@@ -216,7 +216,7 @@ def run_shell_and_report_back(
     soft_time_limit=300,  # 5 min soft limit
     time_limit=360,  # 6 min hard kill
 )
-def investigate_and_fix_sentry_issue(self, task_id: str, issue_params: dict) -> dict:
+def investigate_and_fix_sentry_issue(self, task_id: int, issue_params: dict) -> dict:
     """Auto-investigate a Sentry issue and attempt a code fix via LLM + RepoClient."""
     try:
         return asyncio.run(_investigate_and_fix(task_id, issue_params))
@@ -1204,7 +1204,7 @@ async def _deploy_brain(reason: str) -> dict:
     return {"success": True, "steps": steps}
 
 
-async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
+async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
     """
     1. Mark task as executing in DB.
     2. Fetch stack-trace context from Sentry API (if auth token configured).
@@ -1212,9 +1212,8 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
     4. Apply file patches via RepoClient → commit → push (if fixable and repo configured).
     5. Resolve in Sentry (if LLM says it's fully addressed).
     6. Post Slack summary to brain-alerts.
-    7. Mark task completed / failed.
+    7. Mark task done / failed.
     """
-    from app.db import postgres
     from app.config import get_settings
     from app.integrations.slack_notifier import post_alert
 
@@ -1227,13 +1226,7 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
     permalink = issue_params.get("permalink", "")
 
     # ── 1. Mark executing ──────────────────────────────────────────────────────
-    try:
-        postgres.execute(
-            "UPDATE pending_write_tasks SET status='executing', updated_at=NOW() WHERE task_id=%s",
-            (task_id,),
-        )
-    except Exception as exc:
-        logger.warning("Could not mark task executing: %s", exc)
+    _mark_task(task_id, "in_progress")
 
     # ── 2. Fetch rich Sentry event via API ────────────────────────────────────
     issue_context = ""
@@ -1515,15 +1508,9 @@ async def _investigate_and_fix(task_id: str, issue_params: dict) -> dict:
         logger.warning("Could not post Sentry fix Slack alert: %s", exc)
 
     # ── 7. Mark task done ─────────────────────────────────────────────────────
-    final_status = "completed" if not patch_errors or patches_applied else "failed"
+    final_status = "done" if not patch_errors or patches_applied else "failed"
     error_text = "; ".join(patch_errors[:3]) if patch_errors and not patches_applied else None
-    try:
-        postgres.execute(
-            "UPDATE pending_write_tasks SET status=%s, error=%s, updated_at=NOW() WHERE task_id=%s",
-            (final_status, error_text, task_id),
-        )
-    except Exception as exc:
-        logger.warning("Could not update task to %s: %s", final_status, exc)
+    _mark_task(task_id, final_status, error_text)
 
     return {
         "task_id": task_id,
