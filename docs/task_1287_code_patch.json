@@ -1,0 +1,47 @@
+{
+  "file": "scheduler_processor.go",
+  "line": 158,
+  "issue": "EOF error when notifying scheduler about finished query",
+  "current_code_pattern": "Direct connection to 127.0.0.1:9095 without pooling, retry, or health checks",
+  "suggested_fixes": [
+    {
+      "fix_id": "1",
+      "title": "Add Connection Pool",
+      "code_snippet": "// Define connection pool at package level\ntype SchedulerConnPool struct {\n    addr     string\n    maxSize  int\n    conns    chan net.Conn\n    mu       sync.RWMutex\n}\n\nfunc NewSchedulerConnPool(addr string, size int) *SchedulerConnPool {\n    return &SchedulerConnPool{\n        addr:    addr,\n        maxSize: size,\n        conns:   make(chan net.Conn, size),\n    }\n}\n\nfunc (p *SchedulerConnPool) Get(ctx context.Context) (net.Conn, error) {\n    select {\n    case conn := <-p.conns:\n        // Validate connection\n        if conn != nil {\n            return conn, nil\n        }\n    case <-ctx.Done():\n        return nil, ctx.Err()\n    default:\n    }\n    \n    // Create new connection with timeouts\n    dialer := &net.Dialer{\n        Timeout:   5 * time.Second,\n        KeepAlive: 30 * time.Second,\n    }\n    return dialer.DialContext(ctx, \"tcp\", p.addr)\n}\n\nfunc (p *SchedulerConnPool) Put(conn net.Conn) {\n    select {\n    case p.conns <- conn:\n    default:\n        conn.Close()\n    }\n}"
+    },
+    {
+      "fix_id": "2",
+      "title": "Add Retry Logic with Exponential Backoff",
+      "code_snippet": "func notifySchedulerWithRetry(ctx context.Context, pool *SchedulerConnPool, msg []byte) error {\n    maxRetries := 3\n    backoffDurations := []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond}\n    \n    var lastErr error\n    for attempt := 0; attempt <= maxRetries; attempt++ {\n        if attempt > 0 {\n            select {\n            case <-ctx.Done():\n                return ctx.Err()\n            case <-time.After(backoffDurations[attempt-1]):\n            }\n        }\n        \n        conn, err := pool.Get(ctx)\n        if err != nil {\n            lastErr = err\n            continue\n        }\n        defer pool.Put(conn)\n        \n        // Set write deadline\n        if deadline, ok := ctx.Deadline(); ok {\n            conn.SetWriteDeadline(deadline)\n        } else {\n            conn.SetWriteDeadline(time.Now().Add(10 * time.Second))\n        }\n        \n        _, err = conn.Write(msg)\n        if err == nil || err == io.EOF {\n            return err\n        }\n        lastErr = err\n    }\n    \n    return fmt.Errorf(\"failed to notify scheduler after %d retries: %w\", maxRetries, lastErr)\n}"
+    },
+    {
+      "fix_id": "3",
+      "title": "Add Health Check Before Notification",
+      "code_snippet": "type SchedulerHealthChecker struct {\n    addr          string\n    lastCheck     time.Time\n    lastHealthy   bool\n    cacheDuration time.Duration\n    mu            sync.RWMutex\n}\n\nfunc (h *SchedulerHealthChecker) IsHealthy(ctx context.Context) bool {\n    h.mu.RLock()\n    if time.Since(h.lastCheck) < h.cacheDuration && h.lastHealthy {\n        h.mu.RUnlock()\n        return true\n    }\n    h.mu.RUnlock()\n    \n    // Perform health check\n    dialer := &net.Dialer{Timeout: 2 * time.Second}\n    conn, err := dialer.DialContext(ctx, \"tcp\", h.addr)\n    if err != nil {\n        h.mu.Lock()\n        h.lastHealthy = false\n        h.lastCheck = time.Now()\n        h.mu.Unlock()\n        return false\n    }\n    conn.Close()\n    \n    h.mu.Lock()\n    h.lastHealthy = true\n    h.lastCheck = time.Now()\n    h.mu.Unlock()\n    return true\n}"
+    },
+    {
+      "fix_id": "4",
+      "title": "Update scheduler_processor.go:158 Implementation",
+      "code_snippet": "// At line 158, update the notification logic:\nfunc (sp *SchedulerProcessor) notifySchedulerAboutFinishedQuery(ctx context.Context, queryID string) error {\n    // Check scheduler health first\n    if !sp.healthChecker.IsHealthy(ctx) {\n        return fmt.Errorf(\"scheduler service at %s is unhealthy\", sp.pool.addr)\n    }\n    \n    // Prepare notification message\n    msg := []byte(fmt.Sprintf(\"QUERY_FINISHED:%s\", queryID))\n    \n    // Use connection pool with retry logic\n    return sp.notifyWithRetry(ctx, msg)\n}\n\nfunc (sp *SchedulerProcessor) notifyWithRetry(ctx context.Context, msg []byte) error {\n    return notifySchedulerWithRetry(ctx, sp.pool, msg)\n}"
+    }
+  ],
+  "configuration_changes": {
+    "scheduler_connection_timeout": "5s",
+    "scheduler_pool_size": 10,
+    "scheduler_health_check_interval": "5s",
+    "scheduler_retry_attempts": 3,
+    "scheduler_retry_backoff_initial": "100ms",
+    "tcp_keepalive_enabled": true,
+    "tcp_keepalive_interval": "30s"
+  },
+  "testing_checklist": [
+    "Test connection pool creation and lifecycle",
+    "Test retry logic with increasing backoff",
+    "Test health check caching",
+    "Test graceful degradation when scheduler is down",
+    "Test connection pool exhaustion handling",
+    "Test timeout behavior under load",
+    "Test TCP keep-alive prevents connection closure"
+  ],
+  "created_at": "2026-03-05T22:20:11.688476"
+}

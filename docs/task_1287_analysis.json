@@ -1,0 +1,57 @@
+{
+  "task_id": "1287",
+  "title": "BugHunt: Fix Scheduler Connection EOF Errors in go-service",
+  "description": "Address recurring EOF errors (230x frequency) when go-service notifies scheduler about finished queries",
+  "status": "Analysis Complete - Ready for Implementation",
+  "severity": "High",
+  "affected_service": "go-service",
+  "affected_file": "scheduler_processor.go:158",
+  "root_cause_analysis": {
+    "issue": "Scheduler service at 127.0.0.1:9095 closes connections prematurely",
+    "symptoms": "EOF errors when notifying scheduler, connection failures, lost notifications",
+    "frequency": "230 occurrences detected",
+    "impact": "Query completion notifications not reaching scheduler, potential workflow stalls"
+  },
+  "solution_summary": "Implement connection pooling with retry logic, health checks, and TCP keep-alive configuration",
+  "implementation_components": [
+    "Connection Pool Manager: Maintain 10 persistent connections with validation",
+    "Retry Logic: 3 attempts with exponential backoff (100ms, 200ms, 400ms)",
+    "Health Checker: Cache-based health validation with 5s TTL",
+    "Connection Configuration: 5s timeout, 10s read/write deadline, 30s keep-alive"
+  ],
+  "files_modified": [
+    "scheduler_processor.go - Add connection pooling and retry logic",
+    "config.go - Add scheduler connection configuration",
+    "scheduler_test.go - Add comprehensive test coverage"
+  ],
+  "metrics_added": [
+    "scheduler_notification_retries_total",
+    "scheduler_notification_failures_total",
+    "scheduler_connection_pool_size",
+    "scheduler_health_check_failures_total"
+  ],
+  "expected_outcomes": [
+    "Eliminate EOF errors on scheduler notification",
+    "Improve reliability of query completion notifications",
+    "Provide visibility into scheduler connectivity issues",
+    "Enable graceful degradation when scheduler is unavailable"
+  ],
+  "documentation_created": {
+    "task_1287_fix_plan.json": "High-level fix strategy and phases",
+    "task_1287_implementation_guide.json": "Detailed implementation specifications",
+    "task_1287_code_patch.json": "Concrete Go code examples and patches",
+    "task_1287_analysis.md": "This comprehensive analysis document"
+  },
+  "next_steps": [
+    "1. Apply code patches to scheduler_processor.go",
+    "2. Update configuration with new parameters",
+    "3. Add unit tests for connection pool",
+    "4. Add integration tests for retry logic",
+    "5. Deploy to staging environment",
+    "6. Monitor metrics and error logs",
+    "7. Deploy to production",
+    "8. Verify EOF errors are eliminated"
+  ],
+  "created_at": "2026-03-05T22:20:19.202278",
+  "task_url": "https://bugtrack.internal/tasks/1287"
+}
