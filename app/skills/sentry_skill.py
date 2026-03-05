@@ -41,7 +41,7 @@ class SentryReadSkill(BaseSkill):
         if action == "list":
             issues = await client.list_issues(project=project, query=query, limit=limit)
             if not issues:
-                return SkillResult(data={"issues": []}, summary="No Sentry issues found matching that query.")
+                return SkillResult(context_data="No Sentry issues found matching that query.")
             lines = [f"**Sentry Issues** ({len(issues)} found)\n"]
             for i in issues:
                 badge = _LEVEL_BADGE.get(i["level"], "⚪")
@@ -50,12 +50,12 @@ class SentryReadSkill(BaseSkill):
                 lines.append(f"   Project: {i['project']} | Count: {i['count']} | Last seen: {last}")
                 if i.get("permalink"):
                     lines.append(f"   {i['permalink']}")
-            return SkillResult(data={"issues": issues}, summary="\n".join(lines))
+            return SkillResult(context_data="\n".join(lines))
 
         if action == "get":
             issue_id = params.get("issue_id", "")
             if not issue_id:
-                return SkillResult(data={}, summary="Please provide an issue_id to look up.")
+                return SkillResult(context_data="Please provide an issue_id to look up.")
             issue = await client.get_issue(issue_id)
             badge = _LEVEL_BADGE.get(issue["level"], "⚪")
             first = issue["first_seen"][:10] if issue.get("first_seen") else "N/A"
@@ -71,7 +71,7 @@ class SentryReadSkill(BaseSkill):
                 lines.append(f"Assigned to: {issue['assigned_to']}")
             if issue.get("permalink"):
                 lines.append(f"Link: {issue['permalink']}")
-            return SkillResult(data=issue, summary="\n".join(lines))
+            return SkillResult(context_data="\n".join(lines))
 
         # list_from_db — show recently received issues stored in Postgres
         if action == "db":
@@ -88,18 +88,18 @@ class SentryReadSkill(BaseSkill):
                     (limit,),
                 )
                 if not rows:
-                    return SkillResult(data={"issues": []}, summary="No Sentry issues tracked yet.")
+                    return SkillResult(context_data="No Sentry issues tracked yet.")
                 lines = [f"**Tracked Sentry Issues** ({len(rows)} recent)\n"]
                 for r in rows:
                     badge = _LEVEL_BADGE.get(r["level"], "⚪")
                     ts = r["received_at"].strftime("%Y-%m-%d") if r.get("received_at") else "N/A"
                     lines.append(f"{badge} `{r['issue_id']}` [{r['level'].upper()}] **{r['title']}**")
                     lines.append(f"   Project: {r['project']} | Count: {r['count']} | Category: {r['category']} | {ts}")
-                return SkillResult(data={"issues": rows}, summary="\n".join(lines))
+                return SkillResult(context_data="\n".join(lines))
             except Exception as exc:
-                return SkillResult(data={}, summary=f"Could not load tracked issues: {exc}")
+                return SkillResult(context_data=f"Could not load tracked issues: {exc}")
 
-        return SkillResult(data={}, summary=f"Unknown action: `{action}`. Use 'list', 'get', or 'db'.")
+        return SkillResult(context_data=f"Unknown action: `{action}`. Use 'list', 'get', or 'db'.")
 
 
 class SentryManageSkill(BaseSkill):
@@ -118,9 +118,9 @@ class SentryManageSkill(BaseSkill):
         issue_id = params.get("issue_id", "")
 
         if not issue_id:
-            return SkillResult(data={}, summary="Please provide the Sentry `issue_id` to act on.")
+            return SkillResult(context_data="Please provide the Sentry `issue_id` to act on.")
         if not action:
-            return SkillResult(data={}, summary="Please specify an action: resolve, ignore, assign, or comment.")
+            return SkillResult(context_data="Please specify an action: resolve, ignore, assign, or comment.")
 
         # Lower category for non-destructive ops
         if action in ("assign", "comment"):
@@ -135,8 +135,7 @@ class SentryManageSkill(BaseSkill):
         label = labels.get(action, f"Perform `{action}` on Sentry issue `{issue_id}`")
 
         return SkillResult(
-            data={},
-            summary=label,
+            context_data=label,
             pending_action={
                 "action": f"sentry_{action}",
                 "params": params,
