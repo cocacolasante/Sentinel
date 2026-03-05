@@ -29,7 +29,7 @@ class SentryReadSkill(BaseSkill):
 
         return SentryClient().is_configured()
 
-    async def execute(self, params: dict, session_id: str, original_message: str) -> SkillResult:
+    async def execute(self, params: dict, original_message: str) -> SkillResult:
         from app.integrations.sentry_client import SentryClient
 
         client = SentryClient()
@@ -113,7 +113,7 @@ class SentryManageSkill(BaseSkill):
 
         return SentryClient().is_configured()
 
-    async def execute(self, params: dict, session_id: str, original_message: str) -> SkillResult:
+    async def execute(self, params: dict, original_message: str) -> SkillResult:
         action = params.get("action", "")
         issue_id = params.get("issue_id", "")
 
