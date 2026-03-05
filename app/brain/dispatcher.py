@@ -94,6 +94,7 @@ def _build_skill_registry():
     from app.skills.bug_hunter_skill import BugHunterSkill
     from app.skills.arch_advisor_skill import ArchAdvisorSkill
     from app.skills.project_skill import ProjectSkill
+    from app.skills.knowledge_graph_skill import KnowledgeGraphSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -157,6 +158,8 @@ def _build_skill_registry():
     reg.register(TaskUpdateSkill())
     # Project — scaffold, build, and deploy coding projects
     reg.register(ProjectSkill())
+    # Knowledge Graph — map projects, repos, servers, clients, ideas
+    reg.register(KnowledgeGraphSkill())
     return reg
 
 
