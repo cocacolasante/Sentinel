@@ -1,0 +1,62 @@
+{
+  "title": "Task #1287: Fix Scheduler Connection EOF Errors in go-service",
+  "description": "Address premature connection closure when notifying scheduler about finished queries",
+  "affected_code": "scheduler_processor.go:158",
+  "solution_components": [
+    {
+      "component": "Connection Pool Manager",
+      "purpose": "Maintain persistent connections to scheduler service",
+      "implementation": [
+        "Create connection pool with configurable size (default 10)",
+        "Implement connection validation before use",
+        "Add automatic reconnection on pool exhaustion"
+      ]
+    },
+    {
+      "component": "Retry Logic with Exponential Backoff",
+      "purpose": "Handle transient connection failures gracefully",
+      "implementation": [
+        "Max retries: 3 attempts",
+        "Backoff strategy: exponential (100ms, 200ms, 400ms)",
+        "Max total wait time: 5 seconds",
+        "Retry on: EOF, connection refused, timeout"
+      ]
+    },
+    {
+      "component": "Health Check Mechanism",
+      "purpose": "Verify scheduler service availability before notification",
+      "implementation": [
+        "Add /health endpoint check",
+        "Cache health status for 5 seconds",
+        "Fast-fail if service unhealthy",
+        "Log health check results"
+      ]
+    },
+    {
+      "component": "Connection Configuration",
+      "purpose": "Prevent premature closure and improve stability",
+      "implementation": [
+        "Set TCP keep-alive: enabled, interval 30s",
+        "Connection timeout: 5 seconds",
+        "Read/Write timeout: 10 seconds",
+        "TCP NoDelay: enabled for low latency"
+      ]
+    }
+  ],
+  "testing_strategy": [
+    "Unit test: connection pool management",
+    "Unit test: retry logic and backoff timing",
+    "Integration test: scheduler service unavailability",
+    "Integration test: scheduler service recovery",
+    "Load test: high query volume with pool exhaustion",
+    "Chaos test: random connection drops"
+  ],
+  "monitoring": [
+    "Metric: scheduler_notification_retries (counter)",
+    "Metric: scheduler_notification_failures (counter)",
+    "Metric: scheduler_connection_pool_usage (gauge)",
+    "Metric: scheduler_health_check_failures (counter)",
+    "Alert: Scheduler service unreachable for >5 minutes",
+    "Alert: Connection pool exhaustion events"
+  ]
+}

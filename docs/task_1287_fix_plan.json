@@ -1,0 +1,20 @@
+{
+  "task_id": "1287",
+  "service": "go-service",
+  "issue": "error notifying scheduler about finished query",
+  "root_cause": "Scheduler service at 127.0.0.1:9095 closing connections prematurely (EOF errors)",
+  "affected_file": "scheduler_processor.go:158",
+  "frequency": "230x",
+  "recommended_fixes": [
+    "Add connection pooling with retry logic and exponential backoff",
+    "Implement health checks before attempting notification",
+    "Add connection timeout and keep-alive settings",
+    "Verify scheduler service is running and healthy"
+  ],
+  "implementation_plan": {
+    "phase_1": "Add connection pool manager with pooling configuration",
+    "phase_2": "Implement retry mechanism with exponential backoff (3 retries, max 5s)",
+    "phase_3": "Add health check endpoint for scheduler service",
+    "phase_4": "Configure TCP keep-alive and connection timeouts"
+  }
+}
