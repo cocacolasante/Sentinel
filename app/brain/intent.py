@@ -103,6 +103,7 @@ Intent-specific param examples:
                   Multiple tasks (ALWAYS use this when user asks to create 2+ tasks): {{"tasks": [{{"title": "Task one", "description": "...", "priority": 3, "approval_level": 1}}, {{"title": "Task two", "description": "...", "priority": 3, "approval_level": 1}}]}}
   task_read:      {{"action": "list" | "get", "status": "pending" | "in_progress" | "done" | "cancelled" | "", "priority": 4, "id": "", "limit": 20}}
   task_update:    {{"id": 42, "status": "in_progress" | "done" | "cancelled" | "pending", "priority": 4, "approval_level": 1, "title": "", "description": "", "tags": "", "assigned_to": ""}}
+  deep_research:  {{"topic": "quantum computing", "context": "focus on near-term applications", "email": ""}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
@@ -155,6 +156,7 @@ Routing guidance:
   - "show me X" where X is a git operation (diff, status) → repo_read
   - Requests to edit/create a specific file with a path → repo_write
   - Ambiguous improvement requests without a specific file → code (let LLM suggest approach)
+  - "research X", "do a deep dive on X", "research and send me X", "investigate X in depth", "write a research report on X", "look into X and email me", "deep research X" → deep_research with topic=X
   - "create a task", "add a task", "track this", "new task", "remember to", "log a task" → task_create
   - "list tasks", "show tasks", "what tasks", "my tasks", "view tasks", "open tasks", "pending tasks" → task_read
   - "mark task done", "complete task", "update task", "change priority", "close task", "set task status" → task_update

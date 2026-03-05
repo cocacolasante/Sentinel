@@ -21,21 +21,21 @@
     "list": [
       {
         "name": "brain_url",
-        "type": "textbox",
+        "type": "constant",
         "label": "Brain API URL",
-        "description": "Base URL of the Brain API. Use http://localhost:8000 locally, or https://your-domain.com in production.",
-        "query": "",
+        "query": "https://sentinelai.cloud",
         "current": {
-          "value": "",
-          "text": ""
+          "value": "https://sentinelai.cloud",
+          "text": "https://sentinelai.cloud"
         },
         "options": [
           {
-            "value": "",
-            "text": ""
+            "value": "https://sentinelai.cloud",
+            "text": "https://sentinelai.cloud",
+            "selected": true
           }
         ],
-        "hide": 0
+        "hide": 2
       }
     ]
   },
@@ -916,8 +916,7 @@
           "queryType": "issues",
           "projectIds": [],
           "query": "is:unresolved",
-          "refId": "A",
-          "interval": "5s"
+          "refId": "A"
         }
       ],
       "options": {
@@ -1030,8 +1029,7 @@
           "projectIds": [],
           "query": "is:unresolved",
           "limit": 5,
-          "refId": "A",
-          "interval": "5s"
+          "refId": "A"
         }
       ],
       "options": {
@@ -1583,7 +1581,9 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "orientation": "auto",
         "colorMode": "background",
@@ -1602,9 +1602,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "orange", "value": null },
-              { "color": "yellow", "value": 300 },
-              { "color": "green",  "value": 3600 }
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 300
+              },
+              {
+                "color": "green",
+                "value": 3600
+              }
             ]
           },
           "mappings": []

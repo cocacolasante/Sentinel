@@ -71,6 +71,7 @@ def _build_skill_registry():
     from app.skills.smart_home_skill import SmartHomeSkill
     from app.skills.n8n_skill import N8nSkill
     from app.skills.research_skill import ResearchSkill
+    from app.skills.deep_research_skill import DeepResearchSkill
     from app.skills.code_skill import CodeSkill
     from app.skills.content_draft_skill import ContentDraftSkill
     from app.skills.social_caption_skill import SocialCaptionSkill
@@ -124,6 +125,7 @@ def _build_skill_registry():
     reg.register(IONOSDNSSkill())
     # Content / writing
     reg.register(ResearchSkill())
+    reg.register(DeepResearchSkill())
     reg.register(CodeSkill())
     reg.register(ContentDraftSkill())
     reg.register(SocialCaptionSkill())

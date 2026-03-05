@@ -149,11 +149,17 @@ class GmailClient:
             "body": body,
         }
 
-    def _send_email_sync(self, to: str, subject: str, body: str) -> dict:
+    def _send_email_sync(self, to: str, subject: str, body: str, html: bool = False) -> dict:
         svc = self._build_service()
-        mime_msg = MIMEText(body)
-        mime_msg["to"] = to
-        mime_msg["subject"] = subject
+        if html:
+            mime_msg = MIMEMultipart("alternative")
+            mime_msg["to"] = to
+            mime_msg["subject"] = subject
+            mime_msg.attach(MIMEText(body, "html"))
+        else:
+            mime_msg = MIMEText(body)
+            mime_msg["to"] = to
+            mime_msg["subject"] = subject
         raw = base64.urlsafe_b64encode(mime_msg.as_bytes()).decode()
         sent = svc.users().messages().send(userId="me", body={"raw": raw}).execute()
         return {"id": sent.get("id"), "thread_id": sent.get("threadId")}
@@ -217,8 +223,8 @@ class GmailClient:
     async def get_email(self, msg_id: str) -> dict:
         return await asyncio.to_thread(self._get_email_sync, msg_id)
 
-    async def send_email(self, to: str, subject: str, body: str) -> dict:
-        return await asyncio.to_thread(self._send_email_sync, to, subject, body)
+    async def send_email(self, to: str, subject: str, body: str, html: bool = False) -> dict:
+        return await asyncio.to_thread(self._send_email_sync, to, subject, body, html)
 
     async def reply_email(self, msg_id: str, body: str) -> dict:
         return await asyncio.to_thread(self._reply_email_sync, msg_id, body)

@@ -135,6 +135,10 @@ class Settings(BaseSettings):
     # ── Evals ──────────────────────────────────────────────────
     slack_eval_channel: str = "brain-evals"
 
+    # ── Research ────────────────────────────────────────────────
+    slack_research_channel: str = "sentinel-research"
+    owner_email: str = ""  # Email address to send research reports to
+
     # ── Cost & rate limiting ────────────────────────────────────
     # Set DAILY_COST_CEILING_USD=0 to disable the ceiling (not recommended).
     daily_cost_ceiling_usd: float = 10.0

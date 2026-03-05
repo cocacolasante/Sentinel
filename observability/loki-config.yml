@@ -3,17 +3,21 @@ auth_enabled: false
 server:
   http_listen_port: 3100
   grpc_listen_port: 9096
-  # Keep internal gRPC connections alive so scheduler_processor never gets
-  # EOF when notifying the scheduler about a finished query.
-  grpc_server_max_connection_idle: 2m30s
-  grpc_server_max_connection_age: 5m
-  grpc_server_max_connection_age_grace: 5m
-  grpc_server_keepalive_time: 1m
+  # Long connection age so internal gRPC components (frontend↔scheduler↔querier)
+  # never get GOAWAY/EOF during normal operation. Keepalive pings detect dead
+  # connections without forced recycling.
+  grpc_server_max_connection_idle: 1h30m
+  grpc_server_max_connection_age: 1h30m
+  grpc_server_max_connection_age_grace: 10m
+  grpc_server_keepalive_time: 60s
   grpc_server_keepalive_timeout: 10s
+  grpc_server_min_time_between_pings: 10s
+  grpc_server_ping_without_stream_allowed: true
 
 # Run as all-in-one (no frontend/scheduler/querier split)
 common:
   path_prefix: /loki
+
   storage:
     filesystem:
       chunks_directory: /loki/chunks
@@ -82,10 +86,20 @@ limits_config:
   max_query_length: 10000h
   retention_period: 720h
 
-query_scheduler:
-  # Increase queue depth per tenant so queries are not dropped under load,
-  # and back-pressure is applied before connections are exhausted.
-  max_outstanding_requests_per_tenant: 2048
+frontend_worker:
+  # Connect directly to the query-frontend; do not discover via scheduler ring.
+  # Avoids scheduler_processor.go "context canceled" errors from cancelled queries.
+  scheduler_address: ""
+  frontend_address: "127.0.0.1:9096"
+
+query_range:
+  # Disable label-shard parallelism — reduces concurrent gRPC streams that
+  # generate context-canceled noise on query cancellation.
+  parallelise_shardable_queries: false
+
+querier:
+  engine:
+    timeout: 5m
 
 chunk_store_config:
   max_look_back_period: 0s

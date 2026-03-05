@@ -1,0 +1,227 @@
+"""
+DeepResearchSkill — research any topic in depth, then deliver a full report
+via Slack (#sentinel-research) and email.
+
+Flow:
+  1. Call Claude Sonnet with a structured research prompt
+  2. Post to sentinel-research Slack channel
+  3. Send HTML email to owner
+  4. Return summary to dispatcher
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+
+import anthropic
+
+from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
+
+_RESEARCH_SYSTEM = """You are a world-class research analyst. When given a topic, produce a
+comprehensive, well-structured research report. Be thorough, accurate, and insightful.
+Cite concrete facts, numbers, and examples where possible. Write in clear prose — no fluff.
+
+Structure your report with these exact markdown sections:
+## Executive Summary
+(3-4 sentence overview)
+
+## Background & Context
+(history, origin, why this matters)
+
+## Key Concepts & Mechanisms
+(how it works, core ideas, technical detail if relevant)
+
+## Current State & Recent Developments
+(latest trends, news, data as of your knowledge cutoff)
+
+## Key Players & Stakeholders
+(people, organisations, projects — who matters and why)
+
+## Opportunities & Risks
+(what to watch, what to act on, what to avoid)
+
+## Recommended Next Steps
+(3-5 concrete actions the reader could take)
+
+## Sources & Further Reading
+(books, papers, sites, people to follow)
+
+Be specific. Avoid generic statements. Aim for 800-1200 words."""
+
+
+async def _generate_report(topic: str, extra_context: str) -> str:
+    """Call Claude Sonnet to produce the research report."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+    prompt = f"Research topic: {topic}"
+    if extra_context:
+        prompt += f"\n\nAdditional context from user: {extra_context}"
+
+    msg = await client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=4096,
+        system=_RESEARCH_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return msg.content[0].text
+
+
+def _truncate_for_slack(text: str, limit: int = 2900) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n\n_…(truncated — full report in email)_"
+
+
+async def _post_to_slack(topic: str, report: str, channel: str) -> bool:
+    """Post the research report to the sentinel-research Slack channel."""
+    from app.integrations.slack_notifier import post_alert
+
+    header = f"*🔬 Deep Research: {topic}*\n{'─' * 44}\n"
+    body = _truncate_for_slack(report)
+    return await post_alert(header + body, channel=channel)
+
+
+def _md_to_html(report: str) -> str:
+    """Convert the markdown report to simple HTML for email."""
+    html = report
+    html = re.sub(r"^## (.+)$", r"<h2 style='color:#1a1a2e;margin-top:1.5em;'>\1</h2>", html, flags=re.MULTILINE)
+    html = re.sub(r"^### (.+)$", r"<h3 style='color:#333;'>\1</h3>", html, flags=re.MULTILINE)
+    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
+    html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
+    # Wrap bullet lines in <li>
+    lines = html.split("\n")
+    out_lines: list[str] = []
+    in_list = False
+    for line in lines:
+        if re.match(r"^[-*] ", line):
+            if not in_list:
+                out_lines.append("<ul>")
+                in_list = True
+            out_lines.append(f"<li>{line[2:]}</li>")
+        else:
+            if in_list:
+                out_lines.append("</ul>")
+                in_list = False
+            out_lines.append(line)
+    if in_list:
+        out_lines.append("</ul>")
+    html = "\n".join(out_lines)
+    # Wrap bare paragraphs
+    paras = re.split(r"\n{2,}", html)
+    body_html = ""
+    for para in paras:
+        para = para.strip()
+        if not para:
+            continue
+        if re.match(r"^<(h[123]|ul|li)", para):
+            body_html += para + "\n"
+        else:
+            body_html += f"<p>{para}</p>\n"
+    return body_html
+
+
+async def _send_email(topic: str, report: str, to: str) -> bool:
+    """Send the full report as an HTML email via Gmail."""
+    try:
+        from app.integrations.gmail import get_gmail_client
+
+        client = get_gmail_client()
+        if not client.is_configured():
+            logger.warning("DeepResearchSkill: Gmail not configured — skipping email")
+            return False
+
+        body_html = _md_to_html(report)
+        full_html = (
+            "<!DOCTYPE html><html><body style='font-family:Georgia,serif;"
+            "max-width:800px;margin:40px auto;line-height:1.7;color:#222;'>"
+            f"<h1 style='color:#1a1a2e;'>🔬 Research Report: {topic}</h1>"
+            "<hr style='border:1px solid #ddd;margin:20px 0;'>"
+            f"{body_html}"
+            "<hr style='border:1px solid #ddd;margin:20px 0;'>"
+            "<p style='color:#888;font-size:0.85em;'>Generated by Sentinel AI · sentinel-research</p>"
+            "</body></html>"
+        )
+
+        await client.send_email(
+            to=to,
+            subject=f"Research Report: {topic}",
+            body=full_html,
+            html=True,
+        )
+        return True
+    except Exception as exc:
+        logger.error("DeepResearchSkill email send failed: %s", exc)
+        return False
+
+
+class DeepResearchSkill(BaseSkill):
+    name = "deep_research"
+    description = (
+        "Research any topic in depth using Claude Sonnet. Produces a structured "
+        "8-section report and delivers it via Slack (#sentinel-research) and email."
+    )
+    trigger_intents = ["deep_research"]
+    approval_category = ApprovalCategory.STANDARD
+    config_vars = ["ANTHROPIC_API_KEY"]
+
+    def is_available(self) -> bool:
+        from app.config import get_settings
+
+        return bool(get_settings().anthropic_api_key)
+
+    async def execute(self, params: dict, original_message: str) -> SkillResult:
+        from app.config import get_settings
+
+        settings = get_settings()
+
+        topic = params.get("topic", "").strip() or original_message.strip()
+        extra_context = params.get("context", "")
+        to_email = params.get("email") or settings.owner_email
+        channel = settings.slack_research_channel
+
+        # ── Generate ─────────────────────────────────────────────────────────
+        try:
+            report = await _generate_report(topic, extra_context)
+        except Exception as exc:
+            logger.error("DeepResearchSkill LLM call failed: %s", exc)
+            return SkillResult(
+                context_data=f"[DeepResearch failed: {exc}]",
+                skill_name=self.name,
+            )
+
+        # ── Deliver ──────────────────────────────────────────────────────────
+        slack_ok = await _post_to_slack(topic, report, channel)
+        email_ok = False
+        if to_email:
+            email_ok = await _send_email(topic, report, to_email)
+        else:
+            logger.info("DeepResearchSkill: owner_email not set — skipping email")
+
+        # ── Reply summary ────────────────────────────────────────────────────
+        delivered: list[str] = []
+        if slack_ok:
+            delivered.append(f"Slack #{channel}")
+        if email_ok:
+            delivered.append(f"email to {to_email}")
+        if not delivered:
+            delivered.append("(no delivery — check Slack token / Gmail config)")
+
+        word_count = len(report.split())
+        exec_summary = ""
+        if "## Executive Summary" in report:
+            exec_summary = (
+                report.split("## Executive Summary")[1].split("##")[0].strip()[:500]
+            )
+
+        context_data = (
+            f"Research report on **{topic}** generated ({word_count} words, 8 sections).\n"
+            f"Delivered via: {', '.join(delivered)}\n\n"
+            f"**Executive Summary:**\n{exec_summary}"
+        )
+        return SkillResult(context_data=context_data, skill_name=self.name)
