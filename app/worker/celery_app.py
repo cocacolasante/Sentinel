@@ -96,10 +96,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.worker.error_tasks.aggregate_error_metrics",
         "schedule": crontab(minute=0),
     },
-    # Every 6 hours — fetch top 10 Sentry errors, create tasks, investigate+fix
+    # 4x daily at 12am, 6am, 12pm, 6pm UTC — fetch top 10 Sentry errors,
+    # create tasks (approval_level=1 = auto-start), investigate + patch + open PR
     "sentry-error-triage": {
         "task": "app.worker.sentry_tasks.ingest_and_triage_top_errors",
-        "schedule": crontab(minute=0, hour="*/6"),
+        "schedule": crontab(minute=0, hour="0,6,12,18"),
         "options": {"queue": "celery"},
     },
 }
