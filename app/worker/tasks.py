@@ -119,6 +119,7 @@ def plan_and_execute_board_task(self, task_id: int) -> dict:
     except Exception as exc:
         logger.error("plan_and_execute_board_task(%s) crashed: %s", task_id, exc, exc_info=True)
         _mark_task(task_id, "failed", str(exc))
+        _dm_task_failure(task_id, f"Task #{task_id}", f"Celery crash: {exc}")
         return {"error": str(exc)}
 
 
@@ -168,6 +169,7 @@ def execute_board_task(self, task_id: int) -> dict:
     except Exception as exc:
         logger.error("execute_board_task(%s) crashed: %s", task_id, exc, exc_info=True)
         _mark_task(task_id, "failed", str(exc))
+        _dm_task_failure(task_id, f"Task #{task_id}", f"Celery crash: {exc}")
         return {"error": str(exc)}
 
 
@@ -378,6 +380,24 @@ def _mark_task(task_id: int, status: str, error: str | None = None) -> None:
     # On completion, unblock dependent tasks
     if status == "done":
         _unblock_dependents(task_id)
+
+
+def _dm_task_failure(task_id: int, title: str, summary: str) -> None:
+    """DM the owner when a task fails and no Slack thread is available."""
+    try:
+        from app.config import get_settings as _gs
+
+        _s = _gs()
+        if not (_s.slack_owner_user_id and _s.slack_bot_token):
+            return
+        from app.integrations.slack_notifier import post_dm_sync
+
+        short = summary[:600] if summary else "(no details)"
+        post_dm_sync(
+            f"❌ *Task #{task_id} — {title}* failed\n```{short}```"
+        )
+    except Exception as exc:
+        logger.warning("_dm_task_failure could not send DM: %s", exc)
 
 
 def _unblock_dependents(completed_task_id: int) -> None:
@@ -632,15 +652,18 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
         pass
 
     # ── 7. Report back to Slack ───────────────────────────────────────────────
+    divider = "─" * 36
     if channel and thread_ts:
         header = (
             f"✅ *Task #{task_id} — {title}* — complete"
             if all_passed
             else f"❌ *Task #{task_id} — {title}* — failed at step {len(results)}"
         )
-        divider = "─" * 36
         body = f"\n{divider}\n".join(results)
         post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
+    elif not all_passed:
+        body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
+        _dm_task_failure(task_id, title, body)
 
     return {"task_id": task_id, "passed": all_passed, "steps": len(results)}
 
@@ -776,6 +799,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     round_num = 0
     parse_errors = 0
     write_commands_run = 0  # track how many write/edit commands have been issued
+    consecutive_read_rounds = 0  # track read-only rounds in a row
 
     _READ_ONLY_PREFIXES = ("cat ", "grep ", "find ", "ls ", "head ", "tail ", "wc ", "echo ")
 
@@ -805,9 +829,11 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
                 messages=messages,
             )
             raw = resp.content[0].text.strip()
+            # Strip non-printable / null bytes that fool the truthiness check
+            raw = "".join(ch for ch in raw if ch.isprintable() or ch in "\n\r\t")
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-            if not raw:
+            if not raw.strip():
                 raise ValueError("LLM returned empty response")
             action = json.loads(raw)
             parse_errors = 0  # reset on success
@@ -881,8 +907,12 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
 
         # Track write activity
         cmd_stripped = cmd.lstrip()
-        if not any(cmd_stripped.startswith(p) for p in _READ_ONLY_PREFIXES):
+        is_read_only = any(cmd_stripped.startswith(p) for p in _READ_ONLY_PREFIXES)
+        if not is_read_only:
             write_commands_run += 1
+            consecutive_read_rounds = 0
+        else:
+            consecutive_read_rounds += 1
 
         status_icon = "✅" if exit_code == 0 else "❌"
         snippet = f"```\n{output}\n```" if output else ""
@@ -896,13 +926,19 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             cmd[:80],
         )
 
-        # Inject action-pressure message if still only reading after round 4
+        # Inject action-pressure message if stuck in read-only loop
         action_pressure = ""
-        if round_num >= 4 and write_commands_run == 0:
+        if consecutive_read_rounds >= 5:
             action_pressure = (
-                "\n\n⚠️ You have been researching for several rounds without making any changes. "
-                "You must now implement the task — write or edit files, then commit and push. "
-                "Do not run any more read-only commands."
+                f"\n\n⚠️ You have run {consecutive_read_rounds} consecutive read-only commands. "
+                "STOP exploring. You now have enough context. "
+                "Execute the task: run scripts, call APIs, write output, or mark done/failed. "
+                "Do not run any more cat/grep/ls/head/tail commands."
+            )
+        elif round_num >= 4 and write_commands_run == 0:
+            action_pressure = (
+                "\n\n⚠️ You have been researching for several rounds without taking action. "
+                "Execute the task now — run scripts, call APIs, write/edit files, or mark done/failed."
             )
 
         # Feed result back to LLM
@@ -973,13 +1009,16 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     except Exception:
         pass
 
+    divider = "─" * 36
     if channel and thread_ts:
         header = (
             f"✅ *Task #{task_id} — {title}* — complete" if all_passed else f"❌ *Task #{task_id} — {title}* — failed"
         )
-        divider = "─" * 36
         body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
         post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
+    elif not all_passed:
+        body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
+        _dm_task_failure(task_id, title, body)
 
     return {"task_id": task_id, "passed": all_passed, "rounds": round_num + 1}
 
