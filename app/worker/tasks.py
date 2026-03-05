@@ -617,6 +617,20 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
     # ── 6. Update task status ─────────────────────────────────────────────────
     _mark_task(task_id, "done" if all_passed else "failed")
 
+    try:
+        from app.integrations.milestone_logger import log_milestone
+        import asyncio as _asyncio
+        _asyncio.create_task(log_milestone(
+            action="task_complete" if all_passed else "task_failed",
+            intent="task_execute",
+            params={"title": title},
+            session_id=session_id or f"task-{task_id}",
+            detail={"task_id": task_id, "title": title, "steps": len(results), "passed": all_passed},
+            agent="celery",
+        ))
+    except Exception:
+        pass
+
     # ── 7. Report back to Slack ───────────────────────────────────────────────
     if channel and thread_ts:
         header = (
@@ -668,6 +682,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     description = row.get("description") or ""
     channel = row.get("slack_channel") or ""
     thread_ts = row.get("slack_thread_ts") or ""
+    session_id = row.get("session_id") or ""
 
     # blocked_by check
     import json as _json
@@ -943,6 +958,20 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
         results.append(f"❌ *Agent exhausted {max_rounds} rounds without explicitly completing the task*")
 
     _mark_task(task_id, "done" if all_passed else "failed")
+
+    try:
+        from app.integrations.milestone_logger import log_milestone
+        import asyncio as _asyncio
+        _asyncio.create_task(log_milestone(
+            action="task_complete" if all_passed else "task_failed",
+            intent="task_execute",
+            params={"title": title},
+            session_id=session_id or f"task-{task_id}",
+            detail={"task_id": task_id, "title": title, "rounds": round_num + 1, "passed": all_passed},
+            agent="celery",
+        ))
+    except Exception:
+        pass
 
     if channel and thread_ts:
         header = (

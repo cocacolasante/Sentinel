@@ -37,6 +37,8 @@ _ACTION_LABELS: dict[str, tuple[str, str]] = {
     "trigger_workflow": ("⚙️", "Workflow Triggered"),
     "docker_restart": ("🐳", "Docker Restart"),
     "docker_compose": ("🐳", "Docker Compose"),
+    "task_complete": ("✅", "Task Completed"),
+    "task_failed": ("❌", "Task Failed"),
     "task_update": ("📋", "Task Updated"),
     "sentry_resolve": ("🐛", "Sentry Resolved"),
     "sentry_ignore": ("🐛", "Sentry Ignored"),
