@@ -23,13 +23,21 @@ from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
-# Matches dynamic tokens that vary between occurrences of the same error type:
-# Slack session IDs (s_17592004491665), UUIDs, long numeric IDs, hex addresses.
+# Strip log-line prefixes emitted by loguru/stdlib:
+#   "2026-03-05 13:39:38.174 | ERROR | module:method:57 - actual message"
+_LOG_PREFIX_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[.,]\d+\s*\|\s*\w+\s*\|\s*[^\|]+ - ",
+)
+
+# Dynamic tokens that vary between occurrences of the same error type:
+# Slack session IDs (s_17592004491665), UUIDs, long numeric IDs, hex addresses,
+# ISO timestamps, short date/time components.
 _DYNAMIC_TOKEN_RE = re.compile(
     r"\b(s_[0-9a-f]+|"
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|"
     r"0x[0-9a-f]+|"
-    r"\d{8,})\b",
+    r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[.,]\d*|"  # ISO timestamps
+    r"\d{8,})\b",                                          # long numeric IDs
     re.IGNORECASE,
 )
 
@@ -37,11 +45,14 @@ _DYNAMIC_TOKEN_RE = re.compile(
 def _error_fingerprint(title: str, culprit: str) -> str:
     """
     Stable key for grouping Sentry issues that represent the same error type.
-    Strips dynamic tokens (session IDs, UUIDs, long numerics) then combines
-    with culprit so different callsites stay separate.
+    Strips log-line prefixes (timestamps, log levels, logger names) and dynamic
+    tokens (session IDs, UUIDs, long numerics) then combines with culprit so
+    different callsites stay separate.
     """
-    normalized = _DYNAMIC_TOKEN_RE.sub("*", title)
-    # Also collapse anything in parentheses that contained a dynamic token
+    # Remove "2026-03-05 13:39:38.174 | ERROR | module:method:57 - " prefix
+    normalized = _LOG_PREFIX_RE.sub("", title)
+    normalized = _DYNAMIC_TOKEN_RE.sub("*", normalized)
+    # Collapse parenthesised groups that contained a dynamic token
     normalized = re.sub(r"\(\*[^)]*\)", "(*)", normalized)
     return f"{normalized.strip()}|{culprit}"
 
@@ -116,8 +127,9 @@ def ingest_and_triage_top_errors(stats_period: str = "6h", limit: int = 10) -> d
             continue
         seen_fingerprints.add(fp)
 
-        # Skip if an active (non-terminal) triage task already exists for this
-        # exact Sentry issue ID or for the same normalised fingerprint.
+        # Skip if a triage task for this exact issue ID or same error fingerprint
+        # was created in the last 24 hours (regardless of done/failed status —
+        # prevents re-investigating the same Sentry issue every run).
         try:
             existing = postgres.execute_one(
                 """
@@ -127,7 +139,7 @@ def ingest_and_triage_top_errors(stats_period: str = "6h", limit: int = 10) -> d
                     description LIKE %s
                     OR description LIKE %s
                   )
-                  AND status NOT IN ('done', 'failed')
+                  AND created_at >= NOW() - INTERVAL '24 hours'
                 LIMIT 1
                 """,
                 (
@@ -141,7 +153,7 @@ def ingest_and_triage_top_errors(stats_period: str = "6h", limit: int = 10) -> d
 
         if existing:
             logger.info(
-                "Sentry issue %s already has active task #%s (%s) — skipping",
+                "Sentry issue %s already triaged as task #%s (%s) within 24h — skipping",
                 issue_id, existing["id"], existing["status"],
             )
             skipped += 1
