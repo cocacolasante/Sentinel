@@ -751,26 +751,30 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             thread_ts,
         )
 
-    # ── Sync workspace to latest origin/main before starting ─────────────────
+    # ── Sync workspace to latest origin/main and create a sentinel branch ──────
+    import datetime as _dt
+    sentinel_branch = f"sentinel/task-{task_id}-{_dt.datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
     sync_output = ""
     if os.path.isdir(os.path.join(code_root, ".git")):
         try:
             sync_proc = await asyncio.create_subprocess_shell(
-                f"git -C {code_root} fetch origin && git -C {code_root} reset --hard origin/main",
+                f"git -C {code_root} fetch origin && "
+                f"git -C {code_root} checkout -B {sentinel_branch} origin/main",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 executable="/bin/bash",
             )
             sync_stdout, _ = await asyncio.wait_for(sync_proc.communicate(), timeout=60)
             sync_output = (sync_stdout or b"").decode("utf-8", errors="replace").strip()
-            logger.info("Task #%s workspace synced to origin/main: %s", task_id, sync_output[:120])
+            logger.info("Task #%s on branch %s: %s", task_id, sentinel_branch, sync_output[:120])
         except Exception as sync_exc:
             logger.warning("Task #%s workspace sync failed: %s", task_id, sync_exc)
 
     # ── Agent loop ────────────────────────────────────────────────────────────
     system_prompt = (
         "You are Sentinel, an autonomous AI agent executing server tasks via shell commands.\n"
-        f"Workspace: {code_root}  (a git repository — always commit + push after file changes)\n\n"
+        f"Workspace: {code_root}  (a git repository)\n"
+        f"You are working on branch: {sentinel_branch}\n\n"
         "Each response must be ONLY a JSON object — one of:\n"
         '  {"command": "<bash command>", "reasoning": "<why>"}\n'
         '  {"done": true, "summary": "<what was accomplished>"}\n'
@@ -779,7 +783,10 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
         f"- Use absolute paths starting with {code_root}/\n"
         "- JSON file edits: python3 -c with json.load/json.dump\n"
         f"- After any file change: git -C {code_root} add -A && "
-        f"  git -C {code_root} commit -m '<msg>' && git -C {code_root} push\n"
+        f"  git -C {code_root} commit -m '<msg>' && "
+        f"  git -C {code_root} push origin {sentinel_branch}\n"
+        f"- NEVER push to main or master — always push to {sentinel_branch}\n"
+        "- A PR will be opened automatically after you push for human review before deploy\n"
         "- Max one command per response\n"
         "- Limit research to at most 4 rounds — then start implementing\n"
         "- Once you understand the codebase, make changes immediately\n"
@@ -971,11 +978,11 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     if write_commands_run > 0 and os.path.isdir(os.path.join(code_root, ".git")):
         try:
             push_proc = await asyncio.create_subprocess_shell(
-                # Commit any stragglers, then push (no-op if already up to date)
+                # Commit any stragglers, then push branch (never push to main)
                 f"cd {code_root} && "
                 f"git add -A && "
                 f"(git diff --cached --quiet || git commit -m 'chore: task #{task_id} — final auto-commit') && "
-                f"git push origin HEAD",
+                f"git push origin {sentinel_branch} --set-upstream",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 executable="/bin/bash",
@@ -986,6 +993,35 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             results.append(f"🚀 *GitHub push:* `{push_log[:120]}`")
         except Exception as push_exc:
             logger.warning("Task #%s safety push failed: %s", task_id, push_exc)
+
+    # ── Open PR if commits were pushed to the sentinel branch ─────────────────
+    pr_url = ""
+    try:
+        check_proc = await asyncio.create_subprocess_shell(
+            f"git -C {code_root} log origin/main..{sentinel_branch} --oneline 2>/dev/null | wc -l",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            executable="/bin/bash",
+        )
+        count_out, _ = await asyncio.wait_for(check_proc.communicate(), timeout=15)
+        ahead = int((count_out or b"0").decode().strip())
+        if ahead > 0:
+            from app.integrations.repo import _open_pr_sync, _notify_pr_slack
+
+            pr_url, pr_number = await asyncio.to_thread(
+                _open_pr_sync,
+                sentinel_branch,
+                f"sentinel: task #{task_id} — {title[:80]}",
+                f"Automated changes from Sentinel task #{task_id}.\n\n"
+                f"**Task:** {title}\n\n"
+                "**Review carefully before merging.** Merging triggers CI and deploys to production.",
+            )
+            if pr_number:
+                _notify_pr_slack(pr_url, sentinel_branch, pr_number)
+                results.append(f"🔀 *PR opened:* {pr_url}")
+                logger.info("Task #%s PR opened: %s", task_id, pr_url)
+    except Exception as pr_exc:
+        logger.warning("Task #%s PR creation failed: %s", task_id, pr_exc)
 
     # Only mark done if LLM explicitly said done AND all commands passed.
     # If we exhausted max_rounds without the LLM saying done, mark failed.

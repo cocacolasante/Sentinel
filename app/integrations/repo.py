@@ -75,6 +75,71 @@ def _dm_secret_leak(patterns: list[str]) -> None:
         logger.warning("Could not send secret-leak DM: %s", exc)
 
 
+def _open_pr_sync(branch: str, title: str, body: str) -> tuple[str, int]:
+    """Open a GitHub PR from *branch* → main. Returns (pr_url, pr_number)."""
+    import httpx
+
+    token = settings.github_token
+    repo = settings.github_default_repo  # "owner/repo"
+    if not token or not repo:
+        logger.warning("GitHub token or repo not configured — skipping PR creation")
+        return ("(PR not created — GitHub not configured)", 0)
+
+    payload = {
+        "title": title[:256],
+        "body": body[:65_536],
+        "head": branch,
+        "base": "main",
+        "draft": False,
+    }
+    with httpx.Client(timeout=15) as client:
+        r = client.post(
+            f"https://api.github.com/repos/{repo}/pulls",
+            json=payload,
+            headers={
+                "Authorization": f"token {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+    if r.status_code == 201:
+        data = r.json()
+        return (data["html_url"], data["number"])
+    # PR already exists → find it
+    if r.status_code == 422:
+        with httpx.Client(timeout=15) as client:
+            r2 = client.get(
+                f"https://api.github.com/repos/{repo}/pulls",
+                params={"head": f"{repo.split('/')[0]}:{branch}", "state": "open"},
+                headers={
+                    "Authorization": f"token {token}",
+                    "Accept": "application/vnd.github+json",
+                },
+            )
+        if r2.status_code == 200 and r2.json():
+            existing = r2.json()[0]
+            return (existing["html_url"], existing["number"])
+    logger.warning("GitHub PR creation failed: {} {}", r.status_code, r.text[:200])
+    return (f"(PR creation failed: {r.status_code})", 0)
+
+
+def _notify_pr_slack(pr_url: str, branch: str, pr_number: int) -> None:
+    """DM the owner and post to brain-alerts when a sentinel PR is opened."""
+    try:
+        from app.integrations.slack_notifier import post_dm_sync, post_alert_sync
+
+        msg = (
+            f"🔀 *Sentinel opened PR #{pr_number} — review required*\n"
+            f"Branch: `{branch}`\n"
+            f"Link: {pr_url}\n\n"
+            "_Merge to deploy. No changes will reach production until you approve._"
+        )
+        post_dm_sync(msg)
+        post_alert_sync(msg)
+    except Exception as exc:
+        logger.warning("Could not send PR notification: {}", exc)
+
+
 def _assert_not_protected(path: Path) -> None:
     """Raise PermissionError if *path* is inside /root/sentinel or is a .env file."""
     try:
@@ -284,7 +349,16 @@ class RepoClient:
         out = self._run(["git", "commit", "-m", message])
         return out
 
-    def _push_sync(self) -> str:
+    def _push_sync(self, pr_title: str = "", pr_body: str = "") -> str:
+        """
+        Push Sentinel's changes as a feature branch and open a PR for human review.
+
+        Rules:
+        - Never push directly to main/master.
+        - If we're already on a sentinel/* branch, push it.
+        - If we're on main/master (or detached HEAD), create a new sentinel/patch-* branch first.
+        - After pushing, open a GitHub PR and DM the owner for review.
+        """
         # ── Secret scan before push ────────────────────────────────────────────
         try:
             diff = self._run(["git", "diff", "HEAD~1..HEAD"], check=False)
@@ -294,16 +368,52 @@ class RepoClient:
         if leaked:
             _dm_secret_leak(leaked)
             raise PermissionError(
-                f"Push aborted — potential secrets detected in diff: "
+                "Push aborted — potential secrets detected in diff: "
                 + ", ".join(leaked[:3])
                 + (f" (+{len(leaked) - 3} more)" if len(leaked) > 3 else "")
             )
         # ── .env in staged files ───────────────────────────────────────────────
-        staged = self._run(["git", "diff", "--name-only", "--cached"], check=False)
-        if any(_ENV_PATH_RE.search(ln.strip()) for ln in staged.splitlines()):
+        staged_files = self._run(["git", "diff", "--name-only", "--cached"], check=False)
+        if any(_ENV_PATH_RE.search(ln.strip()) for ln in staged_files.splitlines()):
             _dm_secret_leak([".env file staged for commit"])
             raise PermissionError("Push aborted — a .env file is staged. Remove it with: git reset HEAD .env")
-        return self._run(["git", "push", "origin", "HEAD"])
+
+        # ── Ensure we're on a feature branch, never main ──────────────────────
+        import time as _time
+
+        current = self._run(["git", "rev-parse", "--abbrev-ref", "HEAD"], check=False).strip()
+        if current in ("main", "master", "HEAD"):
+            branch = f"sentinel/patch-{int(_time.time())}"
+            self._run(["git", "checkout", "-b", branch])
+            logger.info("Created sentinel branch: {}", branch)
+        else:
+            branch = current
+
+        # ── Push branch to origin ─────────────────────────────────────────────
+        self._run(["git", "push", "origin", branch, "--set-upstream"])
+        logger.info("Pushed branch {} to origin", branch)
+
+        # ── Open PR via GitHub API ─────────────────────────────────────────────
+        pr_url, pr_number = _open_pr_sync(
+            branch=branch,
+            title=pr_title or f"sentinel: {branch}",
+            body=pr_body or (
+                "Automated changes proposed by Sentinel.\n\n"
+                "**Please review carefully before merging.** "
+                "Merging will trigger CI and deploy to production."
+            ),
+        )
+
+        # ── Notify owner ──────────────────────────────────────────────────────
+        _notify_pr_slack(pr_url, branch, pr_number)
+
+        return f"Opened PR #{pr_number}: {pr_url}"
+
+    def _create_branch_sync(self, branch: str) -> str:
+        """Create and checkout a new branch, resetting to origin/main first."""
+        self._run(["git", "fetch", "origin", "main"], check=False)
+        self._run(["git", "checkout", "-B", branch, "origin/main"])
+        return branch
 
     # ── Public async API ──────────────────────────────────────────────────────
 
@@ -331,5 +441,8 @@ class RepoClient:
     async def commit(self, message: str, files: list[str] | None = None) -> str:
         return await asyncio.to_thread(self._commit_sync, message, files)
 
-    async def push(self) -> str:
-        return await asyncio.to_thread(self._push_sync)
+    async def push(self, pr_title: str = "", pr_body: str = "") -> str:
+        return await asyncio.to_thread(self._push_sync, pr_title, pr_body)
+
+    async def create_branch(self, branch: str) -> str:
+        return await asyncio.to_thread(self._create_branch_sync, branch)
