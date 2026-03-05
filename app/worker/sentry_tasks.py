@@ -17,10 +17,33 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
+
+# Matches dynamic tokens that vary between occurrences of the same error type:
+# Slack session IDs (s_17592004491665), UUIDs, long numeric IDs, hex addresses.
+_DYNAMIC_TOKEN_RE = re.compile(
+    r"\b(s_[0-9a-f]+|"
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|"
+    r"0x[0-9a-f]+|"
+    r"\d{8,})\b",
+    re.IGNORECASE,
+)
+
+
+def _error_fingerprint(title: str, culprit: str) -> str:
+    """
+    Stable key for grouping Sentry issues that represent the same error type.
+    Strips dynamic tokens (session IDs, UUIDs, long numerics) then combines
+    with culprit so different callsites stay separate.
+    """
+    normalized = _DYNAMIC_TOKEN_RE.sub("*", title)
+    # Also collapse anything in parentheses that contained a dynamic token
+    normalized = re.sub(r"\(\*[^)]*\)", "(*)", normalized)
+    return f"{normalized.strip()}|{culprit}"
 
 
 @shared_task(
@@ -67,6 +90,10 @@ def ingest_and_triage_top_errors(stats_period: str = "6h", limit: int = 10) -> d
     # ── 2. Create board tasks and dispatch ────────────────────────────────────
     created: list[dict] = []   # [{task_id, rank, issue}]
     skipped: int = 0
+    # Fingerprints seen in this run — prevents creating duplicate tasks when
+    # Sentry lists multiple issues that are really the same error type
+    # (e.g. same exception with different session IDs in the message).
+    seen_fingerprints: set[str] = set()
 
     for rank, issue in enumerate(issues[:limit], start=1):
         issue_id = issue.get("id", "")
@@ -77,17 +104,36 @@ def ingest_and_triage_top_errors(stats_period: str = "6h", limit: int = 10) -> d
         permalink = issue.get("permalink", "")
         culprit = issue.get("culprit", "")
 
-        # Skip if an active (non-terminal) triage task already exists for this issue
+        # Deduplicate within this run by normalised error fingerprint
+        fp = _error_fingerprint(title, culprit)
+        if fp in seen_fingerprints:
+            logger.info(
+                "Sentry issue %s is a duplicate of an already-queued error type "
+                "(fingerprint: %s) — skipping",
+                issue_id, fp[:80],
+            )
+            skipped += 1
+            continue
+        seen_fingerprints.add(fp)
+
+        # Skip if an active (non-terminal) triage task already exists for this
+        # exact Sentry issue ID or for the same normalised fingerprint.
         try:
             existing = postgres.execute_one(
                 """
                 SELECT id, status FROM tasks
                 WHERE source = 'sentry-triage'
-                  AND description LIKE %s
+                  AND (
+                    description LIKE %s
+                    OR description LIKE %s
+                  )
                   AND status NOT IN ('done', 'failed')
                 LIMIT 1
                 """,
-                (f"%Sentry issue ID: {issue_id}%",),
+                (
+                    f"%Sentry issue ID: {issue_id}%",
+                    f"%fingerprint: {fp[:100]}%",
+                ),
             )
         except Exception as exc:
             logger.warning("Could not check existing task for %s: %s", issue_id, exc)
@@ -106,7 +152,8 @@ def ingest_and_triage_top_errors(stats_period: str = "6h", limit: int = 10) -> d
             f"Sentry issue ID: {issue_id}\n"
             f"Level: {level} | Project: {project} | Count: {count}\n"
             f"Culprit: {culprit}\n"
-            f"Link: {permalink}\n\n"
+            f"Link: {permalink}\n"
+            f"fingerprint: {fp}\n\n"
             "Auto-created by Sentinel sentry-triage. "
             "Investigating root cause and applying a fix if possible."
         )
@@ -169,11 +216,10 @@ def ingest_and_triage_top_errors(stats_period: str = "6h", limit: int = 10) -> d
     if created or skipped:
         from datetime import datetime, timezone
         now_utc = datetime.now(timezone.utc).strftime("%H:%M UTC")
+        dedup_note = f", {skipped} skipped (duplicate or in progress)" if skipped else ""
         header = (
             f"🔍 *Sentry triage — {now_utc} — top {len(issues)} errors (last {stats_period})*\n"
-            f"Started {len(created)} investigation(s)"
-            + (f", {skipped} already in progress" if skipped else "")
-            + ". Slack updates per fix below."
+            f"Started {len(created)} investigation(s){dedup_note}. Slack updates per fix below."
         )
         lines = [header, "─" * 36]
         for item in created:
