@@ -324,28 +324,27 @@ def _analyze_cluster(cluster: dict, hours: int) -> dict | None:
 
 def _create_fix_task(cluster: dict, analysis: dict) -> int | None:
     """
-    Create a board task for every non-noise bug found. Returns task_id or None.
-
-    approval_level:
-      1 = auto_fixable → Sentinel executes immediately
-      2 = not auto_fixable → DMs owner for approval before any code changes
+    Create a board task only for auto-fixable bugs. Returns task_id or None.
+    Noise bugs and non-auto-fixable bugs are skipped — no task is created.
     """
     from app.db import postgres
 
     if analysis.get("is_noise"):
         return None
 
-    severity = analysis.get("severity", "low")
     auto_fixable = bool(analysis.get("auto_fixable"))
-    approval_level = 1 if auto_fixable else 2
+    if not auto_fixable:
+        return None
+
+    severity = analysis.get("severity", "low")
+    approval_level = 1
 
     title = f"[BugHunt] {cluster['service']} — {cluster['fingerprint'][:80]}"
     description = (
         f"Detected by Autonomous Bug Hunter\n"
         f"Service: {cluster['service']}\n"
         f"Frequency: {cluster['count']}x\n"
-        f"Fingerprint: {cluster['fingerprint']}\n"
-        f"Auto-fixable: {auto_fixable}\n\n"
+        f"Fingerprint: {cluster['fingerprint']}\n\n"
         f"Root cause: {analysis.get('root_cause', '')}\n"
         f"Affected component: {analysis.get('affected_component', '')}\n"
         f"Proposed fix: {analysis.get('proposed_fix', '')}\n"
