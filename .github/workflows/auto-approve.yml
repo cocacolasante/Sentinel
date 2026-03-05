@@ -1,0 +1,43 @@
+name: Auto-approve (non-Sentinel PRs)
+
+# Approves and enables auto-merge for PRs NOT from Sentinel's AI branches.
+# Sentinel PRs (sentinel/*) require a human review — this job is skipped for them.
+# Claude Code and human PRs get approved immediately; CI checks remain the merge gate.
+#
+# Required repository settings (one-time setup):
+#   Settings → General → "Allow auto-merge"                           → ON
+#   Settings → Actions → General → "Allow GitHub Actions to create    → ON
+#     and approve pull requests"
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-approve:
+    name: Auto-approve
+    # Skip for Sentinel AI branches — those require human review
+    if: ${{ !startsWith(github.head_ref, 'sentinel/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Approve PR
+        run: |
+          gh pr review "$PR_NUMBER" \
+            --approve \
+            --body "Auto-approved: non-Sentinel branch. CI checks are the merge gate."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
+      - name: Enable auto-merge (squash)
+        run: gh pr merge "$PR_NUMBER" --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
