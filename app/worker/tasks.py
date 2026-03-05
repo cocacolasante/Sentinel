@@ -1281,6 +1281,7 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
     # Track which files+lines the Sentry API tells us are relevant so we can
     # extract the exact function from the repo, not just dump the whole file.
     _sentry_frames: list[dict] = []  # [{filename, lineno, function}]
+    _third_party_lib: str = ""       # top-level lib name when error is in a dependency
 
     if settings.sentry_auth_token and issue_id:
         try:
@@ -1306,7 +1307,7 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
                         issue_context += f"Exception: {exc_type}: {exc_value}\n"
 
                         frames = (exc_val.get("stacktrace") or {}).get("frames", [])
-                        # Last 8 frames — deepest call is most relevant
+                        # Last 8 frames — deepest call is most relevant for context
                         for frame in frames[-8:]:
                             fname = frame.get("filename", "")
                             lineno = frame.get("lineno", 0)
@@ -1331,6 +1332,28 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
 
                             if fname.startswith("app/"):
                                 _sentry_frames.append({"filename": fname, "lineno": lineno})
+
+                        # Also scan frames earlier in the call stack for app/ entry points.
+                        # When the error is deep in a third-party library our code appears
+                        # at the beginning of the stack, not the end.
+                        for frame in (frames[:-8] if len(frames) > 8 else []):
+                            fname = frame.get("filename", "")
+                            if fname.startswith("app/") and not any(
+                                f["filename"] == fname for f in _sentry_frames
+                            ):
+                                _sentry_frames.append(
+                                    {"filename": fname, "lineno": frame.get("lineno", 0)}
+                                )
+
+                        # Identify the top-level third-party library for caller discovery
+                        if not _third_party_lib:
+                            for frame in reversed(frames):
+                                fname = frame.get("filename", "")
+                                if fname and not fname.startswith("app/") and "/" in fname:
+                                    lib = fname.split("/")[0]
+                                    if lib and lib not in ("", "."):
+                                        _third_party_lib = lib
+                                        break
 
                 # Breadcrumbs — last 10 give execution path leading to the crash
                 for entry in event.get("entries", []):
@@ -1364,6 +1387,35 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
     for fname in issue_params.get("affected_files", []):
         if fname not in _frame_map:
             _frame_map[fname] = []
+
+    # When the error originates entirely in a third-party library and no app/
+    # frames were found (e.g. slack_sdk Socket Mode errors), grep our codebase
+    # for files that import that library — those are the entry points where we
+    # can add resilience improvements.
+    if not _frame_map and _third_party_lib:
+        try:
+            grep_result = subprocess.run(
+                [
+                    "grep", "-rl",
+                    _third_party_lib,
+                    f"{_CODE_ROOT}/app",
+                    "--include=*.py",
+                ],
+                capture_output=True, text=True, timeout=10,
+            )
+            for fpath in grep_result.stdout.strip().split("\n")[:4]:
+                fpath = fpath.strip()
+                if fpath:
+                    rel = fpath.replace(f"{_CODE_ROOT}/", "")
+                    if rel not in _frame_map:
+                        _frame_map[rel] = []
+            if _frame_map:
+                logger.info(
+                    "No app/ frames found; using %d caller file(s) for lib=%s",
+                    len(_frame_map), _third_party_lib,
+                )
+        except Exception as exc:
+            logger.warning("Could not grep for library callers (%s): %s", _third_party_lib, exc)
 
     file_context = ""
     for fname, linenos in _frame_map.items():
@@ -1423,10 +1475,13 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
 
         context_block = f"\nStack trace:\n{issue_context}" if issue_context else ""
         file_block = file_context if file_context else ""
+        available_files = list(_frame_map.keys())
+        files_list = "\n".join(f"  - {f}" for f in available_files) if available_files else "  (none)"
         prompt = (
             f"You are an AI assistant that investigates and fixes software bugs reported in Sentry.\n\n"
             f"Issue: {title}\nLevel: {level}\nProject: {project}{context_block}{file_block}\n\n"
-            "Analyze this error and decide if it can be fixed with a targeted, surgical code patch.\n"
+            f"Source files available for patching:\n{files_list}\n\n"
+            "Analyze this error and decide if it can be fixed with a targeted code patch.\n"
             "Respond with ONLY a JSON object — no markdown, no explanation:\n"
             "{\n"
             '  "fixable": true/false,\n'
@@ -1439,9 +1494,18 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
             '  "summary": "human-readable summary of analysis and what was done"\n'
             "}\n\n"
             "Rules:\n"
-            "- fixable=true only when you have HIGH confidence the patch will resolve the issue\n"
+            "- fixable=true for direct bug fixes AND for resilience improvements such as:\n"
+            "    * adding retry / reconnection logic for transient network failures\n"
+            "    * catching and suppressing expected exceptions from third-party libraries\n"
+            "    * adding log filters to silence noisy SDK errors that are handled internally\n"
+            "    * adding timeouts or backoff where missing\n"
+            "- If the fix is ALREADY present in the source files above, set fixable=false,\n"
+            "  resolve_in_sentry=true, and explain in summary that the fix is already deployed\n"
+            "- fixable=false only when the root cause is purely environmental (expired credentials,\n"
+            "  Slack API outage, DNS failure) AND no code improvement would help\n"
+            "- The 'file' field in each patch MUST be one of the paths listed in 'Source files\n"
+            "  available for patching' above — do not invent new file paths\n"
             "- Each 'old' must be an EXACT verbatim string copied from the file content above\n"
-            "- For environmental issues (network, config, credentials): fixable=false\n"
             "- resolve_in_sentry=true only if the patch fully addresses the root cause"
         )
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
