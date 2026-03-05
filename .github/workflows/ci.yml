@@ -24,6 +24,10 @@ jobs:
       - name: Check for code errors
         run: ruff check .
 
+      - name: Check code formatting
+        run: ruff format --check .
+        continue-on-error: true
+
   # ── Job 2: Test ────────────────────────────────────────────────────────────
   test:
     name: Test
@@ -59,7 +63,7 @@ jobs:
         run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing
+        run: pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=20
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

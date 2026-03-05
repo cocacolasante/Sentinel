@@ -27,6 +27,7 @@ from app.config import get_settings
 # ── Published Anthropic pricing (USD per 1M tokens, 2025) ─────────────────────
 # Update these when Anthropic changes rates.
 PRICING: dict[str, dict[str, float]] = {
+    "claude-opus-4-6":            {"input": 15.00, "output": 75.00},
     "claude-sonnet-4-6":          {"input": 3.00,  "output": 15.00},
     "claude-haiku-4-5-20251001":  {"input": 0.25,  "output":  1.25},
 }
@@ -220,6 +221,8 @@ class CostTracker:
     @staticmethod
     def _model_token_budget(s, model: str) -> int:
         """Return the per-model daily token budget (0 = unlimited)."""
+        if "opus" in model:
+            return getattr(s, "opus_daily_token_budget", 0)
         if "sonnet" in model:
             return s.sonnet_daily_token_budget
         if "haiku" in model:

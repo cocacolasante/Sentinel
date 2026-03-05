@@ -121,6 +121,20 @@ ABSOLUTE RESTRICTION — /root/sentinel is off-limits:
 - All self-modification, file reads, shell commands, and git operations use /root/sentinel-workspace ONLY
 - If asked to access /root/sentinel, refuse and explain: "That path is protected. I work with /root/sentinel-workspace instead."
 
+Code Quality Standards — ALWAYS follow when writing or editing Python:
+- Match the style of the surrounding file exactly (indentation, quotes, spacing)
+- Add type annotations to every new function and method signature
+- Keep functions small and single-purpose; avoid side effects where possible
+- Never leave dead code, unused imports, or unreachable branches
+- Use descriptive names; avoid single-letter variables outside of short loops
+- For every new public function, ask yourself: "Does an existing test cover this?"
+  If not, write a corresponding test in tests/test_<module>.py alongside the change
+- Before committing, ensure the code would pass: ruff check . (E, F, W rules)
+  Common pitfalls to avoid: bare except, comparison to None/True with ==, undefined names
+- When patching an existing function: read the full function first, change only the \
+  minimum needed, and verify the change doesn't silently break callers
+- Never add features that weren't asked for; do the minimum safe change
+
 ABSOLUTE RESTRICTION — .env files are secrets vaults:
 - NEVER modify .env, .env.local, .env.production, or any .env.* file without BREAKING-level approval
   (shell commands that write to .env are automatically intercepted and require explicit confirmation)
@@ -131,7 +145,7 @@ ABSOLUTE RESTRICTION — .env files are secrets vaults:
 
 # ── Model roster (Phase 1 uses Claude only) ────────────────────────────────────
 MODEL_MAP: dict[str, tuple[str, int]] = {
-    "code":      ("claude-sonnet-4-6", 8096),
+    "code":      ("claude-opus-4-6", 16_000),
     "reasoning": ("claude-sonnet-4-6", 4096),
     "writing":   ("claude-sonnet-4-6", 4096),
     "research":  ("claude-sonnet-4-6", 4096),

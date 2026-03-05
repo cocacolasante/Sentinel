@@ -1,49 +1,60 @@
 auth_enabled: false
+
 server:
   http_listen_port: 3100
   grpc_listen_port: 9096
-  grpc_server_max_concurrent_streams: 100
-  grpc_server_max_recv_msg_size: 4194304
-ingester:
-  lifecycler:
-    address: 127.0.0.1
-    ring:
-      kvstore:
-        store: inmemory
-      replication_factor: 1
-    final_sleep: 0s
-    heartbeat_timeout: 5s
-    heartbeat_interval: 5s
-  wal:
-    enabled: true
-    dir: /loki/wal
-  chunk_idle_period: 5m
-  chunk_retain_period: 30s
-  max_chunk_age: 2h
-  chunk_encoding: snappy
+
+# Run as all-in-one (no frontend/scheduler/querier split)
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+
 schema_config:
   configs:
-  - from: '2024-01-01'
-    store: boltdb-shipper
-    object_store: filesystem
-    schema: v11
-    index:
-      prefix: index_
-      period: 24h
+    - from: 2024-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+    - from: 2026-03-05
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: tsdb_index_
+        period: 24h
+
 storage_config:
   boltdb_shipper:
     active_index_directory: /loki/boltdb-shipper-active
     cache_location: /loki/boltdb-shipper-cache
     shared_store: filesystem
-    index_cache_validity: 5m
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-shipper-active
+    cache_location: /loki/tsdb-shipper-cache
+    shared_store: filesystem
   filesystem:
     directory: /loki/chunks
-  cache_config:
-    enable_fifocache: true
-    default_validity: 1h
-    background:
-      writeback_goroutines: 10
-      writeback_delay: 5s
+
+ingester:
+  wal:
+    enabled: true
+    dir: /loki/wal
+  chunk_idle_period: 1m
+  chunk_retain_period: 10s
+  max_chunk_age: 2h
+  chunk_encoding: snappy
+
 compactor:
   working_directory: /loki/compactor
   shared_store: filesystem
@@ -51,45 +62,22 @@ compactor:
   retention_enabled: true
   retention_delete_delay: 2h
   retention_delete_worker_count: 10
+
 limits_config:
-  enforce_metric_name: false
   reject_old_samples: true
   reject_old_samples_max_age: 168h
   ingestion_rate_mb: 10
   ingestion_burst_size_mb: 15
   max_streams_per_user: 10000
   max_global_streams_per_user: 10000
-  cardinality_limit: 100000
-  max_cache_freshness_per_query: 10m
-  split_queries_by_interval: 24h
   max_query_parallelism: 32
   max_query_lookback: 30d
   max_query_length: 10000h
-  max_query_series: 1000
   retention_period: 720h
+
 chunk_store_config:
   max_look_back_period: 0s
+
 table_manager:
   retention_deletes_enabled: false
   retention_period: 0s
-query_scheduler:
-  max_outstanding_requests_per_tenant: 2048
-  queue_poll_duration: 10ms
-  max_concurrent_requests_per_tenant: 100
-  grpc_client_config:
-    max_recv_msg_size: 4194304
-    max_send_msg_size: 4194304
-    grpc_compression: gzip
-querier:
-  engine: prometheus
-  timeout: 5m
-  metric_names_cache:
-    validity: 5m
-memberlist:
-  node_name: loki
-  bind_port: 7946
-  join_members:
-  - 127.0.0.1:7946
-  retransmit_factor: 4
-  gossip_interval: 1s
-  gossip_nodes: 3
