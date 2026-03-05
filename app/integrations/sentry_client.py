@@ -51,15 +51,18 @@ class SentryClient:
         sort: str = "date",
         stats_period: str | None = None,
     ) -> list[dict]:
-        proj = project or self._project
-        if proj:
-            url = f"{SENTRY_BASE}/projects/{self._org}/{proj}/issues/"
-        else:
-            url = f"{SENTRY_BASE}/organizations/{self._org}/issues/"
+        # The org-level endpoint supports statsPeriod + sort=freq; the project-level
+        # endpoint does not.  Always use the org endpoint and optionally scope by project.
+        url = f"{SENTRY_BASE}/organizations/{self._org}/issues/"
 
         params: dict = {"query": query, "limit": limit, "sort": sort}
         if stats_period:
             params["statsPeriod"] = stats_period
+
+        # NOTE: Sentry's project filter expects a numeric project ID, not a slug.
+        # Only pass it if the caller explicitly provides a numeric project ID.
+        if project and str(project).isdigit():
+            params["project"] = project
 
         with httpx.Client(timeout=15) as client:
             r = client.get(url, headers=self._headers(), params=params)

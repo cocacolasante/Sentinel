@@ -44,7 +44,10 @@ def ingest_and_triage_top_errors(stats_period: str = "6h", limit: int = 10) -> d
 
     # ── 1. Fetch top errors by frequency in the stats window ──────────────────
     try:
+        # Use org-level endpoint (no project filter) so we get all projects.
+        # sort=freq + statsPeriod ranks by event count in the time window.
         issues = client._list_issues_sync(
+            project=None,  # org-wide — project slug not supported on this endpoint
             query="is:unresolved",
             limit=limit,
             sort="freq",
