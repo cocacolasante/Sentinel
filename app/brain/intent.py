@@ -22,6 +22,7 @@ Intents:
   knowledge_graph  — query or update the personal knowledge graph (projects, repos, servers, clients, ideas)
   chat             — general reasoning / writing / coding (no external action)
   arch_advisor     — analyse system architecture and produce an evolution report
+  data_intelligence — analyze time series data, detect anomalies, discover patterns across systems
 """
 
 import json
@@ -110,6 +111,13 @@ Intent-specific param examples:
   bug_hunt:       {{"hours": 24, "focus": "auth module"}}
   arch_advisor:   {{"target": "Sentinel AI platform", "focus": "scalability", "description": "optional free-text description if analysing an external system", "email": ""}}
   knowledge_graph: {{"action": "add" | "connect" | "show" | "search" | "stats" | "visualize", "label": "Project" | "Repo" | "Server" | "Client" | "Idea" | "Person" | "Tech", "name": "MyApp", "from": "SentinelAI", "to": "sentinel-repo", "relationship": "USES", "query": "search term"}}
+  data_intelligence: {{
+      "action": "analyze" | "anomalies" | "trends" | "patterns" | "overview",
+      "metric": "cpu" | "memory" | "tasks" | "errors" | "api_usage" | "redis" | "celery" | "network" | "disk" | "milestones" | "auto",
+      "window": "1h" | "6h" | "24h" | "7d" | "30d",
+      "threshold": 2.5,
+      "promql": "<optional raw PromQL expression>"
+    }}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
@@ -197,6 +205,18 @@ Routing guidance:
   - "rebuild project", "re-run the build", "try building again", "restart the build" → project_build
   - "project status", "how is the build going", "check project ...", "is ... done building" → project_status
   - "list my projects", "show projects", "what projects exist", "all projects" → project_list
+  - "analyze API usage", "API usage trends", "show request trends", "traffic analysis" → data_intelligence with metric=tasks, action=trends
+  - "detect anomalies", "find anomalies in metrics", "any spikes in CPU", "unusual activity" → data_intelligence with action=anomalies, metric=cpu (or extracted metric)
+  - "server metrics analysis", "analyze server metrics", "how is the server performing" → data_intelligence with metric=cpu, window=24h
+  - "analyze memory usage", "memory trends", "memory over time" → data_intelligence with metric=memory
+  - "task activity patterns", "when are tasks running", "task throughput" → data_intelligence with metric=tasks
+  - "error rate trends", "analyze errors over time", "error spike" → data_intelligence with metric=errors
+  - "redis performance", "redis ops trends" → data_intelligence with metric=redis_ops
+  - "celery task trends", "worker activity" → data_intelligence with metric=celery_tasks
+  - "show patterns", "discover patterns", "time patterns", "usage patterns", "when is it busiest", "peak usage times" → data_intelligence with action=patterns
+  - "system overview", "how is everything performing", "health trends", "dashboard analysis" → data_intelligence with metric=auto
+  - "what's causing the spike", "why did CPU jump", "investigate the anomaly", "correlate metrics" → data_intelligence with action=anomalies
+  - "traffic spike Tuesday", "Tuesday pattern", "weekly patterns", "day of week analysis" → data_intelligence with action=patterns, window=7d
   - "add project X", "add repo X", "add node X", "register project X" → knowledge_graph with action=add, label=<type>, name=X
   - "connect X to Y", "link X to Y", "X uses Y", "X runs on Y" → knowledge_graph with action=connect, from=X, to=Y, relationship=<inferred>
   - "show relationships for X", "what is X connected to", "graph for X" → knowledge_graph with action=show, name=X

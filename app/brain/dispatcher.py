@@ -95,6 +95,7 @@ def _build_skill_registry():
     from app.skills.arch_advisor_skill import ArchAdvisorSkill
     from app.skills.project_skill import ProjectSkill
     from app.skills.knowledge_graph_skill import KnowledgeGraphSkill
+    from app.skills.data_intelligence_skill import DataIntelligenceSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -160,6 +161,8 @@ def _build_skill_registry():
     reg.register(ProjectSkill())
     # Knowledge Graph — map projects, repos, servers, clients, ideas
     reg.register(KnowledgeGraphSkill())
+    # Data Intelligence — time series analysis, anomaly detection, pattern discovery
+    reg.register(DataIntelligenceSkill())
     return reg
 
 
