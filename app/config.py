@@ -152,6 +152,8 @@ class Settings(BaseSettings):
     slack_alert_channel: str = "brain-alerts"
     # Slack channel for AI action milestones (every confirmed write action).
     slack_milestone_channel: str = "sentinel-milestones"
+    # Slack channel for task lifecycle updates (created / updated / completed / failed).
+    slack_tasks_channel: str = "sentinel-tasks"
     # Per-session request rate limits.
     rate_limit_per_minute: int = 20
     rate_limit_per_hour: int = 200
