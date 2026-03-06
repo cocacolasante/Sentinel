@@ -5,11 +5,11 @@ server:
   grpc_server_max_connection_idle: 1h30m
   grpc_server_max_connection_age: 1h30m
   grpc_server_max_connection_age_grace: 10m
-  grpc_server_keepalive_time: 60s
-  grpc_server_keepalive_timeout: 10s
+  grpc_server_keepalive_time: 30s
+  grpc_server_keepalive_timeout: 5s
   grpc_server_min_time_between_pings: 10s
   grpc_server_ping_without_stream_allowed: true
-  grpc_server_max_concurrent_streams: 100
+  grpc_server_max_concurrent_streams: 200
   http_server_read_timeout: 30s
   http_server_write_timeout: 30s
 common:
@@ -79,10 +79,22 @@ limits_config:
 frontend_worker:
   scheduler_address: ''
   frontend_address: 127.0.0.1:9096
+  grpc_client_config:
+    max_recv_msg_size: 104857600
+    max_send_msg_size: 104857600
+    grpc_compression: gzip
+    backoff_config:
+      min_period: 100ms
+      max_period: 10s
+      max_retries: 3
+    keepalive_params:
+      keepalive_time: 10s
+      keepalive_timeout: 3s
+      permit_without_stream: true
 query_range:
   parallelise_shardable_queries: false
   cache_results: true
-  max_retries: 3
+  max_retries: 5
 querier:
   engine:
     timeout: 5m
