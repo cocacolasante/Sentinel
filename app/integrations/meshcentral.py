@@ -55,7 +55,7 @@ class MeshCentralClient:
         self._session_cookie_name: str = ""
 
     def is_configured(self) -> bool:
-        return bool(self.url and self.username and self.password)
+        return bool(self.public_url and self.username and self.password)
 
     # ── Authentication ────────────────────────────────────────────────────────
 
@@ -330,17 +330,17 @@ class MeshCentralClient:
         """
         if os_type.lower() == "linux":
             return (
-                f'sudo sh <(curl -fsSL "{self.url}/mesh?id={mesh_id}&installflags=2") '
-                f'|| wget -qO- "{self.url}/mesh?id={mesh_id}&installflags=2" | sudo bash'
+                f'sudo sh <(curl -fsSL "{self.public_url}/mesh?id={mesh_id}&installflags=2") '
+                f'|| wget -qO- "{self.public_url}/mesh?id={mesh_id}&installflags=2" | sudo bash'
             )
         return (
             f"powershell -Command \"& {{Invoke-WebRequest "
-            f"-Uri '{self.url}/mesh?id={mesh_id}&installflags=2' | iex}}\""
+            f"-Uri '{self.public_url}/mesh?id={mesh_id}&installflags=2' | iex}}\""
         )
 
     def get_agent_install_script_url(self, mesh_id: str) -> str:
         """Return the direct URL for the Linux/amd64 agent install script."""
-        return f"{self.url}/meshagents?id={mesh_id}&installflags=2&meshinstall=6"
+        return f"{self.public_url}/meshagents?id={mesh_id}&installflags=2&meshinstall=6"
 
     # ── WebSocket Event Stream ────────────────────────────────────────────────
 
