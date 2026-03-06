@@ -709,12 +709,13 @@ async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
         _mark_bug_task(task_id, "failed")
     else:
         slack_msg = (
-            f"{badge} *Bug Hunt — Investigated (no patch)* · task #{task_id}\n"
+            f"{badge} *Bug Hunt — Needs Manual Fix* · task #{task_id}\n"
             f"*Service:* {service} · {count}x | *Severity:* {severity}\n"
             f"*Root cause:* {root_cause}\n"
-            f"*Reason no patch:* {fix_plan.get('summary', 'See task for details')}"
+            f"*Why not auto-patched:* {fix_plan.get('summary', 'See task for details')}\n"
+            f"_Task remains open on the board for manual review._"
         )
-        _mark_bug_task(task_id, "done")
+        _mark_bug_task(task_id, "pending")
 
     post_alert_sync(slack_msg)
 
