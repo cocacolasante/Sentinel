@@ -80,6 +80,50 @@ CREATE TABLE IF NOT EXISTS user_profile (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ── RMM: Managed devices (MeshCentral inventory) ────────────────────────────────
+CREATE TABLE IF NOT EXISTS rmm_devices (
+    node_id         TEXT        PRIMARY KEY,
+    name            TEXT        NOT NULL,
+    hostname        TEXT,
+    ip_address      TEXT,
+    os_name         TEXT,
+    agent_version   TEXT,
+    mesh_id         TEXT,
+    group_name      TEXT,       -- production | staging | dev
+    project         TEXT,       -- sentinel | language-tutor | n8n | etc.
+    is_online       BOOLEAN     NOT NULL DEFAULT FALSE,
+    cpu_usage       FLOAT,
+    memory_usage    FLOAT,
+    disk_usage      FLOAT,
+    uptime_seconds  BIGINT,
+    last_seen       TIMESTAMPTZ,
+    tags            JSONB       NOT NULL DEFAULT '[]',
+    metadata        JSONB       NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rmm_devices_online  ON rmm_devices (is_online);
+CREATE INDEX IF NOT EXISTS idx_rmm_devices_group   ON rmm_devices (group_name);
+CREATE INDEX IF NOT EXISTS idx_rmm_devices_project ON rmm_devices (project);
+
+-- ── RMM: Event log (agent events, alerts, command results) ───────────────────
+CREATE TABLE IF NOT EXISTS rmm_events (
+    id              BIGSERIAL   PRIMARY KEY,
+    node_id         TEXT,
+    event_type      TEXT        NOT NULL,
+    severity        TEXT        NOT NULL DEFAULT 'info'
+                                CHECK (severity IN ('critical', 'high', 'medium', 'low', 'info')),
+    hostname        TEXT,
+    project         TEXT,
+    group_name      TEXT,
+    details         JSONB       NOT NULL DEFAULT '{}',
+    correlation_id  TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rmm_events_node     ON rmm_events (node_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rmm_events_type     ON rmm_events (event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rmm_events_severity ON rmm_events (severity, created_at DESC);
+
 -- ── PAI: Session summaries (warm memory tier) ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS session_summaries (
     id          BIGSERIAL   PRIMARY KEY,

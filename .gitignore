@@ -43,6 +43,7 @@ logs/
 
 setup.md
 slack_setup.md
+rmmskill.md
 
 # Local dev overrides — never deploy to production
 docker-compose.override.yml

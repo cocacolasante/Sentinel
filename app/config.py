@@ -203,6 +203,15 @@ class Settings(BaseSettings):
     auto_create_remediation_tasks: bool = True
     error_log_path: str = "/tmp/sentinel_errors.json"
 
+    # ── MeshCentral RMM ─────────────────────────────────────────
+    meshcentral_url: str = ""           # e.g. https://mesh.sentinelai.cloud
+    meshcentral_user: str = ""
+    meshcentral_password: str = ""
+    meshcentral_domain: str = ""        # leave blank for default domain
+    meshcentral_default_mesh_id: str = ""  # mesh to join newly-provisioned servers
+    slack_rmm_prod_channel: str = "rmm-production"
+    slack_rmm_dev_channel: str = "rmm-dev-staging"
+
     # ── Neo4j Knowledge Graph ───────────────────────────────────
     neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"

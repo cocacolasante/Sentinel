@@ -20,6 +20,8 @@ Intents:
   project_status   — check the status of a project
   project_list     — list all projects
   knowledge_graph  — query or update the personal knowledge graph (projects, repos, servers, clients, ideas)
+  rmm_read         — list managed servers, check device status/health, show RMM events or incidents
+  rmm_manage       — run commands on remote servers, restart services/containers, install or upgrade agents, reboot servers
   chat             — general reasoning / writing / coding (no external action)
   arch_advisor     — analyse system architecture and produce an evolution report
   data_intelligence — analyze time series data, detect anomalies, discover patterns across systems
@@ -118,6 +120,8 @@ Intent-specific param examples:
       "threshold": 2.5,
       "promql": "<optional raw PromQL expression>"
     }}
+  rmm_read:       {{"action": "list" | "get" | "status" | "events" | "incidents" | "inventory" | "meshes", "node_id": "", "name": "", "group": "production" | "staging" | "dev", "project": "", "severity": "", "hours": 24, "limit": 20}}
+  rmm_manage:     {{"action": "run_command" | "restart_service" | "restart_container" | "reboot" | "upgrade_agent" | "install_agent", "node_id": "", "name": "", "command": "", "service": "", "container": "", "host": "", "mesh_id": "", "username": "ubuntu"}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
@@ -216,6 +220,19 @@ Routing guidance:
   - "show patterns", "discover patterns", "time patterns", "usage patterns", "when is it busiest", "peak usage times" → data_intelligence with action=patterns
   - "system overview", "how is everything performing", "health trends", "dashboard analysis" → data_intelligence with metric=auto
   - "what's causing the spike", "why did CPU jump", "investigate the anomaly", "correlate metrics" → data_intelligence with action=anomalies
+  - "list managed servers", "show all agents", "which servers are online", "RMM inventory", "show my infrastructure", "list rmm devices", "which servers are offline" → rmm_read with action=list
+  - "show RMM status", "infrastructure health", "server health summary", "how many servers online" → rmm_read with action=status
+  - "RMM events", "recent agent events", "server events" → rmm_read with action=events
+  - "show incidents", "any server incidents", "infrastructure incidents", "recent alerts" → rmm_read with action=incidents
+  - "show production servers", "list staging servers", "list dev servers" → rmm_read with action=list, group=<extracted>
+  - "infrastructure report", "server inventory report" → rmm_read with action=inventory
+  - "show meshes", "list mesh groups", "MeshCentral meshes" → rmm_read with action=meshes
+  - "restart service X on server Y", "restart nginx on server Y" → rmm_manage with action=restart_service, service=X, node_id=Y
+  - "restart container X on server Y", "restart docker container X" → rmm_manage with action=restart_container, container=X, node_id=Y
+  - "run command X on server Y", "execute X on Y", "run shell command" → rmm_manage with action=run_command, command=X, node_id=Y
+  - "reboot server X", "restart server X" → rmm_manage with action=reboot, node_id=X
+  - "upgrade agent on X", "update meshcentral agent" → rmm_manage with action=upgrade_agent, node_id=X
+  - "install meshcentral agent on X", "add server X to RMM" → rmm_manage with action=install_agent, host=X
   - "traffic spike Tuesday", "Tuesday pattern", "weekly patterns", "day of week analysis" → data_intelligence with action=patterns, window=7d
   - "add project X", "add repo X", "add node X", "register project X" → knowledge_graph with action=add, label=<type>, name=X
   - "connect X to Y", "link X to Y", "X uses Y", "X runs on Y" → knowledge_graph with action=connect, from=X, to=Y, relationship=<inferred>
