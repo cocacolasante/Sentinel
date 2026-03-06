@@ -567,7 +567,7 @@ class Dispatcher:
 
     @staticmethod
     async def _dm_approval_request(task_id: str, pending: dict, skill) -> None:
-        """DM the owner and post to brain-alerts when a write action needs confirmation."""
+        """DM the owner and post to sentinel-alerts when a write action needs confirmation."""
         try:
             from app.integrations.slack_notifier import post_dm, post_alert
 
@@ -1351,7 +1351,7 @@ class Dispatcher:
                     "  2. Rebuild the `sentinel-brain` Docker image (~45–90 s)\n"
                     "  3. Hot-swap the running brain container\n\n"
                     "⏱️ The brain will be offline for ~60 seconds during the restart.\n"
-                    "Watch #brain-alerts for the deploy status."
+                    "Watch #sentinel-alerts for the deploy status."
                 )
 
             return f"[Unknown pending action: {action}]"

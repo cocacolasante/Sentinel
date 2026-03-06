@@ -10,7 +10,7 @@ Pipeline:
   3. Cluster similar errors by normalised message fingerprint
   4. Rank clusters by frequency; take top MAX_CLUSTERS
   5. Analyse each cluster with Claude Haiku (root cause + fix proposal)
-  6. Post a structured Slack report to brain-alerts
+  6. Post a structured Slack report to sentinel-alerts
   7. Auto-create board tasks for high-severity, auto-fixable bugs
 """
 

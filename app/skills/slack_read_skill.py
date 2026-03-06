@@ -42,7 +42,7 @@ class SlackReadSkill(BaseSkill):
     name = "slack_read"
     description = (
         "Read Slack channel history, DMs, or search messages. "
-        "Can fetch recent messages from brain-alerts, brain-evals, "
+        "Can fetch recent messages from sentinel-alerts, sentinel-evals, "
         "sentinel-milestones, rmm-production, rmm-dev-staging, or any channel."
     )
     trigger_intents = ["slack_read"]
@@ -75,7 +75,7 @@ class SlackReadSkill(BaseSkill):
         return AsyncWebClient(token=get_settings().slack_bot_token)
 
     async def _resolve_channel_id(self, client, name: str) -> str | None:
-        """Resolve a channel name like 'brain-alerts' to its Slack channel ID."""
+        """Resolve a channel name like 'sentinel-alerts' to its Slack channel ID."""
         # Strip leading #
         name = name.lstrip("#")
         try:
@@ -113,7 +113,7 @@ class SlackReadSkill(BaseSkill):
         channel_name = (
             params.get("channel")
             or params.get("channel_name")
-            or "brain-alerts"
+            or "sentinel-alerts"
         )
         limit = min(int(params.get("limit", 20)), 100)
         oldest = params.get("oldest", "")  # epoch string

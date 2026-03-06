@@ -289,7 +289,7 @@ class CostTracker:
         try:
             from slack_sdk import WebClient  # sync client — safe in thread pool
 
-            channel = s.slack_alert_channel or "brain-alerts"
+            channel = s.slack_alert_channel or "sentinel-alerts"
             WebClient(token=s.slack_bot_token).chat_postMessage(
                 channel=channel,
                 text=text,

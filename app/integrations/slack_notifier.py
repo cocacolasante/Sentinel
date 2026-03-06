@@ -24,7 +24,7 @@ async def post_alert(text: str, channel: str | None = None) -> bool:
         logger.warning("Slack bot token not configured — skipping notification")
         return False
 
-    target = channel or settings.slack_alert_channel or "brain-alerts"
+    target = channel or settings.slack_alert_channel or "sentinel-alerts"
     try:
         from slack_sdk.web.async_client import AsyncWebClient
 
@@ -32,6 +32,13 @@ async def post_alert(text: str, channel: str | None = None) -> bool:
         resp = await client.chat_postMessage(channel=target, text=text, mrkdwn=True)
         if resp.get("ok"):
             logger.info("Slack alert posted | channel=%s", target)
+            ts = resp.get("ts")
+            if ts:
+                try:
+                    from app.memory.redis_client import RedisMemory
+                    RedisMemory().client.setex(f"sentinel:msg:{target}:{ts}", 86400, text[:500])
+                except Exception:
+                    pass
             return True
         logger.error("Slack alert failed: %s", resp.get("error"))
         return False
@@ -109,7 +116,7 @@ def post_alert_sync(text: str, channel: str | None = None) -> bool:
     if not settings.slack_bot_token:
         return False
 
-    target = channel or settings.slack_alert_channel or "brain-alerts"
+    target = channel or settings.slack_alert_channel or "sentinel-alerts"
     try:
         from slack_sdk import WebClient
 
@@ -118,6 +125,14 @@ def post_alert_sync(text: str, channel: str | None = None) -> bool:
             text=text,
             mrkdwn=True,
         )
+        if resp.get("ok"):
+            ts = resp.get("ts")
+            if ts:
+                try:
+                    from app.memory.redis_client import RedisMemory
+                    RedisMemory().client.setex(f"sentinel:msg:{target}:{ts}", 86400, text[:500])
+                except Exception:
+                    pass
         return bool(resp.get("ok"))
     except Exception as exc:
         logger.error("Slack alert (sync) exception: %s", exc)

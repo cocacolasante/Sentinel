@@ -37,6 +37,9 @@ logging.getLogger("slack_sdk.socket_mode.aiohttp").addFilter(
 
 dispatch = Dispatcher()
 
+# Bot user ID — fetched once at startup; used to detect thread replies to bot messages
+_bot_user_id: str = ""
+
 # Phrases that trigger the built-in skills/help listing (no LLM call)
 _HELP_PHRASES = {
     "help",
@@ -245,8 +248,21 @@ def _build_app() -> AsyncApp:
     )
 
     @app.event("message")
-    async def handle_dm(event, say, client):
-        if event.get("channel_type") == "im" and not event.get("subtype"):
+    async def handle_message(event, say, client):
+        subtype = event.get("subtype")
+        channel_type = event.get("channel_type")
+        thread_ts = event.get("thread_ts")
+        is_bot = bool(event.get("bot_id"))
+
+        # Thread reply to a bot message in any channel
+        if thread_ts and not is_bot and not subtype:
+            parent_user = event.get("parent_user_id", "")
+            if parent_user == _bot_user_id and _bot_user_id:
+                await _handle_thread_reply(event, client)
+                return
+
+        # Direct message (existing behaviour)
+        if channel_type == "im" and not subtype:
             await _handle(event, say, client)
 
     @app.event("app_mention")
@@ -256,10 +272,65 @@ def _build_app() -> AsyncApp:
     return app
 
 
+async def _handle_thread_reply(event: dict, client) -> None:
+    """Process a user reply in a thread where the parent message was from this bot."""
+    channel = event["channel"]
+    thread_ts = event["thread_ts"]
+    user_text = event.get("text", "").strip()
+    if not user_text:
+        return
+
+    # Enrich with parent message context from Redis (stored when bot originally posted)
+    try:
+        from app.memory.redis_client import RedisMemory
+        _redis = RedisMemory()
+        parent_ctx = _redis.client.get(f"sentinel:msg:{channel}:{thread_ts}") or ""
+        parent_text = parent_ctx if isinstance(parent_ctx, str) else parent_ctx.decode()
+    except Exception:
+        parent_text = ""
+
+    augmented = user_text
+    if parent_text:
+        augmented = f"{user_text}\n\n[Context — Sentinel's original message: {parent_text[:400]}]"
+
+    session_id = _session_id(event)
+
+    # Store Slack context so background tasks post back to this thread
+    try:
+        from app.memory.redis_client import RedisMemory
+        RedisMemory().set_slack_context(session_id, channel, thread_ts)
+    except Exception:
+        pass
+
+    try:
+        ack_resp = await client.chat_postMessage(
+            channel=channel, thread_ts=thread_ts, text="✅ Received — 🧠 thinking..."
+        )
+        ack_ts = ack_resp.get("ts")
+    except Exception as exc:
+        logger.warning("Could not send thread reply ACK: %s", exc)
+        return
+
+    try:
+        result = await dispatch.process(augmented, session_id)
+        reply = _format_reply(result, session_id=session_id)
+    except Exception as exc:
+        logger.error("Thread reply dispatch error: %s", exc, exc_info=True)
+        reply = f"❌ *Error* — `{type(exc).__name__}: {exc}`"
+
+    try:
+        await client.chat_update(channel=channel, ts=ack_ts, text=reply)
+    except Exception as exc:
+        logger.warning("chat_update failed for thread reply: %s", exc)
+        await client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=reply)
+
+
 # ── Socket Mode launcher ──────────────────────────────────────────────────────
 
 
 async def start_socket_mode() -> None:
+    global _bot_user_id
+
     if not settings.slack_app_token or not settings.slack_bot_token:
         logger.warning(
             "Slack tokens not configured — bot will not start. "
@@ -268,6 +339,15 @@ async def start_socket_mode() -> None:
         return
 
     slack_app = _build_app()
+
+    # Fetch bot user ID once so thread-reply handler can identify bot messages
+    try:
+        from slack_sdk.web.async_client import AsyncWebClient
+        resp = await AsyncWebClient(token=settings.slack_bot_token).auth_test()
+        _bot_user_id = resp.get("user_id", "")
+        logger.info("Slack bot user ID: %s", _bot_user_id)
+    except Exception as exc:
+        logger.warning("Could not fetch bot user ID: %s", exc)
     backoff = 5  # seconds; doubles on each consecutive failure, caps at 300
 
     while True:

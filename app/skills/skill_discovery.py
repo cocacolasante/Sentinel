@@ -18,7 +18,10 @@ import json
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
-_DISCOVERY_SYSTEM = """You are a skill gap analyzer for an AI assistant.
+_DISCOVERY_SYSTEM = """You are a skill gap analyzer for Sentinel, an AI assistant platform.
+You are analyzing Sentinel's own skill registry. The codebase lives at /root/sentinel-workspace on GitHub at cocacolasante/Sentinel.
+Do NOT ask where the repo is — all skills are written directly to app/skills/{skill_name}.py in this workspace.
+
 Given a user request and a list of available skills, determine:
 1. Which existing skill (if any) best handles this request (may be partial match)
 2. Whether a new skill needs to be built
@@ -122,7 +125,7 @@ class SkillDiscoverySkill(BaseSkill):
             # Auto-build: create a workspace task to scaffold + commit the new skill
             skill_file = f"app/skills/{skill_name}.py"
             build_cmds = [
-                "cd /root/sentinel-workspace && git pull",
+                "cd /root/sentinel-workspace && git checkout main && git pull origin main",
                 (
                     f"cat > {skill_file} << 'PYEOF'\n"
                     f'"""\n{skill_desc}\nIntegration: {integration}\n"""\n\n'
@@ -156,7 +159,9 @@ class SkillDiscoverySkill(BaseSkill):
                     "description": (
                         f"Auto-generated skill scaffold for: {skill_desc}\n"
                         f"Integration needed: {integration}\n"
-                        f"Implementation notes: {hints}"
+                        f"Implementation notes: {hints}\n"
+                        f"Working directory: /root/sentinel-workspace (Sentinel's own codebase on GitHub at cocacolasante/Sentinel). "
+                        f"Do NOT ask where the repo is — write directly to app/skills/{skill_name}.py in this workspace."
                     ),
                     "priority": 5,
                     "approval_level": 1,
