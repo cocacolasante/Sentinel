@@ -324,20 +324,17 @@ def _analyze_cluster(cluster: dict, hours: int) -> dict | None:
 
 def _create_fix_task(cluster: dict, analysis: dict) -> int | None:
     """
-    Create a board task only for auto-fixable bugs. Returns task_id or None.
-    Noise bugs and non-auto-fixable bugs are skipped — no task is created.
+    Create a board task for every non-noise bug. Returns task_id or None.
+    Priority is mapped from LLM severity. All tasks use approval_level=1 (auto-execute).
     """
     from app.db import postgres
 
     if analysis.get("is_noise"):
         return None
 
-    auto_fixable = bool(analysis.get("auto_fixable"))
-    if not auto_fixable:
-        return None
-
     severity = analysis.get("severity", "low")
-    approval_level = 1
+    priority_num = {"critical": 5, "high": 4, "medium": 3, "low": 2}.get(severity, 2)
+    priority_str = "urgent" if severity == "critical" else ("high" if severity == "high" else severity)
 
     title = f"[BugHunt] {cluster['service']} — {cluster['fingerprint'][:80]}"
     description = (
@@ -348,24 +345,22 @@ def _create_fix_task(cluster: dict, analysis: dict) -> int | None:
         f"Root cause: {analysis.get('root_cause', '')}\n"
         f"Affected component: {analysis.get('affected_component', '')}\n"
         f"Proposed fix: {analysis.get('proposed_fix', '')}\n"
-        f"Fix complexity: {analysis.get('fix_complexity', '')}\n\n"
+        f"Fix complexity: {analysis.get('fix_complexity', '')}\n"
+        f"Auto-fixable: {analysis.get('auto_fixable', False)}\n\n"
         f"Sample log lines:\n" + "\n".join(cluster["lines"][:3])
     )
     try:
-        priority_num = {"critical": 5, "high": 4, "medium": 3, "low": 2}.get(severity, 2)
-        priority_str = "high" if severity == "critical" else severity
         row = postgres.execute_one(
             """
             INSERT INTO tasks (title, description, status, priority, priority_num,
                                approval_level, source, tags)
-            VALUES (%s, %s, 'pending', %s, %s, %s, 'bug-hunter', %s::jsonb)
+            VALUES (%s, %s, 'pending', %s, %s, 1, 'bug-hunter', %s::jsonb)
             RETURNING id
             """,
             (
                 title, description,
                 priority_str,
                 priority_num,
-                approval_level,
                 json.dumps(["bug-hunter", cluster["service"], severity]),
             ),
         )
@@ -435,10 +430,302 @@ def _build_slack_report(
         lines.append(f"\n_Noise filtered: {noise_summary}_")
 
     # Footer
-    task_note = f" · {len(tasks_created)} fix task(s) queued" if tasks_created else ""
-    lines.append(f"\n_Next scheduled hunt in 6h{task_note}_")
+    if tasks_created:
+        lines.append(f"\n📋 *{len(tasks_created)} task(s) created* and investigations dispatched — watch for fix PRs in #sentinel-alerts")
+    lines.append(f"_Next scheduled hunt in 6h_")
 
     return "\n".join(lines)
+
+
+# ── Investigate & fix individual bug ─────────────────────────────────────────
+
+@shared_task(
+    name="app.worker.bug_hunter_tasks.investigate_and_fix_bug",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=60,
+    soft_time_limit=300,
+    time_limit=360,
+)
+def investigate_and_fix_bug(self, task_id: int, finding: dict) -> dict:
+    """
+    Investigate and attempt to fix a single bug-hunt finding.
+    Called automatically after _create_fix_task for every non-noise bug.
+
+    finding keys: service, fingerprint, count, lines, analysis
+      analysis keys: severity, root_cause, affected_component, proposed_fix,
+                     fix_snippet, fix_complexity, auto_fixable
+    """
+    import asyncio as _asyncio
+
+    try:
+        return _asyncio.run(_investigate_and_fix_bug(task_id, finding))
+    except Exception as exc:
+        logger.error("investigate_and_fix_bug failed task=%s: %s", task_id, exc, exc_info=True)
+        _mark_bug_task(task_id, "failed")
+        return {"error": str(exc)}
+
+
+def _mark_bug_task(task_id: int, status: str) -> None:
+    try:
+        from app.db import postgres
+        postgres.execute(
+            "UPDATE tasks SET status=%s, updated_at=NOW() WHERE id=%s",
+            (status, task_id),
+        )
+    except Exception as exc:
+        logger.warning("Could not update bug task %s to %s: %s", task_id, status, exc)
+
+
+async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
+    """
+    1. Mark task in_progress + post Slack start notification.
+    2. Resolve affected source file(s) from LLM analysis.
+    3. Ask LLM (Sonnet) to produce a precise patch given the source + context.
+    4. Apply patches → commit on sentinel/bughunt-{task_id} branch → push → open PR.
+    5. Post Slack summary. Mark task done / failed.
+    """
+    import asyncio
+    import os
+    import re
+
+    import anthropic
+
+    from app.config import get_settings
+    from app.integrations.slack_notifier import post_alert_sync
+
+    settings = get_settings()
+    analysis = finding.get("analysis", {})
+    service = finding.get("service", "unknown")
+    fingerprint = finding.get("fingerprint", "")
+    count = finding.get("count", 0)
+    log_lines = finding.get("lines", [])
+
+    severity = analysis.get("severity", "low")
+    root_cause = analysis.get("root_cause", "")
+    affected_component = analysis.get("affected_component", "")
+    proposed_fix = analysis.get("proposed_fix", "")
+    fix_snippet = analysis.get("fix_snippet", "")
+    auto_fixable = analysis.get("auto_fixable", False)
+
+    badge = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(severity, "🟢")
+
+    # ── 1. Mark in_progress + notify ─────────────────────────────────────────
+    _mark_bug_task(task_id, "in_progress")
+    post_alert_sync(
+        f"{badge} *Bug Hunt — Investigating* · task #{task_id}\n"
+        f"*Service:* {service} · {count}x\n"
+        f"*Pattern:* `{fingerprint[:100]}`\n"
+        f"*Root cause:* {root_cause}"
+    )
+
+    # ── 2. Resolve source file from affected_component ────────────────────────
+    _CODE_ROOT = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
+
+    # affected_component may be "app/skills/foo.py:42" or "app.skills.foo:method"
+    candidate_files: list[str] = []
+
+    # Pattern: path/to/file.py[:line]
+    path_match = re.search(r"(app/[\w/]+\.py)", affected_component)
+    if path_match:
+        candidate_files.append(path_match.group(1))
+
+    # Pattern: app.module.submodule → app/module/submodule.py
+    mod_match = re.search(r"(app(?:\.\w+)+)", affected_component)
+    if mod_match and not candidate_files:
+        mod_path = mod_match.group(1).replace(".", "/") + ".py"
+        candidate_files.append(mod_path)
+
+    # Grep codebase for the service name if no file found yet
+    if not candidate_files and service not in ("loki", "nginx", "prometheus", "grafana"):
+        try:
+            result = subprocess.run(
+                ["grep", "-rl", service.replace("-", "_"), f"{_CODE_ROOT}/app", "--include=*.py"],
+                capture_output=True, text=True, timeout=10,
+            )
+            for p in result.stdout.strip().splitlines()[:3]:
+                rel = p.replace(f"{_CODE_ROOT}/", "")
+                if rel not in candidate_files:
+                    candidate_files.append(rel)
+        except Exception:
+            pass
+
+    # ── 3. Read source files ──────────────────────────────────────────────────
+    file_context = ""
+    for fname in candidate_files[:3]:
+        fpath = f"{_CODE_ROOT}/{fname}"
+        try:
+            with open(fpath) as fh:
+                content = fh.read()
+            excerpt = content[:4000] + ("\n... [truncated]" if len(content) > 4000 else "")
+            file_context += f"\n\n=== {fname} ===\n{excerpt}"
+        except Exception as exc:
+            logger.warning("Could not read %s: %s", fname, exc)
+
+    # ── 4. LLM patch plan ─────────────────────────────────────────────────────
+    fix_plan: dict = {
+        "fixable": False,
+        "patches": [],
+        "commit_message": f"fix(bughunt): {service} — {fingerprint[:60]}",
+        "summary": "LLM analysis unavailable",
+    }
+
+    if auto_fixable or analysis.get("fix_complexity") in ("simple", "medium"):
+        sample_logs = "\n".join(f"  {l}" for l in log_lines[:6])
+        files_list = "\n".join(f"  - {f}" for f in candidate_files) if candidate_files else "  (none identified)"
+        prompt = (
+            f"You are an expert SRE fixing a recurring production bug.\n\n"
+            f"Service: {service}\n"
+            f"Error pattern ({count}x):\n{sample_logs}\n\n"
+            f"Root cause: {root_cause}\n"
+            f"Affected component: {affected_component}\n"
+            f"Proposed fix: {proposed_fix}\n"
+            + (f"Fix snippet hint: {fix_snippet}\n" if fix_snippet else "")
+            + f"\nSource files available for patching:\n{files_list}\n"
+            + (file_context if file_context else "")
+            + "\n\nProduce a JSON fix plan. Respond with ONLY valid JSON, no markdown:\n"
+            "{\n"
+            '  "fixable": true/false,\n'
+            '  "patches": [\n'
+            '    {"file": "app/path/to/file.py", "old": "exact verbatim text to replace", "new": "replacement text"}\n'
+            "  ],\n"
+            '  "commit_message": "fix(service): what was changed",\n'
+            '  "summary": "human-readable description of the fix"\n'
+            "}\n\n"
+            "Rules:\n"
+            "- Each 'old' must be EXACT verbatim text from the file shown above\n"
+            "- Only patch files listed in 'Source files available for patching'\n"
+            "- fixable=false if the root cause is purely environmental (infra/credentials/external service)\n"
+            "- fixable=false if no source files were provided above\n"
+            "- If already fixed in the source, set fixable=false and explain in summary"
+        )
+
+        try:
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            response = await asyncio.to_thread(
+                client.messages.create,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=2048,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = response.content[0].text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            # Extract first complete JSON object
+            brace_depth = 0
+            json_start = raw.find("{")
+            json_end = -1
+            if json_start != -1:
+                for i, ch in enumerate(raw[json_start:], json_start):
+                    if ch == "{":
+                        brace_depth += 1
+                    elif ch == "}":
+                        brace_depth -= 1
+                        if brace_depth == 0:
+                            json_end = i + 1
+                            break
+            if json_end != -1:
+                raw = raw[json_start:json_end]
+            fix_plan = json.loads(raw)
+        except Exception as exc:
+            logger.warning("Bug hunter LLM patch plan failed task=%s: %s", task_id, exc)
+            fix_plan["summary"] = f"LLM patch plan failed: {exc}"
+    else:
+        fix_plan["summary"] = (
+            f"Bug documented. Fix complexity={analysis.get('fix_complexity','?')} "
+            f"and auto_fixable={auto_fixable} — manual review recommended."
+        )
+
+    # ── 5. Apply patches → commit → push → PR ────────────────────────────────
+    patches_applied: list[str] = []
+    patch_errors: list[str] = []
+    pr_url: str = ""
+
+    if fix_plan.get("fixable") and fix_plan.get("patches"):
+        try:
+            from app.integrations.repo import RepoClient
+
+            repo = RepoClient()
+            if repo.is_configured():
+                await repo.ensure_repo()
+                branch = f"sentinel/bughunt-{task_id}"
+                await repo.create_branch(branch)
+
+                for patch in fix_plan["patches"]:
+                    try:
+                        await repo.patch_file(patch["file"], patch["old"], patch["new"])
+                        patches_applied.append(patch["file"])
+                    except Exception as exc:
+                        patch_errors.append(f"{patch['file']}: {exc}")
+                        logger.warning("Patch failed for %s: %s", patch["file"], exc)
+
+                if patches_applied:
+                    commit_msg = fix_plan.get("commit_message", f"fix(bughunt): task #{task_id}")
+                    await repo.commit(
+                        f"{commit_msg}\n\nAuto-fixed by Sentinel Bug Hunter (task #{task_id})",
+                        files=patches_applied,
+                    )
+                    pr_result = await repo.push(
+                        pr_title=f"fix(bughunt): {service} — {fingerprint[:70]}",
+                        pr_body=(
+                            f"**Service:** {service} | **Severity:** {severity} | **Occurrences:** {count}x\n\n"
+                            f"**Root cause:** {root_cause}\n\n"
+                            f"**Files changed:** {', '.join(f'`{f}`' for f in patches_applied)}\n\n"
+                            f"_{fix_plan.get('summary', '')}_\n\n"
+                            f"---\n*Auto-generated by Sentinel Bug Hunter (task #{task_id}). Review carefully before merging.*"
+                        ),
+                    )
+                    pr_match = re.search(r"(https://github\.com/\S+)", pr_result or "")
+                    pr_url = pr_match.group(1) if pr_match else pr_result
+            else:
+                patch_errors.append("Repo not configured")
+        except Exception as exc:
+            patch_errors.append(f"Repo operation failed: {exc}")
+            logger.error("Bug hunter repo patch failed task=%s: %s", task_id, exc, exc_info=True)
+
+    # ── 6. Post Slack result + mark done ─────────────────────────────────────
+    if patches_applied and pr_url:
+        slack_msg = (
+            f"{badge} *Bug Hunt — Fix Pushed* · task #{task_id}\n"
+            f"*Service:* {service} · {count}x | *Severity:* {severity}\n"
+            f"*Root cause:* {root_cause}\n"
+            f"*Files patched:* {', '.join(f'`{f}`' for f in patches_applied)}\n"
+            f"*PR:* {pr_url}"
+        )
+        _mark_bug_task(task_id, "done")
+    elif patches_applied:
+        slack_msg = (
+            f"{badge} *Bug Hunt — Patched (no PR URL)* · task #{task_id}\n"
+            f"*Service:* {service} | *Files:* {', '.join(patches_applied)}"
+        )
+        _mark_bug_task(task_id, "done")
+    elif patch_errors:
+        slack_msg = (
+            f"{badge} *Bug Hunt — Patch Failed* · task #{task_id}\n"
+            f"*Service:* {service}\n"
+            f"*Errors:* {'; '.join(patch_errors[:2])}\n"
+            f"*Summary:* {fix_plan.get('summary', '')}"
+        )
+        _mark_bug_task(task_id, "failed")
+    else:
+        slack_msg = (
+            f"{badge} *Bug Hunt — Investigated (no patch)* · task #{task_id}\n"
+            f"*Service:* {service} · {count}x | *Severity:* {severity}\n"
+            f"*Root cause:* {root_cause}\n"
+            f"*Reason no patch:* {fix_plan.get('summary', 'See task for details')}"
+        )
+        _mark_bug_task(task_id, "done")
+
+    post_alert_sync(slack_msg)
+
+    return {
+        "task_id": task_id,
+        "service": service,
+        "patches_applied": patches_applied,
+        "patch_errors": patch_errors,
+        "pr_url": pr_url,
+        "summary": fix_plan.get("summary", ""),
+    }
 
 
 # ── Main Celery task ──────────────────────────────────────────────────────────
@@ -492,7 +779,7 @@ def run_bug_hunt(hours: int = 24) -> dict:
 
         finding = {**cluster, "analysis": analysis}
 
-        # ── 4. Create fix task if warranted ───────────────────────────────
+        # ── 4. Create task for every non-noise bug ────────────────────────
         task_id = _create_fix_task(cluster, analysis)
         if task_id:
             finding["task_id"] = task_id
@@ -508,9 +795,31 @@ def run_bug_hunt(hours: int = 24) -> dict:
     report = _build_slack_report(findings, total_lines, hours, tasks_created)
     post_alert_sync(report)
 
+    # ── 6. Dispatch investigate_and_fix for every created task ────────────────
+    dispatched: list[int] = []
+    for finding in findings:
+        tid = finding.get("task_id")
+        if tid is None:
+            continue
+        try:
+            investigate_and_fix_bug.apply_async(
+                kwargs={"task_id": tid, "finding": {
+                    "service":     finding["service"],
+                    "fingerprint": finding["fingerprint"],
+                    "count":       finding["count"],
+                    "lines":       finding["lines"],
+                    "analysis":    finding["analysis"],
+                }},
+                queue="tasks_general",
+                countdown=2,  # slight stagger so report posts first
+            )
+            dispatched.append(tid)
+        except Exception as exc:
+            logger.error("Could not dispatch investigate_and_fix_bug for task %s: %s", tid, exc)
+
     logger.info(
-        "Bug hunt complete: %d findings, %d tasks created",
-        len(findings), len(tasks_created),
+        "Bug hunt complete: %d findings, %d tasks created, %d investigations dispatched",
+        len(findings), len(tasks_created), len(dispatched),
     )
     return {
         "status": "complete",
@@ -519,4 +828,5 @@ def run_bug_hunt(hours: int = 24) -> dict:
         "clusters_found": len(clusters),
         "findings": len(findings),
         "tasks_created": tasks_created,
+        "investigations_dispatched": dispatched,
     }
