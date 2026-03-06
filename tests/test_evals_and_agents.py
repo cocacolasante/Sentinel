@@ -245,7 +245,7 @@ async def test_post_integration_health_all_passed():
     mock_client.chat_postMessage = AsyncMock(return_value={"ok": True})
     mock_cls = MagicMock(return_value=mock_client)
     with patch.dict("sys.modules", {"slack_sdk": MagicMock(), "slack_sdk.web": MagicMock(), "slack_sdk.web.async_client": MagicMock(AsyncWebClient=mock_cls)}):
-        r = await post_integration_health_to_slack(results, channel="brain-evals")
+        r = await post_integration_health_to_slack(results, channel="sentinel-evals")
     assert r is True
 
 
@@ -260,7 +260,7 @@ async def test_post_integration_health_with_failures():
     mock_client.chat_postMessage = AsyncMock(return_value={"ok": True})
     mock_cls = MagicMock(return_value=mock_client)
     with patch.dict("sys.modules", {"slack_sdk": MagicMock(), "slack_sdk.web": MagicMock(), "slack_sdk.web.async_client": MagicMock(AsyncWebClient=mock_cls)}):
-        r = await post_integration_health_to_slack(results, channel="brain-alerts")
+        r = await post_integration_health_to_slack(results, channel="sentinel-alerts")
     assert r is True
 
 
@@ -292,7 +292,7 @@ async def test_post_scorecard_success():
     mock_cls = MagicMock(return_value=mock_client)
     with patch("app.evals.reporter.settings") as mock_settings:
         mock_settings.slack_bot_token = "xoxb-test"
-        mock_settings.slack_eval_channel = "brain-evals"
+        mock_settings.slack_eval_channel = "sentinel-evals"
         with patch.dict("sys.modules", {"slack_sdk": MagicMock(), "slack_sdk.web": MagicMock(), "slack_sdk.web.async_client": MagicMock(AsyncWebClient=mock_cls)}):
             r = await post_scorecard_to_slack(summaries)
     assert r is True
@@ -306,7 +306,7 @@ async def test_post_scorecard_slack_failure():
     mock_cls = MagicMock(return_value=mock_client)
     with patch("app.evals.reporter.settings") as mock_settings:
         mock_settings.slack_bot_token = "xoxb-test"
-        mock_settings.slack_eval_channel = "brain-evals"
+        mock_settings.slack_eval_channel = "sentinel-evals"
         with patch.dict("sys.modules", {"slack_sdk": MagicMock(), "slack_sdk.web": MagicMock(), "slack_sdk.web.async_client": MagicMock(AsyncWebClient=mock_cls)}):
             r = await post_scorecard_to_slack(summaries)
     assert r is False

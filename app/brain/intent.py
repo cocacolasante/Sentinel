@@ -123,7 +123,7 @@ Intent-specific param examples:
     }}
   rmm_read:       {{"action": "list" | "get" | "status" | "events" | "incidents" | "inventory" | "meshes", "node_id": "", "name": "", "group": "production" | "staging" | "dev", "project": "", "severity": "", "hours": 24, "limit": 20}}
   rmm_manage:     {{"action": "run_command" | "restart_service" | "restart_container" | "reboot" | "upgrade_agent" | "install_agent", "node_id": "", "name": "", "command": "", "service": "", "container": "", "host": "", "mesh_id": "", "username": "ubuntu"}}
-  slack_read:     {{"action": "history" | "search" | "list_channels" | "dm_history", "channel": "brain-alerts", "query": "search term", "user": "username", "limit": 20}}
+  slack_read:     {{"action": "history" | "search" | "list_channels" | "dm_history", "channel": "sentinel-alerts", "query": "search term", "user": "username", "limit": 20}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
@@ -235,7 +235,7 @@ Routing guidance:
   - "reboot server X", "restart server X" → rmm_manage with action=reboot, node_id=X
   - "upgrade agent on X", "update meshcentral agent" → rmm_manage with action=upgrade_agent, node_id=X
   - "install meshcentral agent on X", "add server X to RMM" → rmm_manage with action=install_agent, host=X
-  - "read slack channel X", "show messages in X", "what's in #X", "pull messages from X", "check #X", "show #X", "read #brain-alerts", "what did sentinel post to slack", "show recent slack messages", "what was sent to brain-alerts", "show me what was posted in X" → slack_read with action=history, channel=X
+  - "read slack channel X", "show messages in X", "what's in #X", "pull messages from X", "check #X", "show #X", "read #sentinel-alerts", "what did sentinel post to slack", "show recent slack messages", "what was sent to sentinel-alerts", "show me what was posted in X" → slack_read with action=history, channel=X
   - "search slack for X", "find messages about X in slack", "slack search X" → slack_read with action=search, query=X
   - "list slack channels", "what channels is sentinel in", "show all channels" → slack_read with action=list_channels
   - "show my DMs with X", "read DMs with X" → slack_read with action=dm_history, user=X
@@ -294,7 +294,7 @@ task_create     — create a new tracked task with title, priority (1–5), and 
 task_read       — list, filter, or view existing tasks; check task status or priority
 task_update     — update a task's status, priority, approval level, or description
 knowledge_graph — personal knowledge graph: add nodes (projects/repos/servers/ideas/people), connect them, search, visualize
-slack_read      — read Slack channel history, search messages, list channels, fetch DMs; channels: brain-alerts, brain-evals, sentinel-milestones, rmm-production, rmm-dev-staging
+slack_read      — read Slack channel history, search messages, list channels, fetch DMs; channels: sentinel-alerts, sentinel-evals, sentinel-milestones, rmm-production, rmm-dev-staging
 code            — software engineering help, code review, debugging, architecture — no file edits
 skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
 chat            — anything else: analysis, writing, questions, conversation"""

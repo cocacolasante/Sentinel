@@ -68,7 +68,7 @@ def run_nightly_integration_evals(self) -> dict:
 def run_health_check(self) -> dict:
     """
     Check Brain API, Redis, and Postgres health every 30 minutes.
-    Posts a Slack alert to brain-alerts ONLY when something is degraded.
+    Posts a Slack alert to sentinel-alerts ONLY when something is degraded.
     """
     try:
         return asyncio.run(_health_check())

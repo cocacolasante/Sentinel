@@ -6,7 +6,7 @@ ingest_and_triage_top_errors — runs 4x daily at 12am/6am/12pm/6pm UTC.
   2. For each error, create a board task (approval_level=1 — auto-starts immediately).
   3. Skip errors that already have an active triage task.
   4. Dispatch investigate_and_fix_sentry_issue for each new task.
-  5. Post a Slack run summary to brain-alerts.
+  5. Post a Slack run summary to sentinel-alerts.
 
 Each investigate_and_fix task posts its own Slack updates:
   - On start: "🧠 Investigating…"

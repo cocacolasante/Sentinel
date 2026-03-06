@@ -2,7 +2,7 @@
 BugHunterSkill — on-demand trigger for the Autonomous Bug Hunter.
 
 Kicks off the bug_hunt Celery task and returns immediately.
-The full report is posted to #brain-alerts by the worker.
+The full report is posted to #sentinel-alerts by the worker.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ class BugHunterSkill(BaseSkill):
     name = "bug_hunt"
     description = (
         "Scan logs for bugs autonomously: fetches Loki error patterns, clusters them, "
-        "runs LLM root-cause analysis, proposes fixes, posts report to #brain-alerts, "
+        "runs LLM root-cause analysis, proposes fixes, posts report to #sentinel-alerts, "
         "and auto-creates fix tasks for high-severity actionable bugs."
     )
     trigger_intents = ["bug_hunt"]
@@ -45,7 +45,7 @@ class BugHunterSkill(BaseSkill):
                 f"{'Focus: ' + focus + '. ' if focus else ''}"
                 "Sentinel is scanning Loki for error patterns, clustering them, "
                 "and running LLM root-cause analysis on each cluster. "
-                "The full report will be posted to *#brain-alerts* in about 30-60 seconds, "
+                "The full report will be posted to *#sentinel-alerts* in about 30-60 seconds, "
                 "including root causes, proposed fixes, and any auto-created fix tasks."
             )
         else:

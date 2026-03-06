@@ -124,7 +124,7 @@ def _open_pr_sync(branch: str, title: str, body: str) -> tuple[str, int]:
 
 
 def _notify_pr_slack(pr_url: str, branch: str, pr_number: int) -> None:
-    """DM the owner and post to brain-alerts when a sentinel PR is opened."""
+    """DM the owner and post to sentinel-alerts when a sentinel PR is opened."""
     try:
         from app.integrations.slack_notifier import post_dm_sync, post_alert_sync
 

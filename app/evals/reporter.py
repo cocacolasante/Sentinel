@@ -131,7 +131,7 @@ async def post_integration_health_to_slack(
             f"  {len(passed)}/{len(results)} integrations healthy\n"
             f"  _Checked at {datetime.now(timezone.utc).strftime('%H:%M UTC')}_"
         )
-        target = channel or getattr(get_settings(), "slack_eval_channel", "brain-evals")
+        target = channel or getattr(get_settings(), "slack_eval_channel", "sentinel-evals")
     else:
         # Failures → alert channel
         fail_list = "\n".join(f"  • *{r.integration}* — {r.error or 'check failed'}" for r in failed)
@@ -141,7 +141,7 @@ async def post_integration_health_to_slack(
             f"*Failing integrations:*\n{fail_list}\n\n"
             f"_Check `GET /api/v1/integrations/status` for details_"
         )
-        target = channel or getattr(get_settings(), "slack_alert_channel", "brain-alerts")
+        target = channel or getattr(get_settings(), "slack_alert_channel", "sentinel-alerts")
 
     try:
         from slack_sdk.web.async_client import AsyncWebClient
@@ -170,7 +170,7 @@ async def post_scorecard_to_slack(
     Post the formatted scorecard to Slack.
 
     Args:
-        channel: Slack channel ID or name (e.g. '#brain-evals').
+        channel: Slack channel ID or name (e.g. '#sentinel-evals').
                  Falls back to SLACK_EVAL_CHANNEL env var, then SLACK_DEFAULT_CHANNEL.
     Returns True on success.
     """
@@ -178,7 +178,7 @@ async def post_scorecard_to_slack(
         logger.warning("Slack bot token not configured — skipping scorecard post")
         return False
 
-    target_channel = channel or getattr(settings, "slack_eval_channel", "") or "brain-evals"
+    target_channel = channel or getattr(settings, "slack_eval_channel", "") or "sentinel-evals"
     text = format_scorecard(summaries, integration_results, previous_scores)
 
     try:
