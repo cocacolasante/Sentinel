@@ -97,6 +97,7 @@ def _build_skill_registry():
     from app.skills.knowledge_graph_skill import KnowledgeGraphSkill
     from app.skills.data_intelligence_skill import DataIntelligenceSkill
     from app.skills.rmm_skill import RMMReadSkill, RMMManageSkill
+    from app.skills.slack_read_skill import SlackReadSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -167,6 +168,8 @@ def _build_skill_registry():
     # RMM — device monitoring, agent management, remote command execution
     reg.register(RMMReadSkill())
     reg.register(RMMManageSkill())
+    # Slack read — channel history, DMs, search
+    reg.register(SlackReadSkill())
     return reg
 
 

@@ -90,6 +90,7 @@ _INTENT_LABELS: dict[str, str] = {
     "task_read": "📋 Tasks",
     "task_update": "📋 Task updated",
     "chat": "💭 Chat",
+    "slack_read": "💬 Slack read",
     "rate_limited": "⏱️ Rate limited",
     "blocked": "⛔ Blocked",
 }
