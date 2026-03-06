@@ -176,6 +176,19 @@ class TaskCreateSkill(BaseSkill):
         except Exception as exc:
             return SkillResult(context_data=f"[task_create failed: {exc}]", skill_name=self.name)
 
+        # Notify sentinel-tasks channel (fire-and-forget, errors are non-fatal)
+        try:
+            from app.integrations.task_notifier import post_task_created
+            import asyncio as _asyncio
+            _asyncio.create_task(
+                post_task_created(
+                    row["id"], title, priority_num, approval_level,
+                    description or "", source,
+                )
+            )
+        except Exception:
+            pass
+
         queue_note = ""
         celery_id = None
 

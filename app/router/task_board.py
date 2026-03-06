@@ -85,6 +85,10 @@ async def list_tasks(
         conditions.append("priority_num = %s")
         values.append(priority)
 
+    # Never show archived tasks unless explicitly requested
+    if not status:
+        conditions.append("status != 'archived'")
+
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     values.append(limit)
 
@@ -139,6 +143,20 @@ async def create_task(body: TaskCreate):
             _json.dumps(body.blocked_by),
         ),
     )
+
+    # Notify sentinel-tasks channel
+    try:
+        import asyncio as _asyncio
+        from app.integrations.task_notifier import post_task_created
+        _asyncio.create_task(
+            post_task_created(
+                row["id"], body.title, priority_num, approval_level,
+                body.description or "", body.source,
+            )
+        )
+    except Exception:
+        pass
+
     return _enrich(row)
 
 
@@ -217,6 +235,18 @@ async def update_task(task_id: int, body: TaskUpdate):
         """,
         values,
     )
+
+    # Notify sentinel-tasks channel when status changes
+    if body.status is not None:
+        try:
+            import asyncio as _asyncio
+            from app.integrations.task_notifier import notify_status
+            _asyncio.create_task(
+                notify_status(task_id, row["title"], body.status)
+            )
+        except Exception:
+            pass
+
     return _enrich(row)
 
 
@@ -232,7 +262,27 @@ async def cancel_task(task_id: int):
     )
     if not row:
         raise HTTPException(status_code=404, detail=f"Task #{task_id} not found")
+
+    # Notify sentinel-tasks channel
+    try:
+        import asyncio as _asyncio
+        from app.integrations.task_notifier import notify_status
+        _asyncio.create_task(notify_status(task_id, row["title"], "cancelled"))
+    except Exception:
+        pass
+
     return {"message": f"Task #{task_id} cancelled", "task": row}
+
+
+@router.post("/board/tasks/archive-done")
+async def archive_done_tasks():
+    """Move all 'done' tasks to 'archived' status (removes them from the board view)."""
+    rows = postgres.execute(
+        "UPDATE tasks SET status = 'archived', updated_at = NOW() WHERE status = 'done' RETURNING id",
+        [],
+    )
+    count = len(rows or [])
+    return {"archived": count}
 
 
 @router.delete("/board/tasks/{task_id}/purge")
