@@ -510,28 +510,18 @@ async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
 
     badge = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(severity, "🟢")
 
-    # ── 0. Fast-exit for third-party infrastructure services ──────────────────
-    # Loki, Grafana, Prometheus, nginx etc. are not in Sentinel's codebase.
-    # No amount of patching app/ files will fix their internal errors.
-    _THIRD_PARTY = {"loki", "grafana", "prometheus", "nginx", "go-service"}
-    _has_app_component = bool(re.search(r"\bapp/", affected_component) or re.search(r"\bapp\.", affected_component))
-    if service in _THIRD_PARTY and not _has_app_component:
-        _mark_bug_task(task_id, "manual_review")
-        post_alert_sync(
-            f"{badge} *Bug Hunt — Manual Review Required* · task #{task_id}\n"
-            f"*Service:* {service} (third-party — cannot patch) · {count}x\n"
-            f"*Root cause:* {root_cause}\n"
-            f"*Proposed fix:* {proposed_fix[:300]}\n"
-            f"_This error is internal to {service} and requires infrastructure/config changes._"
-        )
-        return {
-            "task_id": task_id,
-            "service": service,
-            "patches_applied": [],
-            "patch_errors": [],
-            "pr_url": "",
-            "summary": f"Third-party service ({service}) — requires manual infrastructure fix.",
-        }
+    # ── 0. Service → config file map ──────────────────────────────────────────
+    # Maps service names to their config files in the repo so the LLM can patch them.
+    _SERVICE_CONFIG_MAP: dict[str, list[str]] = {
+        "loki":           ["observability/loki-config.yml"],
+        "promtail":       ["observability/promtail-config.yml"],
+        "prometheus":     ["prometheus/prometheus.yml"],
+        "nginx":          ["nginx/nginx.conf"],
+        "grafana":        [
+            "grafana/provisioning/datasources/prometheus.yaml",
+            "grafana/provisioning/dashboards/dashboard.yaml",
+        ],
+    }
 
     # ── 1. Mark in_progress + notify ─────────────────────────────────────────
     _mark_bug_task(task_id, "in_progress")
@@ -559,8 +549,12 @@ async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
         mod_path = mod_match.group(1).replace(".", "/") + ".py"
         candidate_files.append(mod_path)
 
+    # Check service config map for infrastructure services
+    if not candidate_files and service in _SERVICE_CONFIG_MAP:
+        candidate_files.extend(_SERVICE_CONFIG_MAP[service])
+
     # Grep codebase for the service name if no file found yet
-    if not candidate_files and service not in ("loki", "nginx", "prometheus", "grafana"):
+    if not candidate_files:
         try:
             result = subprocess.run(
                 ["grep", "-rl", service.replace("-", "_"), f"{_CODE_ROOT}/app", "--include=*.py"],
@@ -610,7 +604,7 @@ async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
             "{\n"
             '  "fixable": true/false,\n'
             '  "patches": [\n'
-            '    {"file": "app/path/to/file.py", "old": "exact verbatim text to replace", "new": "replacement text"}\n'
+            '    {"file": "path/to/file.py", "old": "exact verbatim text to replace", "new": "replacement text"}\n'
             "  ],\n"
             '  "commit_message": "fix(service): what was changed",\n'
             '  "summary": "human-readable description of the fix"\n'
@@ -618,7 +612,8 @@ async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
             "Rules:\n"
             "- Each 'old' must be EXACT verbatim text from the file shown above\n"
             "- Only patch files listed in 'Source files available for patching'\n"
-            "- fixable=false if the root cause is purely environmental (infra/credentials/external service)\n"
+            "- Files may be Python, YAML, nginx conf, JSON, or any other format — patch them as-is\n"
+            "- fixable=false if the root cause is purely environmental (external service outage, credentials, networking)\n"
             "- fixable=false if no source files were provided above\n"
             "- If already fixed in the source, set fixable=false and explain in summary"
         )
