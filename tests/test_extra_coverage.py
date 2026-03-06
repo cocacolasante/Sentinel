@@ -16,9 +16,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 def test_repo_read_metadata():
     from app.skills.repo_skill import RepoReadSkill
-    s = RepoReadSkill()
-    assert s.name == "repo_read"
-    assert isinstance(s.is_available(), bool)
+    with patch("app.integrations.repo.RepoClient") as MockRepo:
+        MockRepo.return_value.is_configured.return_value = True
+        s = RepoReadSkill()
+        assert s.name == "repo_read"
+        assert s.is_available() is True
 
 
 async def test_repo_read_list_files():
@@ -78,10 +80,14 @@ def test_repo_commit_metadata():
 
 async def test_repo_commit_builds_pending():
     from app.skills.repo_skill import RepoCommitSkill
-    r = await RepoCommitSkill().execute(
-        {"message": "fix: resolve null pointer", "files": ["app/main.py"]},
-        "commit the changes",
-    )
+    with patch("app.integrations.repo.RepoClient") as MockRepo:
+        inst = MockRepo.return_value
+        inst.is_configured.return_value = True
+        inst.diff = AsyncMock(return_value="diff --git a/app/main.py")
+        r = await RepoCommitSkill().execute(
+            {"message": "fix: resolve null pointer", "files": ["app/main.py"]},
+            "commit the changes",
+        )
     assert isinstance(r.context_data, str)
 
 
