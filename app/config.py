@@ -204,7 +204,8 @@ class Settings(BaseSettings):
     error_log_path: str = "/tmp/sentinel_errors.json"
 
     # ── MeshCentral RMM ─────────────────────────────────────────
-    meshcentral_url: str = ""           # e.g. https://mesh.sentinelai.cloud
+    meshcentral_url: str = ""           # e.g. https://sentinelai.cloud/rmm (public URL, used for agent install commands)
+    meshcentral_internal_url: str = ""  # e.g. http://meshcentral:4430 (internal Docker URL for API calls)
     meshcentral_user: str = ""
     meshcentral_password: str = ""
     meshcentral_domain: str = ""        # leave blank for default domain

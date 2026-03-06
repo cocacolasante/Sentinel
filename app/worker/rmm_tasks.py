@@ -179,8 +179,8 @@ async def _full_inventory_sync() -> dict:
         is_online = dev.get("conn", 0) == 1
         mesh_id = dev.get("meshid", "")
 
-        # Infer group + project from mesh name or tags
-        group_name = _infer_group(dev)
+        # Use MeshCentral's groupname directly, fall back to inference from device name
+        group_name = dev.get("groupname", "") or _infer_group(dev)
         project = _infer_project(dev)
 
         try:
