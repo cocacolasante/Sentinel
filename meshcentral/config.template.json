@@ -1,0 +1,24 @@
+{
+  "settings": {
+    "cert": "yourdomain.com",
+    "tlsOffload": "0.0.0.0/0",
+    "port": 4430,
+    "redirPort": 0,
+    "allowLoginToken": true,
+    "allowFraming": true,
+    "agentAliasPort": 443,
+    "agentAliasDNS": "yourdomain.com",
+    "sessionKey": "CHANGE_ME_RANDOM_SECRET",
+    "browserSessionTime": 60,
+    "browserSessionTimeout": 30
+  },
+  "domains": {
+    "": {
+      "title": "Sentinel RMM",
+      "title2": "Remote Infrastructure Management",
+      "newAccounts": false,
+      "certUrl": "https://yourdomain.com/rmm/",
+      "footer": "Sentinel AI — Remote Infrastructure Management"
+    }
+  }
+}
