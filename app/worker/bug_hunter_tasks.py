@@ -510,6 +510,29 @@ async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
 
     badge = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(severity, "🟢")
 
+    # ── 0. Fast-exit for third-party infrastructure services ──────────────────
+    # Loki, Grafana, Prometheus, nginx etc. are not in Sentinel's codebase.
+    # No amount of patching app/ files will fix their internal errors.
+    _THIRD_PARTY = {"loki", "grafana", "prometheus", "nginx", "go-service"}
+    _has_app_component = bool(re.search(r"\bapp/", affected_component) or re.search(r"\bapp\.", affected_component))
+    if service in _THIRD_PARTY and not _has_app_component:
+        _mark_bug_task(task_id, "manual_review")
+        post_alert_sync(
+            f"{badge} *Bug Hunt — Manual Review Required* · task #{task_id}\n"
+            f"*Service:* {service} (third-party — cannot patch) · {count}x\n"
+            f"*Root cause:* {root_cause}\n"
+            f"*Proposed fix:* {proposed_fix[:300]}\n"
+            f"_This error is internal to {service} and requires infrastructure/config changes._"
+        )
+        return {
+            "task_id": task_id,
+            "service": service,
+            "patches_applied": [],
+            "patch_errors": [],
+            "pr_url": "",
+            "summary": f"Third-party service ({service}) — requires manual infrastructure fix.",
+        }
+
     # ── 1. Mark in_progress + notify ─────────────────────────────────────────
     _mark_bug_task(task_id, "in_progress")
     post_alert_sync(
