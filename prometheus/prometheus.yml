@@ -23,16 +23,14 @@ scrape_configs:
       - targets: ["celery-exporter:9808"]
 
   # Flower — Celery task monitoring
+  # url_prefix=flower shifts all routes to /flower/...; basic_auth required
   - job_name: flower
     static_configs:
       - targets: ["flower:5555"]
-    metrics_path: /metrics
-
-  # n8n — workflow executor
-  - job_name: n8n
-    static_configs:
-      - targets: ["n8n:5678"]
-    metrics_path: /metrics
+    metrics_path: /flower/metrics
+    basic_auth:
+      username: admin
+      password: "Cola1994$"
 
   # PostgreSQL — connection pool, query stats
   - job_name: postgres
