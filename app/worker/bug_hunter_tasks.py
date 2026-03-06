@@ -715,7 +715,7 @@ async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
             f"*Why not auto-patched:* {fix_plan.get('summary', 'See task for details')}\n"
             f"_Task remains open on the board for manual review._"
         )
-        _mark_bug_task(task_id, "pending")
+        _mark_bug_task(task_id, "manual_review")
 
     post_alert_sync(slack_msg)
 

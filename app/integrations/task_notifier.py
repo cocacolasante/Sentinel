@@ -34,6 +34,7 @@ _STATUS_EMOJI = {
     "failed": ":x:",
     "cancelled": ":no_entry_sign:",
     "archived": ":package:",
+    "manual_review": ":eyes:",
 }
 
 
