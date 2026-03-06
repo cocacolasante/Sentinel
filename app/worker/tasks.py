@@ -377,6 +377,24 @@ def _mark_task(task_id: int, status: str, error: str | None = None) -> None:
     except Exception as exc:
         logger.warning("Could not update task #%s status: %s", task_id, exc)
 
+    # Post status update to sentinel-tasks thread
+    # in_progress: always notify  |  failed with error: crash notify (report posted separately for normal done/failed)
+    if status == "in_progress":
+        try:
+            from app.integrations.task_notifier import notify_status_sync, _get_task_title
+
+            notify_status_sync(task_id, _get_task_title(task_id), "in_progress")
+        except Exception as _nte:
+            logger.debug("sentinel-tasks notify failed: %s", _nte)
+    elif status == "failed" and error:
+        # Crash before execution report — post a minimal failure notice
+        try:
+            from app.integrations.task_notifier import notify_report_sync, _get_task_title
+
+            notify_report_sync(task_id, _get_task_title(task_id), False, f"```{error[:600]}```")
+        except Exception as _nte:
+            logger.debug("sentinel-tasks crash notify failed: %s", _nte)
+
     # On completion, unblock dependent tasks
     if status == "done":
         _unblock_dependents(task_id)
@@ -653,17 +671,25 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
 
     # ── 7. Report back to Slack ───────────────────────────────────────────────
     divider = "─" * 36
+    report_body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
+
     if channel and thread_ts:
         header = (
             f"✅ *Task #{task_id} — {title}* — complete"
             if all_passed
             else f"❌ *Task #{task_id} — {title}* — failed at step {len(results)}"
         )
-        body = f"\n{divider}\n".join(results)
-        post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
+        post_thread_reply_sync(f"{header}\n{divider}\n{report_body}", channel, thread_ts)
     elif not all_passed:
-        body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
-        _dm_task_failure(task_id, title, body)
+        _dm_task_failure(task_id, title, report_body)
+
+    # ── 8. Report to sentinel-tasks channel thread ─────────────────────────────
+    try:
+        from app.integrations.task_notifier import notify_report_sync
+
+        notify_report_sync(task_id, title, all_passed, report_body)
+    except Exception as _nte:
+        logger.debug("sentinel-tasks report failed: %s", _nte)
 
     return {"task_id": task_id, "passed": all_passed, "steps": len(results)}
 
@@ -1046,15 +1072,23 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
         pass
 
     divider = "─" * 36
+    report_body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
+
     if channel and thread_ts:
         header = (
             f"✅ *Task #{task_id} — {title}* — complete" if all_passed else f"❌ *Task #{task_id} — {title}* — failed"
         )
-        body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
-        post_thread_reply_sync(f"{header}\n{divider}\n{body}", channel, thread_ts)
+        post_thread_reply_sync(f"{header}\n{divider}\n{report_body}", channel, thread_ts)
     elif not all_passed:
-        body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
-        _dm_task_failure(task_id, title, body)
+        _dm_task_failure(task_id, title, report_body)
+
+    # Report to sentinel-tasks channel thread
+    try:
+        from app.integrations.task_notifier import notify_report_sync
+
+        notify_report_sync(task_id, title, all_passed, report_body, pr_url)
+    except Exception as _nte:
+        logger.debug("sentinel-tasks report failed: %s", _nte)
 
     return {"task_id": task_id, "passed": all_passed, "rounds": round_num + 1}
 

@@ -95,6 +95,8 @@ def _build_skill_registry():
     from app.skills.arch_advisor_skill import ArchAdvisorSkill
     from app.skills.project_skill import ProjectSkill
     from app.skills.knowledge_graph_skill import KnowledgeGraphSkill
+    from app.skills.data_intelligence_skill import DataIntelligenceSkill
+    from app.skills.rmm_skill import RMMReadSkill, RMMManageSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -160,6 +162,11 @@ def _build_skill_registry():
     reg.register(ProjectSkill())
     # Knowledge Graph — map projects, repos, servers, clients, ideas
     reg.register(KnowledgeGraphSkill())
+    # Data Intelligence — time series analysis, anomaly detection, pattern discovery
+    reg.register(DataIntelligenceSkill())
+    # RMM — device monitoring, agent management, remote command execution
+    reg.register(RMMReadSkill())
+    reg.register(RMMManageSkill())
     return reg
 
 
@@ -1260,6 +1267,66 @@ class Dispatcher:
                         f"Approval: {_apv_label.get(alv, str(alv))}"
                     )
                 return f"[Task #{_task_id} not found or no changes applied]"
+
+            # ── RMM remote management ────────────────────────────────────────
+            if action and action.startswith("rmm_"):
+                from app.integrations.meshcentral import MeshCentralClient
+
+                rmm_action = action[len("rmm_"):]  # strip "rmm_" prefix
+                client = MeshCentralClient()
+                node_id = params.get("node_id") or params.get("name", "")
+
+                if rmm_action == "run_command":
+                    cmd = params.get("command", "")
+                    res = await client.run_command(node_id, cmd)
+                    out = (res or {}).get("output", "") or (res or {}).get("result", "")
+                    return (
+                        f"✅ Command dispatched to `{node_id}`.\n"
+                        + (f"```\n{out[:2000]}\n```" if out else "")
+                    )
+
+                if rmm_action == "restart_service":
+                    svc = params.get("service", "")
+                    res = await client.run_command(node_id, f"sudo systemctl restart {svc}")
+                    return f"✅ `systemctl restart {svc}` sent to `{node_id}`."
+
+                if rmm_action == "restart_container":
+                    ctr = params.get("container", "")
+                    res = await client.run_command(node_id, f"sudo docker restart {ctr}")
+                    return f"✅ `docker restart {ctr}` sent to `{node_id}`."
+
+                if rmm_action == "reboot":
+                    await client.power_action(node_id, 7)  # 7 = reset
+                    return f"✅ Reboot command sent to `{node_id}`."
+
+                if rmm_action == "upgrade_agent":
+                    res = await client.upgrade_agent(node_id)
+                    return f"✅ Agent upgrade triggered on `{node_id}`."
+
+                if rmm_action == "install_agent":
+                    host = params.get("host", "")
+                    mesh_id = params.get("mesh_id", "") or settings.meshcentral_default_mesh_id
+                    if not host or not mesh_id:
+                        return "❌ Provide `host` (IP/hostname) and `mesh_id` for agent install."
+                    cmd = client.get_agent_install_command(mesh_id, "linux")
+                    # Use IONOS ssh_exec if available, else return the command
+                    try:
+                        from app.integrations.ionos import IONOSClient
+                        ionos = IONOSClient()
+                        user = params.get("username", "ubuntu")
+                        res = await ionos.ssh_exec(host, cmd, username=user, timeout=120)
+                        if res.get("exit_code") == 0:
+                            return f"✅ MeshCentral agent installed on `{host}`."
+                        return (
+                            f"⚠️ Agent install returned exit code {res.get('exit_code')}.\n"
+                            f"```\n{res.get('stderr', '')[:500]}\n```"
+                        )
+                    except Exception:
+                        return (
+                            f"Run this on `{host}` to install the agent:\n```bash\n{cmd}\n```"
+                        )
+
+                return f"[Unknown RMM action: {rmm_action}]"
 
             if action == "deploy_brain":
                 try:

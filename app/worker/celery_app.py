@@ -33,6 +33,7 @@ celery_app = Celery(
         "app.worker.sentry_tasks",
         "app.worker.bug_hunter_tasks",
         "app.worker.pr_tasks",
+        "app.worker.rmm_tasks",
     ],
 )
 
@@ -122,6 +123,24 @@ celery_app.conf.beat_schedule = {
     "poll-sentinel-prs": {
         "task": "app.worker.pr_tasks.poll_open_sentinel_prs",
         "schedule": crontab(minute="*/15"),
+        "options": {"queue": "celery"},
+    },
+    # RMM — every 60s: check device online/offline status, fire Slack alerts on changes
+    "rmm-device-poll": {
+        "task": "app.worker.rmm_tasks.rmm_poll_device_status",
+        "schedule": crontab(minute="*"),
+        "options": {"queue": "celery"},
+    },
+    # RMM — every 5min: full inventory sync (hostname, OS, IP, agent version)
+    "rmm-full-sync": {
+        "task": "app.worker.rmm_tasks.rmm_full_inventory_sync",
+        "schedule": crontab(minute="*/5"),
+        "options": {"queue": "celery"},
+    },
+    # RMM — every 2min: threshold breach detection (CPU/mem/disk/offline duration)
+    "rmm-incident-check": {
+        "task": "app.worker.rmm_tasks.rmm_incident_detection",
+        "schedule": crontab(minute="*/2"),
         "options": {"queue": "celery"},
     },
 }

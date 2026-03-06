@@ -152,6 +152,8 @@ class Settings(BaseSettings):
     slack_alert_channel: str = "brain-alerts"
     # Slack channel for AI action milestones (every confirmed write action).
     slack_milestone_channel: str = "sentinel-milestones"
+    # Slack channel for task lifecycle updates (created / updated / completed / failed).
+    slack_tasks_channel: str = "sentinel-tasks"
     # Per-session request rate limits.
     rate_limit_per_minute: int = 20
     rate_limit_per_hour: int = 200
@@ -200,6 +202,15 @@ class Settings(BaseSettings):
     error_buffer_size: int = 100
     auto_create_remediation_tasks: bool = True
     error_log_path: str = "/tmp/sentinel_errors.json"
+
+    # ── MeshCentral RMM ─────────────────────────────────────────
+    meshcentral_url: str = ""           # e.g. https://mesh.sentinelai.cloud
+    meshcentral_user: str = ""
+    meshcentral_password: str = ""
+    meshcentral_domain: str = ""        # leave blank for default domain
+    meshcentral_default_mesh_id: str = ""  # mesh to join newly-provisioned servers
+    slack_rmm_prod_channel: str = "rmm-production"
+    slack_rmm_dev_channel: str = "rmm-dev-staging"
 
     # ── Neo4j Knowledge Graph ───────────────────────────────────
     neo4j_uri: str = "bolt://neo4j:7687"

@@ -776,7 +776,7 @@ class IONOSClient:
 
         result["public_ip"] = static_ip_addr or "(DHCP — assigned within ~5 min)"
         result["note"] = (
-            f"Server ready at {static_ip_addr}. SSH: ssh -i ~/.ssh/ionos_auto root@{static_ip_addr}"
+            f"Server ready at {static_ip_addr}. SSH: ssh -i ~/.ssh/ionos_auto ubuntu@{static_ip_addr}"
             if static_ip_addr and wait_for_ready
             else "Server is provisioning. Use list_servers to check status and get IP."
         )
@@ -784,6 +784,37 @@ class IONOSClient:
             "Provisioning complete | server=%s | dc=%s | vol=%s | nic=%s | ip=%s",
             server_id, dc_id, vol_id, nic_id, static_ip_addr or "dhcp",
         )
+
+        # ── 10. Auto-install MeshCentral agent (optional) ─────────────────────
+        # Only when: MeshCentral is configured, a mesh ID is set, server has a
+        # known IP, and we waited for it to be ready (so SSH is up).
+        if wait_for_ready and static_ip_addr:
+            try:
+                from app.integrations.meshcentral import MeshCentralClient
+                mc = MeshCentralClient()
+                mesh_id = s.meshcentral_default_mesh_id
+                if mc.is_configured() and mesh_id:
+                    install_cmd = mc.get_agent_install_command(mesh_id, "linux")
+                    result["steps"].append("Installing MeshCentral agent...")
+                    agent_result = await self.ssh_exec(
+                        static_ip_addr,
+                        install_cmd,
+                        username="ubuntu",
+                        timeout=120,
+                    )
+                    if agent_result.get("exit_code") == 0:
+                        result["steps"].append("MeshCentral agent installed successfully")
+                        result["meshcentral_agent"] = "installed"
+                    else:
+                        result["steps"].append(
+                            f"MeshCentral agent install failed (exit {agent_result.get('exit_code')}): "
+                            f"{agent_result.get('stderr', '')[:200]}"
+                        )
+                        result["meshcentral_agent"] = "failed"
+            except Exception as mc_exc:
+                logger.warning("MeshCentral agent install skipped: %s", mc_exc)
+                result["steps"].append(f"MeshCentral agent install skipped: {mc_exc}")
+
         return result
 
     # ── Website deployment ────────────────────────────────────────────────────
