@@ -103,6 +103,28 @@ services:
     networks:
       - brain-net
 
+  # ── MeshCentral (RMM — Remote Monitoring & Management) ───────
+  # Uses official Docker Hub image (meshcentral/meshcentral).
+  # Config + DB live in ./meshcentral/ bind mounts (gitignored).
+  # See meshcentral/config.template.json for the config structure.
+  meshcentral:
+    image: ghcr.io/ylianst/meshcentral:latest
+    container_name: ai-meshcentral
+    restart: unless-stopped
+    volumes:
+      - ./meshcentral/meshcentral-data:/opt/meshcentral/meshcentral-data
+      - ./meshcentral/meshcentral-files:/opt/meshcentral/meshcentral-files
+      - ./meshcentral/meshcentral-backups:/opt/meshcentral/meshcentral-backups
+    ports:
+      - "127.0.0.1:4430:4430"
+    extra_hosts:
+      # Allows MeshCentral to load certUrl (https://sentinelai.cloud/rmm/)
+      # from inside Docker so it embeds the correct Let's Encrypt cert hash
+      # in .msh agent packages. Uses nginx container on brain-net.
+      - "sentinelai.cloud:172.18.0.23"
+    networks:
+      - brain-net
+
   # ── n8n (Action Executor — NOT the Brain) ────────────────────
   n8n:
     image: n8nio/n8n:latest

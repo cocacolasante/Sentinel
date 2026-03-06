@@ -27,6 +27,11 @@ redis-data/
 qdrant-data/
 n8n-data/
 
+# MeshCentral — bind-mount dirs contain DB, certs, and config with secrets
+meshcentral/meshcentral-data/
+meshcentral/meshcentral-files/
+meshcentral/meshcentral-backups/
+
 # Nginx certs
 nginx/certs/
 
