@@ -76,12 +76,19 @@ class SlackReadSkill(BaseSkill):
 
     async def _resolve_channel_id(self, client, name: str) -> str | None:
         """Resolve a channel name like 'sentinel-alerts' to its Slack channel ID."""
-        # Strip leading #
         name = name.lstrip("#")
         try:
             resp = await client.conversations_list(
                 types="public_channel,private_channel", limit=200
             )
+            if not resp.get("ok"):
+                err = resp.get("error", "unknown")
+                if err == "missing_scope":
+                    logger.warning(
+                        "channels:read scope missing — bot cannot list channels. "
+                        "Add it at api.slack.com → Your App → OAuth & Permissions."
+                    )
+                return None
             for ch in resp.get("channels", []):
                 if ch.get("name") == name or ch.get("id") == name:
                     return ch["id"]
@@ -124,8 +131,13 @@ class SlackReadSkill(BaseSkill):
         if not channel_id:
             return SkillResult(
                 context_data=(
-                    f"Channel `#{channel_name}` not found or bot is not a member. "
-                    "Use `list_channels` to see available channels."
+                    f"Cannot read `#{channel_name}`. Either:\n"
+                    f"1. The bot is missing `channels:read` scope — add it at "
+                    f"api.slack.com → Your App → OAuth & Permissions → Bot Token Scopes, "
+                    f"then click 'Reinstall to Workspace' and restart the bot.\n"
+                    f"2. The channel doesn't exist — create `#{channel_name}` in Slack first.\n"
+                    f"3. The bot hasn't been invited — once scopes are added the bot auto-joins "
+                    f"on restart, or run `/invite @Sentinel` in `#{channel_name}`."
                 )
             )
 

@@ -328,6 +328,84 @@ async def _handle_thread_reply(event: dict, client) -> None:
 # ── Socket Mode launcher ──────────────────────────────────────────────────────
 
 
+async def _auto_join_channels(client) -> None:
+    """
+    Join all configured Sentinel channels at startup.
+
+    Requires the bot token to have `channels:read` + `channels:join` scopes.
+    If those scopes are missing this logs a clear warning and exits gracefully —
+    the user must add the scopes in the Slack app dashboard and reinstall.
+    """
+    target_channels = {
+        c for c in [
+            settings.slack_alert_channel,
+            settings.slack_eval_channel,
+            getattr(settings, "slack_milestone_channel", ""),
+            getattr(settings, "slack_tasks_channel", ""),
+            getattr(settings, "slack_rmm_prod_channel", ""),
+            getattr(settings, "slack_rmm_dev_channel", ""),
+        ] if c
+    }
+
+    # Step 1: resolve channel names → IDs (needs channels:read)
+    name_to_id: dict[str, str] = {}
+    try:
+        cursor = None
+        while True:
+            kwargs = {"types": "public_channel", "exclude_archived": True, "limit": 200}
+            if cursor:
+                kwargs["cursor"] = cursor
+            resp = await client.conversations_list(**kwargs)
+            if not resp.get("ok"):
+                err = resp.get("error", "unknown")
+                if err == "missing_scope":
+                    logger.warning(
+                        "Slack auto-join skipped — bot is missing 'channels:read' scope. "
+                        "Add it at api.slack.com → Your App → OAuth & Permissions → Bot Token Scopes, "
+                        "then click 'Reinstall to Workspace' and restart the bot."
+                    )
+                else:
+                    logger.warning("conversations_list failed: %s", err)
+                return
+            for ch in resp.get("channels", []):
+                name_to_id[ch["name"]] = ch["id"]
+                if ch.get("is_member"):
+                    logger.debug("Already a member of #%s", ch["name"])
+            meta = resp.get("response_metadata", {})
+            cursor = meta.get("next_cursor", "")
+            if not cursor:
+                break
+    except Exception as exc:
+        logger.warning("Could not list Slack channels: %s", exc)
+        return
+
+    # Step 2: join any target channel we're not in yet (needs channels:join)
+    for name in sorted(target_channels):
+        ch_id = name_to_id.get(name)
+        if not ch_id:
+            logger.warning("Slack channel #%s not found in workspace — create it first", name)
+            continue
+        try:
+            resp = await client.conversations_join(channel=ch_id)
+            if resp.get("ok"):
+                logger.info("Joined Slack channel #%s (%s)", name, ch_id)
+            else:
+                err = resp.get("error", "unknown")
+                if err == "already_in_channel":
+                    logger.debug("Already in #%s", name)
+                elif err == "missing_scope":
+                    logger.warning(
+                        "Slack auto-join skipped — bot is missing 'channels:join' scope. "
+                        "Add it at api.slack.com → Your App → OAuth & Permissions → Bot Token Scopes, "
+                        "then click 'Reinstall to Workspace' and restart the bot."
+                    )
+                    return
+                else:
+                    logger.warning("Could not join #%s: %s", name, err)
+        except Exception as exc:
+            logger.warning("conversations_join failed for #%s: %s", name, exc)
+
+
 async def start_socket_mode() -> None:
     global _bot_user_id
 
@@ -340,14 +418,20 @@ async def start_socket_mode() -> None:
 
     slack_app = _build_app()
 
+    from slack_sdk.web.async_client import AsyncWebClient
+    _wc = AsyncWebClient(token=settings.slack_bot_token)
+
     # Fetch bot user ID once so thread-reply handler can identify bot messages
     try:
-        from slack_sdk.web.async_client import AsyncWebClient
-        resp = await AsyncWebClient(token=settings.slack_bot_token).auth_test()
+        resp = await _wc.auth_test()
         _bot_user_id = resp.get("user_id", "")
         logger.info("Slack bot user ID: %s", _bot_user_id)
     except Exception as exc:
         logger.warning("Could not fetch bot user ID: %s", exc)
+
+    # Auto-join configured channels (no-op if scopes not yet granted)
+    await _auto_join_channels(_wc)
+
     backoff = 5  # seconds; doubles on each consecutive failure, caps at 300
 
     while True:
