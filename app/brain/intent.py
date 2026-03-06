@@ -22,6 +22,7 @@ Intents:
   knowledge_graph  — query or update the personal knowledge graph (projects, repos, servers, clients, ideas)
   rmm_read         — list managed servers, check device status/health, show RMM events or incidents
   rmm_manage       — run commands on remote servers, restart services/containers, install or upgrade agents, reboot servers
+  slack_read       — read messages from a Slack channel, search Slack, list channels, fetch DMs
   chat             — general reasoning / writing / coding (no external action)
   arch_advisor     — analyse system architecture and produce an evolution report
   data_intelligence — analyze time series data, detect anomalies, discover patterns across systems
@@ -122,6 +123,7 @@ Intent-specific param examples:
     }}
   rmm_read:       {{"action": "list" | "get" | "status" | "events" | "incidents" | "inventory" | "meshes", "node_id": "", "name": "", "group": "production" | "staging" | "dev", "project": "", "severity": "", "hours": 24, "limit": 20}}
   rmm_manage:     {{"action": "run_command" | "restart_service" | "restart_container" | "reboot" | "upgrade_agent" | "install_agent", "node_id": "", "name": "", "command": "", "service": "", "container": "", "host": "", "mesh_id": "", "username": "ubuntu"}}
+  slack_read:     {{"action": "history" | "search" | "list_channels" | "dm_history", "channel": "brain-alerts", "query": "search term", "user": "username", "limit": 20}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
@@ -233,6 +235,10 @@ Routing guidance:
   - "reboot server X", "restart server X" → rmm_manage with action=reboot, node_id=X
   - "upgrade agent on X", "update meshcentral agent" → rmm_manage with action=upgrade_agent, node_id=X
   - "install meshcentral agent on X", "add server X to RMM" → rmm_manage with action=install_agent, host=X
+  - "read slack channel X", "show messages in X", "what's in #X", "pull messages from X", "check #X", "show #X", "read #brain-alerts", "what did sentinel post to slack", "show recent slack messages", "what was sent to brain-alerts", "show me what was posted in X" → slack_read with action=history, channel=X
+  - "search slack for X", "find messages about X in slack", "slack search X" → slack_read with action=search, query=X
+  - "list slack channels", "what channels is sentinel in", "show all channels" → slack_read with action=list_channels
+  - "show my DMs with X", "read DMs with X" → slack_read with action=dm_history, user=X
   - "traffic spike Tuesday", "Tuesday pattern", "weekly patterns", "day of week analysis" → data_intelligence with action=patterns, window=7d
   - "add project X", "add repo X", "add node X", "register project X" → knowledge_graph with action=add, label=<type>, name=X
   - "connect X to Y", "link X to Y", "X uses Y", "X runs on Y" → knowledge_graph with action=connect, from=X, to=Y, relationship=<inferred>
@@ -288,6 +294,7 @@ task_create     — create a new tracked task with title, priority (1–5), and 
 task_read       — list, filter, or view existing tasks; check task status or priority
 task_update     — update a task's status, priority, approval level, or description
 knowledge_graph — personal knowledge graph: add nodes (projects/repos/servers/ideas/people), connect them, search, visualize
+slack_read      — read Slack channel history, search messages, list channels, fetch DMs; channels: brain-alerts, brain-evals, sentinel-milestones, rmm-production, rmm-dev-staging
 code            — software engineering help, code review, debugging, architecture — no file edits
 skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
 chat            — anything else: analysis, writing, questions, conversation"""
