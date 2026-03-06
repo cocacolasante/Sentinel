@@ -45,11 +45,14 @@ class MeshCentralClient:
 
     def __init__(self) -> None:
         s = _settings()
-        self.url = s.meshcentral_url.rstrip("/")
+        self.public_url = s.meshcentral_url.rstrip("/")
+        # Use internal URL for API calls if configured, otherwise fall back to public URL
+        self.url = (s.meshcentral_internal_url or s.meshcentral_url).rstrip("/")
         self.username = s.meshcentral_user
         self.password = s.meshcentral_password
         self.domain = s.meshcentral_domain or ""
         self._session_cookie: Optional[str] = None
+        self._session_cookie_name: str = ""
 
     def is_configured(self) -> bool:
         return bool(self.url and self.username and self.password)
@@ -71,11 +74,21 @@ class MeshCentralClient:
                 )
                 # MeshCentral returns 302 on successful login
                 cookies = dict(resp.cookies)
-                for key, val in cookies.items():
-                    if "meshcentral" in key.lower() or key == "connect.sid":
-                        self._session_cookie = val
+                # Preferred cookie names (in priority order)
+                _PREFERRED = ("meshcentral.sid", "connect.sid", "xid")
+                for key in _PREFERRED:
+                    if key in cookies:
+                        self._session_cookie = cookies[key]
+                        self._session_cookie_name = key
                         logger.debug("MeshCentral authenticated (cookie: %s)", key)
                         return True
+                # Fallback: any cookie set on successful response
+                if resp.status_code in (200, 302) and cookies:
+                    key, val = next(iter(cookies.items()))
+                    self._session_cookie = val
+                    self._session_cookie_name = key
+                    logger.debug("MeshCentral authenticated (cookie: %s)", key)
+                    return True
                 if resp.status_code in (200, 302) and not cookies:
                     # Some deployments embed token in response body
                     try:
@@ -83,6 +96,7 @@ class MeshCentralClient:
                         token = body.get("loginToken") or body.get("token")
                         if token:
                             self._session_cookie = token
+                            self._session_cookie_name = "loginToken"
                             return True
                     except Exception:
                         pass
@@ -92,132 +106,216 @@ class MeshCentralClient:
             logger.error("MeshCentral login error: %s", exc)
             return False
 
-    def _headers(self) -> dict:
-        h: dict = {"Content-Type": "application/json"}
-        if self._session_cookie:
-            h["Cookie"] = f"meshcentral.sid={self._session_cookie}"
-        return h
+    def _ws_url(self) -> str:
+        """WebSocket control URL derived from the internal API URL."""
+        return (
+            self.url.replace("https://", "wss://").replace("http://", "ws://")
+            + "/control.ashx"
+        )
 
-    async def _get(self, path: str, params: dict | None = None) -> Any:
-        """Authenticated GET — re-auths once on 401."""
-        if not self._session_cookie:
-            if not await self._login():
-                return None
+    async def _get_cookie_header(self) -> str:
+        """HTTP login to get session cookies for WebSocket auth."""
+        http_url = self.url.replace("ws://", "http://").replace("wss://", "https://")
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT, verify=False) as client:
-                resp = await client.get(
-                    f"{self.url}{path}",
-                    params=params,
-                    headers=self._headers(),
-                    follow_redirects=True,
+            async with httpx.AsyncClient(timeout=_TIMEOUT, verify=False) as c:
+                r = await c.post(
+                    f"{http_url}/login",
+                    data={"username": self.username, "password": self.password, "domain": self.domain},
+                    follow_redirects=False,
                 )
-                if resp.status_code == 401:
-                    self._session_cookie = None
-                    if await self._login():
-                        resp = await client.get(
-                            f"{self.url}{path}",
-                            params=params,
-                            headers=self._headers(),
-                            follow_redirects=True,
-                        )
-                if resp.status_code == 200:
-                    return resp.json()
-                logger.warning("MeshCentral GET %s → %s", path, resp.status_code)
-                return None
+                cookies = dict(r.cookies)
+                parts = [f"{k}={v}" for k, v in cookies.items()]
+                return "; ".join(parts)
         except Exception as exc:
-            logger.error("MeshCentral GET %s: %s", path, exc)
-            return None
+            logger.error("MeshCentral cookie login failed: %s", exc)
+            return ""
 
-    async def _post(self, path: str, payload: dict) -> Any:
-        """Authenticated POST — re-auths once on 401."""
-        if not self._session_cookie:
-            if not await self._login():
-                return None
+    async def _ws_query(
+        self,
+        send_actions: list[dict],
+        collect_actions: set[str],
+        timeout: float = 15.0,
+    ) -> dict[str, Any]:
+        """
+        One-shot WebSocket query: authenticate via cookie, send actions, collect responses.
+
+        send_actions:    List of action dicts to send after connection.
+        collect_actions: Set of action names to collect before closing.
+        Returns a dict keyed by action name → response payload.
+        """
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT, verify=False) as client:
-                resp = await client.post(
-                    f"{self.url}{path}",
-                    headers=self._headers(),
-                    json=payload,
-                    follow_redirects=True,
-                )
-                if resp.status_code == 401:
-                    self._session_cookie = None
-                    if await self._login():
-                        resp = await client.post(
-                            f"{self.url}{path}",
-                            headers=self._headers(),
-                            json=payload,
-                            follow_redirects=True,
-                        )
-                if resp.status_code in (200, 201):
+            import websockets
+        except ImportError:
+            logger.error("websockets package not installed")
+            return {}
+
+        results: dict[str, Any] = {}
+        ws_url = self._ws_url()
+        ssl_ctx: Any = False if ws_url.startswith("wss://") else None
+
+        # Auth via HTTP session cookie
+        cookie_hdr = await self._get_cookie_header()
+        extra_headers: dict = {}
+        if cookie_hdr:
+            extra_headers["Cookie"] = cookie_hdr
+
+        # WS server sends serverinfo, userinfo etc. on connect — we collect after those
+        _SKIP_ACTIONS = {"serverinfo", "userinfo", "traceinfo", "close"}
+
+        try:
+            async with websockets.connect(
+                ws_url,
+                additional_headers=extra_headers,
+                ssl=ssl_ctx,
+                open_timeout=10,
+                close_timeout=5,
+            ) as ws:
+                # Send all requested actions after connecting
+                for action in send_actions:
+                    await ws.send(json.dumps(action))
+
+                # Collect expected responses
+                deadline = asyncio.get_event_loop().time() + timeout
+                remaining = set(collect_actions)
+                while remaining:
+                    wait = deadline - asyncio.get_event_loop().time()
+                    if wait <= 0:
+                        break
                     try:
-                        return resp.json()
-                    except Exception:
-                        return {"status": "ok"}
-                logger.warning("MeshCentral POST %s → %s", path, resp.status_code)
-                return None
+                        raw = await asyncio.wait_for(ws.recv(), timeout=wait)
+                        msg = json.loads(raw)
+                        action_name = msg.get("action", "")
+                        if action_name == "close":
+                            logger.warning("MeshCentral WS closed: %s", msg.get("msg", ""))
+                            break
+                        if action_name in remaining:
+                            results[action_name] = msg
+                            remaining.discard(action_name)
+                    except asyncio.TimeoutError:
+                        break
+                    except Exception as exc:
+                        logger.warning("WS recv error: %s", exc)
+                        break
+
         except Exception as exc:
-            logger.error("MeshCentral POST %s: %s", path, exc)
-            return None
+            logger.error("MeshCentral WS query failed: %s", exc)
+
+        return results
 
     # ── Device Inventory ──────────────────────────────────────────────────────
 
     async def list_devices(self) -> list[dict]:
-        """Return all registered devices."""
-        data = await self._get("/api/v1/devices")
-        if not data:
-            return []
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return data.get("devices", data.get("nodes", []))
-        return []
+        """Return all registered devices via WebSocket API."""
+        results = await self._ws_query(
+            send_actions=[{"action": "nodes"}, {"action": "meshes"}],
+            collect_actions={"nodes", "meshes"},
+        )
+
+        # Build meshid → mesh name lookup from meshes response
+        mesh_name: dict[str, str] = {}
+        meshes_data = results.get("meshes", {}).get("meshes", [])
+        if isinstance(meshes_data, list):
+            for m in meshes_data:
+                if isinstance(m, dict):
+                    mesh_name[m.get("_id", "")] = m.get("name", "")
+        elif isinstance(meshes_data, dict):
+            for mid, m in meshes_data.items():
+                mesh_name[mid] = m.get("name", "") if isinstance(m, dict) else ""
+
+        nodes_map = results.get("nodes", {}).get("nodes", {})
+        devices: list[dict] = []
+        if isinstance(nodes_map, dict):
+            # {"meshid": [node,...], ...}  OR  {"meshid": {"nodeid": node,...}, ...}
+            for mesh_id, mesh_nodes in nodes_map.items():
+                node_list: list[dict] = []
+                if isinstance(mesh_nodes, list):
+                    node_list = [n for n in mesh_nodes if isinstance(n, dict)]
+                elif isinstance(mesh_nodes, dict):
+                    node_list = [n for n in mesh_nodes.values() if isinstance(n, dict)]
+                # Inject meshid and groupname into each node
+                for node in node_list:
+                    node["meshid"] = mesh_id
+                    node["groupname"] = mesh_name.get(mesh_id, "")
+                devices.extend(node_list)
+        elif isinstance(nodes_map, list):
+            devices = [n for n in nodes_map if isinstance(n, dict)]
+        return devices
 
     async def get_device(self, node_id: str) -> dict | None:
-        """Get full details for a specific device."""
-        return await self._get(f"/api/v1/device/{node_id}")
+        """Get details for a specific device via WebSocket."""
+        devices = await self.list_devices()
+        for dev in devices:
+            dev_id = dev.get("_id") or dev.get("id", "")
+            if dev_id == node_id:
+                return dev
+        return None
 
     async def get_meshes(self) -> list[dict]:
-        """Return all mesh groups."""
-        data = await self._get("/api/v1/meshes")
-        if not data:
-            return []
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return data.get("meshes", [])
+        """Return all mesh groups via WebSocket API."""
+        results = await self._ws_query(
+            send_actions=[{"action": "meshes"}],
+            collect_actions={"meshes"},
+        )
+        meshes_msg = results.get("meshes", {})
+        meshes = meshes_msg.get("meshes", {})
+        if isinstance(meshes, dict):
+            return list(meshes.values())
+        if isinstance(meshes, list):
+            return meshes
         return []
 
     async def server_info(self) -> dict | None:
-        """Return MeshCentral server metadata."""
-        return await self._get("/api/v1/serverinfo")
+        """Return MeshCentral server metadata via WebSocket."""
+        results = await self._ws_query(
+            send_actions=[],
+            collect_actions={"serverinfo"},
+            timeout=8.0,
+        )
+        return results.get("serverinfo")
 
     # ── Remote Commands ───────────────────────────────────────────────────────
 
     async def run_command(self, node_id: str, command: str) -> dict | None:
         """Execute a shell command on a managed device."""
-        return await self._post(
-            "/api/v1/runcommand",
-            {"nodeids": [node_id], "cmds": command, "type": 0},
+        results = await self._ws_query(
+            send_actions=[{
+                "action": "runcommands",
+                "nodeids": [node_id],
+                "cmds": command,
+                "type": 0,
+                "rights": 4,
+                "responseid": "run1",
+            }],
+            collect_actions={"runcommands"},
         )
+        return results.get("runcommands")
 
     async def power_action(self, node_id: str, action: int) -> dict | None:
         """
         Send a power action to a device.
         2=sleep  4=hibernate  5=soft-off  6=hard-off  7=reset  8=soft-reset  10=wake-on-lan
         """
-        return await self._post(
-            "/api/v1/devicepower",
-            {"nodeids": [node_id], "power": action},
+        results = await self._ws_query(
+            send_actions=[{
+                "action": "poweraction",
+                "nodeids": [node_id],
+                "actiontype": action,
+            }],
+            collect_actions={"poweraction"},
         )
+        return results.get("poweraction", {"status": "sent"})
 
     async def upgrade_agent(self, node_id: str) -> dict | None:
         """Trigger a MeshCentral agent self-upgrade on a device."""
-        return await self._post(
-            "/api/v1/meshcommand",
-            {"nodeids": [node_id], "command": 30},  # 30 = upgrade agent
+        results = await self._ws_query(
+            send_actions=[{
+                "action": "meshcommand",
+                "nodeids": [node_id],
+                "command": 30,
+            }],
+            collect_actions={"meshcommand"},
         )
+        return results.get("meshcommand", {"status": "sent"})
 
     # ── Agent Installation ────────────────────────────────────────────────────
 
@@ -268,10 +366,7 @@ class MeshCentralClient:
             )
             return
 
-        ws_url = (
-            self.url.replace("https://", "wss://").replace("http://", "ws://")
-            + "/control.ashx"
-        )
+        ws_url = self._ws_url()
 
         if not self._session_cookie:
             await self._login()
@@ -286,11 +381,12 @@ class MeshCentralClient:
             if self._session_cookie:
                 extra_headers["Cookie"] = f"meshcentral.sid={self._session_cookie}"
 
+            ssl_ctx = False if ws_url.startswith("wss://") else None
             try:
                 async with websockets.connect(
                     ws_url,
                     additional_headers=extra_headers,
-                    ssl=False,
+                    ssl=ssl_ctx,
                     ping_interval=_WS_PING_INTERVAL,
                     ping_timeout=_WS_PING_TIMEOUT,
                     close_timeout=5,

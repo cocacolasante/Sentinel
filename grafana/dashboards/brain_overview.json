@@ -627,7 +627,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "fieldConfig": {
         "defaults": {
@@ -667,7 +667,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='pending'",
@@ -681,7 +681,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "fieldConfig": {
         "defaults": {
@@ -721,7 +721,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='in_progress'",
@@ -735,7 +735,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "fieldConfig": {
         "defaults": {
@@ -775,7 +775,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status='done'",
@@ -789,7 +789,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "fieldConfig": {
         "defaults": {
@@ -829,7 +829,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE status NOT IN ('done','cancelled') AND priority_num >= 4",
@@ -1817,7 +1817,7 @@
       "title": "Total Devices",
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "gridPos": {
         "h": 3,
@@ -1857,7 +1857,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM rmm_devices",
@@ -1872,7 +1872,7 @@
       "title": "Online",
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "gridPos": {
         "h": 3,
@@ -1915,7 +1915,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM rmm_devices WHERE is_online = TRUE",
@@ -1930,7 +1930,7 @@
       "title": "Offline",
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "gridPos": {
         "h": 3,
@@ -1977,7 +1977,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM rmm_devices WHERE is_online = FALSE",
@@ -1992,7 +1992,7 @@
       "title": "Critical Incidents (24h)",
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "gridPos": {
         "h": 3,
@@ -2039,7 +2039,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT COUNT(*) AS value FROM rmm_events WHERE severity IN ('high','critical') AND created_at > NOW() - INTERVAL '24 hours'",
@@ -2054,7 +2054,7 @@
       "title": "Device Inventory",
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "gridPos": {
         "h": 12,
@@ -2175,7 +2175,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT\n  name, hostname, ip_address, os_name,\n  group_name, project, is_online,\n  cpu_usage, memory_usage, disk_usage,\n  TO_CHAR(last_seen, 'YYYY-MM-DD HH24:MI') AS last_seen\nFROM rmm_devices\nORDER BY is_online DESC, name ASC",
@@ -2190,7 +2190,7 @@
       "title": "Events by Severity (24h)",
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "gridPos": {
         "h": 12,
@@ -2223,7 +2223,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT\n  severity,\n  COUNT(*) AS count\nFROM rmm_events\nWHERE created_at > NOW() - INTERVAL '24 hours'\nGROUP BY severity\nORDER BY count DESC",
@@ -2238,7 +2238,7 @@
       "title": "Recent RMM Events",
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "gridPos": {
         "h": 9,
@@ -2338,7 +2338,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "table",
           "rawSql": "SELECT\n  TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,\n  severity,\n  event_type,\n  hostname,\n  group_name,\n  project,\n  details\nFROM rmm_events\nORDER BY created_at DESC\nLIMIT 50",
@@ -2353,7 +2353,7 @@
       "title": "RMM Event Rate (events / hour)",
       "datasource": {
         "type": "postgres",
-        "uid": "${DS_POSTGRESQL}"
+        "uid": "postgres"
       },
       "gridPos": {
         "h": 8,
@@ -2384,7 +2384,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "time_series",
           "rawSql": "SELECT\n  DATE_TRUNC('hour', created_at) AS time,\n  COUNT(*) AS \"All Events\"\nFROM rmm_events\nWHERE created_at > NOW() - INTERVAL '7 days'\nGROUP BY 1\nORDER BY 1",
@@ -2394,7 +2394,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "${DS_POSTGRESQL}"
+            "uid": "postgres"
           },
           "format": "time_series",
           "rawSql": "SELECT\n  DATE_TRUNC('hour', created_at) AS time,\n  COUNT(*) AS \"Critical/High\"\nFROM rmm_events\nWHERE severity IN ('critical','high')\n  AND created_at > NOW() - INTERVAL '7 days'\nGROUP BY 1\nORDER BY 1",
