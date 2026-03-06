@@ -1,12 +1,31 @@
 # Sentinel Skills Reference
 
-> **37 skills** across 9 categories. All triggered via natural language in Slack, the CLI (`brain chat`), or the REST API (`POST /api/v1/chat`).
+> **40 skills** across 10 categories. All triggered via natural language in Slack, the CLI (`brain chat`), or the REST API (`POST /api/v1/chat`).
 
 All skills are triggered via natural language in Slack, the CLI (`brain chat`), or the REST API (`POST /api/v1/chat`). The intent classifier maps your message to the right skill automatically.
 
 ---
 
 ## Communication
+
+### Slack — Read
+Read messages from any Slack channel, search across channels, list channels, or fetch DMs.
+
+**Trigger phrases:**
+- "show recent messages in brain-alerts", "read #brain-evals", "what's in #sentinel-milestones"
+- "what did Sentinel post to Slack", "show me what was sent to brain-alerts"
+- "check #rmm-production", "show recent slack messages from #rmm-dev-staging"
+- "search Slack for X", "find messages about X in Slack"
+- "list Slack channels", "what channels is Sentinel in"
+- "show my DMs with X", "read DMs with X"
+
+**Actions:** `history` · `search` · `list_channels` · `dm_history`
+
+**Built-in channels:** `brain-alerts` · `brain-evals` · `sentinel-milestones` · `rmm-production` · `rmm-dev-staging`
+
+**Requires:** `SLACK_BOT_TOKEN` + scopes: `channels:history`, `channels:read`, `groups:history`, `groups:read`, `search:read`
+
+---
 
 ### Gmail — Read
 Read, search, or manage your inbox.
@@ -454,6 +473,82 @@ Build and query a personal Neo4j graph of everything Sentinel works on — proje
 
 ---
 
+## Remote Monitoring & Management (RMM)
+
+Sentinel uses MeshCentral as its RMM backend, combining a live WebSocket event stream for real-time alerts with periodic polling for state reconciliation, and stores all data in `rmm_devices` + `rmm_events` Postgres tables.
+
+### RMM — Read
+Query the managed server inventory, check device health and status, and view recent events or incidents.
+
+**Trigger phrases:**
+- "list managed servers", "show all agents", "which servers are online / offline"
+- "RMM inventory", "show my infrastructure", "list RMM devices"
+- "show RMM status", "infrastructure health summary", "how many servers online"
+- "RMM events", "recent agent events", "server events"
+- "show incidents", "any server incidents", "infrastructure incidents", "recent alerts"
+- "show production servers", "list staging servers", "list dev servers"
+- "infrastructure report", "server inventory report"
+- "show meshes", "list mesh groups", "MeshCentral meshes"
+
+**Actions:**
+
+| Action | Description |
+|--------|-------------|
+| `list` | Full device inventory with online/offline status, IP, OS, group, project |
+| `get` | Detail view of a single device (CPU, RAM, disk, agent version, last seen) |
+| `status` | Summary: online/offline counts + event breakdown for the last hour |
+| `events` | Recent raw events; filter by node, severity, or limit |
+| `incidents` | High/critical/medium severity events for a configurable window (default 24h) |
+| `inventory` | Grouped breakdown by project/environment showing health ratio |
+| `meshes` | List all MeshCentral mesh groups |
+
+**Requires:** `MESHCENTRAL_URL`, `MESHCENTRAL_USER`, `MESHCENTRAL_PASSWORD`
+
+---
+
+### RMM — Manage
+Execute remote actions on managed servers via MeshCentral — commands, service/container restarts, reboots, and agent management.
+
+> **Approval required** — all manage actions require confirmation before execution. Agent installs require `STANDARD` approval; all other actions require `CRITICAL` approval.
+
+**Trigger phrases:**
+- "restart service nginx on server X", "restart nginx on server X"
+- "restart container api on server X", "restart docker container X"
+- "run command X on server Y", "execute X on Y"
+- "reboot server X", "restart server X"
+- "upgrade agent on X", "update MeshCentral agent on X"
+- "install MeshCentral agent on X", "add server X to RMM"
+
+**Actions:**
+
+| Action | Description |
+|--------|-------------|
+| `run_command` | Run a shell command on the target device |
+| `restart_service` | `systemctl restart <service>` on the target |
+| `restart_container` | `docker restart <container>` on the target |
+| `reboot` | Hard reboot the target server |
+| `upgrade_agent` | Upgrade the MeshCentral agent to latest |
+| `install_agent` | Install a new MeshCentral agent on a fresh host |
+
+**Auto-provisioning:** when IONOS provisions a new server with `wait_for_ready=True` and a static IP, the RMM agent is automatically installed and registered into the configured mesh.
+
+**Slack notifications:**
+- Dev/staging servers → `#rmm-dev-staging`
+- Production servers → `#rmm-production`
+
+**Requires:** `MESHCENTRAL_URL`, `MESHCENTRAL_USER`, `MESHCENTRAL_PASSWORD`
+
+**Background tasks (Celery):**
+
+| Task | Frequency | Purpose |
+|------|-----------|---------|
+| `rmm_poll_device_status` | Every 60s | Online/offline status sync |
+| `rmm_full_inventory_sync` | Every 5 min | Full device metadata reconciliation |
+| `rmm_incident_detection` | Every 2 min | Scan for high/critical severity events |
+| `rmm_websocket_listener` | On-demand | Live event stream from MeshCentral |
+
+---
+
 ## Sentinel Self-Management
 
 ### Architecture Advisor
@@ -509,6 +604,7 @@ When no existing skill covers a request, analyzes the gap and proposes a new ski
 
 | Skill | Intent | Requires Config |
 |-------|--------|-----------------|
+| slack_read | slack_read | SLACK_BOT_TOKEN |
 | gmail_read | gmail_read | GOOGLE_REFRESH_TOKEN |
 | gmail_send | gmail_send | GOOGLE_REFRESH_TOKEN |
 | gmail_reply | gmail_reply | GOOGLE_REFRESH_TOKEN |
@@ -547,4 +643,6 @@ When no existing skill covers a request, analyzes the gap and proposes a new ski
 | deploy | deploy | — |
 | code | code | ANTHROPIC_API_KEY |
 | chat | chat | ANTHROPIC_API_KEY |
+| rmm_read | rmm_read | MESHCENTRAL_URL + USER + PASSWORD |
+| rmm_manage | rmm_manage | MESHCENTRAL_URL + USER + PASSWORD |
 | skill_discover | skill_discover | ANTHROPIC_API_KEY |
