@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     title       TEXT        NOT NULL,
     description TEXT,
     status      TEXT        NOT NULL DEFAULT 'pending'
-                            CHECK (status IN ('pending', 'in_progress', 'done', 'cancelled', 'failed', 'archived')),
+                            CHECK (status IN ('pending', 'in_progress', 'done', 'cancelled', 'failed', 'archived', 'manual_review')),
     priority    TEXT        NOT NULL DEFAULT 'normal'
                             CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
     due_date    TIMESTAMPTZ,
