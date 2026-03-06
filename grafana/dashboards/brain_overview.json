@@ -9,13 +9,15 @@
     "to": "now"
   },
   "schemaVersion": 39,
-  "version": 7,
+  "version": 8,
   "tags": [
     "brain",
+    "meshcentral",
     "ai",
+    "rmm",
     "celery",
-    "loki",
-    "observability"
+    "observability",
+    "loki"
   ],
   "templating": {
     "list": [
@@ -1781,6 +1783,610 @@
         "mode": "html",
         "content": "<div id=\"brain-chat\" style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center\">\n  <span style=\"color:#93c5fd;font-size:13px;font-weight:bold\">Sentinel Chat</span>\n  <div style=\"display:flex;gap:6px;align-items:center\">\n    <span id=\"chat-indicator\" style=\"font-size:10px;color:#4b5563\"></span>\n    <button onclick=\"clearSession()\" style=\"background:#374151;color:#9ca3af;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px\">Clear</button>\n  </div>\n</div>\n<div id=\"msgs\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0\"></div>\n<div style=\"display:flex;gap:6px\">\n  <textarea id=\"inp\" rows=\"2\" placeholder=\"Message Sentinel... (Enter to send)\" style=\"flex:1;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:8px;font-size:13px;font-family:monospace;resize:none\"></textarea>\n  <button onclick=\"sendMsg()\" id=\"sendBtn\" style=\"background:#3b82f6;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;align-self:flex-end\">Send</button>\n</div>\n<div id=\"chat-status\" style=\"font-size:11px;color:#6b7280\"></div>\n</div>\n<script>\nvar _BASE='[[brain_url]]';\nvar _sid='dashboard-'+Math.random().toString(36).slice(2,8);\nvar _pollTimer=null;\nvar _pollCount=0;\nvar _MAX_POLLS=40; // 40 x 3s = 2 min max polling window\n\nfunction addMsg(role,text,meta){\n  var msgs=document.getElementById('msgs');\n  var d=document.createElement('div');\n  d.style.cssText='padding:8px 10px;border-radius:6px;max-width:92%;word-break:break-word;font-size:13px;line-height:1.5;white-space:pre-wrap;'\n    +(role==='user'?'background:#1e3a5f;color:#93c5fd;align-self:flex-end'\n    :role==='followup'?'background:#1a2e1a;color:#86efac;align-self:flex-start;border-left:3px solid #22c55e'\n    :'background:#1f2937;color:#d1d5db;align-self:flex-start');\n  d.textContent=text;\n  if(meta){var s=document.createElement('div');s.style.cssText='font-size:10px;color:#4b5563;margin-top:4px';s.textContent=meta;d.appendChild(s);}\n  msgs.appendChild(d);\n  msgs.scrollTop=msgs.scrollHeight;\n}\n\nfunction setIndicator(text,color){\n  var el=document.getElementById('chat-indicator');\n  el.textContent=text;\n  el.style.color=color||'#4b5563';\n}\n\nfunction startPolling(){\n  _pollCount=0;\n  stopPolling();\n  _pollTimer=setInterval(function(){\n    _pollCount++;\n    if(_pollCount>_MAX_POLLS){stopPolling();setIndicator('');return;}\n    fetch(_BASE+'/api/v1/chat/followup/'+_sid)\n      .then(function(r){return r.json();})\n      .then(function(data){\n        if(data.message){\n          addMsg('followup',data.message,'\u27f3 Sentinel follow-up');\n          _pollCount=0; // reset window if we got a message, keep polling\n        }\n      })\n      .catch(function(){});\n  },3000);\n}\n\nfunction stopPolling(){\n  if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}\n}\n\nasync function sendMsg(){\n  var inp=document.getElementById('inp');\n  var btn=document.getElementById('sendBtn');\n  var msg=inp.value.trim();\n  if(!msg)return;\n  stopPolling();\n  addMsg('user',msg);\n  inp.value='';\n  btn.disabled=true;\n  setIndicator('\u25cf thinking\u2026','#fbbf24');\n  document.getElementById('chat-status').textContent='';\n  try{\n    var r=await fetch(_BASE+'/api/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,session_id:_sid})});\n    var data=await r.json();\n    addMsg('brain',data.reply||data.detail||'No response','intent: '+(data.intent||'?')+' \u00b7 agent: '+(data.agent||'?'));\n    setIndicator('\u25cf listening','#4b5563');\n    // Start polling for async follow-ups (background tasks, long ops, etc.)\n    startPolling();\n  }catch(e){\n    addMsg('brain','Error: '+e.message);\n    setIndicator('','');\n  }\n  btn.disabled=false;\n}\n\nfunction clearSession(){\n  stopPolling();\n  fetch(_BASE+'/api/v1/chat/'+_sid,{method:'DELETE'});\n  document.getElementById('msgs').innerHTML='';\n  document.getElementById('chat-status').textContent='Session cleared';\n  setIndicator('','');\n}\n\ndocument.getElementById('inp').addEventListener('keydown',function(e){\n  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}\n});\n</script>"
       }
+    },
+    {
+      "id": 800,
+      "type": "row",
+      "title": "RMM Infrastructure",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 148
+      }
+    },
+    {
+      "id": 801,
+      "type": "stat",
+      "title": "Total Devices",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 149
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "#93c5fd",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#93c5fd",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM rmm_devices",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ]
+    },
+    {
+      "id": 802,
+      "type": "stat",
+      "title": "Online",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 6,
+        "y": 149
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#6b7280",
+                "value": null
+              },
+              {
+                "color": "#86efac",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM rmm_devices WHERE is_online = TRUE",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ]
+    },
+    {
+      "id": 803,
+      "type": "stat",
+      "title": "Offline",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 12,
+        "y": 149
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#86efac",
+                "value": null
+              },
+              {
+                "color": "#fb923c",
+                "value": 1
+              },
+              {
+                "color": "#f87171",
+                "value": 3
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM rmm_devices WHERE is_online = FALSE",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ]
+    },
+    {
+      "id": 804,
+      "type": "stat",
+      "title": "Critical Incidents (24h)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 149
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#86efac",
+                "value": null
+              },
+              {
+                "color": "#fb923c",
+                "value": 1
+              },
+              {
+                "color": "#f87171",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM rmm_events WHERE severity IN ('high','critical') AND created_at > NOW() - INTERVAL '24 hours'",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ]
+    },
+    {
+      "id": 810,
+      "type": "table",
+      "title": "Device Inventory",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 14,
+        "x": 0,
+        "y": 152
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "is_online"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "true": {
+                        "text": "\ud83d\udfe2 Online",
+                        "color": "#86efac",
+                        "index": 0
+                      },
+                      "false": {
+                        "text": "\ud83d\udd34 Offline",
+                        "color": "#f87171",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "node_id"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cpu_usage"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "memory_usage"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "disk_usage"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "is_online",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT\n  name, hostname, ip_address, os_name,\n  group_name, project, is_online,\n  cpu_usage, memory_usage, disk_usage,\n  TO_CHAR(last_seen, 'YYYY-MM-DD HH24:MI') AS last_seen\nFROM rmm_devices\nORDER BY is_online DESC, name ASC",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ]
+    },
+    {
+      "id": 811,
+      "type": "barchart",
+      "title": "Events by Severity (24h)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 10,
+        "x": 14,
+        "y": 152
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 70
+          }
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "groupWidth": 0.7,
+        "barWidth": 0.97,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT\n  severity,\n  COUNT(*) AS count\nFROM rmm_events\nWHERE created_at > NOW() - INTERVAL '24 hours'\nGROUP BY severity\nORDER BY count DESC",
+          "refId": "A",
+          "interval": "60s"
+        }
+      ]
+    },
+    {
+      "id": 812,
+      "type": "table",
+      "title": "Recent RMM Events",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 164
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "\ud83d\udd34 critical",
+                        "color": "#f87171",
+                        "index": 0
+                      },
+                      "high": {
+                        "text": "\ud83d\udd34 high",
+                        "color": "#f87171",
+                        "index": 1
+                      },
+                      "medium": {
+                        "text": "\ud83d\udfe0 medium",
+                        "color": "#fb923c",
+                        "index": 2
+                      },
+                      "low": {
+                        "text": "\ud83d\udfe1 low",
+                        "color": "#fde68a",
+                        "index": 3
+                      },
+                      "info": {
+                        "text": "\ud83d\udd35 info",
+                        "color": "#93c5fd",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "node_id"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "created_at"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "created_at",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "table",
+          "rawSql": "SELECT\n  TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,\n  severity,\n  event_type,\n  hostname,\n  group_name,\n  project,\n  details\nFROM rmm_events\nORDER BY created_at DESC\nLIMIT 50",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ]
+    },
+    {
+      "id": 813,
+      "type": "timeseries",
+      "title": "RMM Event Rate (events / hour)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "${DS_POSTGRESQL}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 173
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity"
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT\n  DATE_TRUNC('hour', created_at) AS time,\n  COUNT(*) AS \"All Events\"\nFROM rmm_events\nWHERE created_at > NOW() - INTERVAL '7 days'\nGROUP BY 1\nORDER BY 1",
+          "refId": "A",
+          "interval": "1h"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${DS_POSTGRESQL}"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT\n  DATE_TRUNC('hour', created_at) AS time,\n  COUNT(*) AS \"Critical/High\"\nFROM rmm_events\nWHERE severity IN ('critical','high')\n  AND created_at > NOW() - INTERVAL '7 days'\nGROUP BY 1\nORDER BY 1",
+          "refId": "B",
+          "interval": "1h"
+        }
+      ]
     }
   ]
 }
