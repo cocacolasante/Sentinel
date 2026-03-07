@@ -2,10 +2,10 @@ auth_enabled: false
 server:
   http_listen_port: 3100
   grpc_listen_port: 9096
-  grpc_server_max_connection_idle: 1h30m
+  grpc_server_max_connection_idle: 2h30m
   grpc_server_max_connection_age: 4h
   grpc_server_max_connection_age_grace: 30m
-  grpc_server_keepalive_time: 30s
+  grpc_server_keepalive_time: 60s
   grpc_server_keepalive_timeout: 10s
   grpc_server_min_time_between_pings: 10s
   grpc_server_ping_without_stream_allowed: true
@@ -90,10 +90,11 @@ frontend_worker:
     max_recv_msg_size: 104857600
     max_send_msg_size: 104857600
     grpc_compression: gzip
+    backoff_on_ratelimits: false
     backoff_config:
       min_period: 100ms
       max_period: 10s
-      max_retries: 3
+      max_retries: 10
     keepalive_params:
       keepalive_time: 10s
       keepalive_timeout: 3s
