@@ -109,6 +109,20 @@ _SEVERITY_BADGE = {
 }
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
+# Maps infra service names to patchable config files in the repo.
+# prometheus/prometheus.yml is intentionally excluded — it contains credentials
+# and is gitignored; patches to it would be silently dropped from git commits.
+_SERVICE_CONFIG_MAP: dict[str, list[str]] = {
+    "loki":       ["observability/loki-config.yml"],
+    "promtail":   ["observability/promtail-config.yml"],
+    "nginx":      ["nginx/nginx.conf"],
+    "grafana":    [
+        "grafana/provisioning/datasources/prometheus.yaml",
+        "grafana/provisioning/dashboards/dashboard.yaml",
+        "grafana/dashboards/brain_overview.json",
+    ],
+}
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -510,19 +524,6 @@ async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
 
     badge = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(severity, "🟢")
 
-    # ── 0. Service → config file map ──────────────────────────────────────────
-    # Maps service names to their config files in the repo so the LLM can patch them.
-    _SERVICE_CONFIG_MAP: dict[str, list[str]] = {
-        "loki":           ["observability/loki-config.yml"],
-        "promtail":       ["observability/promtail-config.yml"],
-        "prometheus":     ["prometheus/prometheus.yml"],
-        "nginx":          ["nginx/nginx.conf"],
-        "grafana":        [
-            "grafana/provisioning/datasources/prometheus.yaml",
-            "grafana/provisioning/dashboards/dashboard.yaml",
-        ],
-    }
-
     # ── 1. Mark in_progress + notify ─────────────────────────────────────────
     _mark_bug_task(task_id, "in_progress")
     post_alert_sync(
@@ -550,11 +551,13 @@ async def _investigate_and_fix_bug(task_id: int, finding: dict) -> dict:
         candidate_files.append(mod_path)
 
     # Check service config map for infrastructure services
-    if not candidate_files and service in _SERVICE_CONFIG_MAP:
+    config_map_hit = not candidate_files and service in _SERVICE_CONFIG_MAP
+    if config_map_hit:
         candidate_files.extend(_SERVICE_CONFIG_MAP[service])
 
-    # Grep codebase for the service name if no file found yet
-    if not candidate_files:
+    # Grep app/ for the service name — only when config map didn't match,
+    # to avoid false positives from incidental references in settings/imports
+    if not candidate_files and not config_map_hit:
         try:
             result = subprocess.run(
                 ["grep", "-rl", service.replace("-", "_"), f"{_CODE_ROOT}/app", "--include=*.py"],

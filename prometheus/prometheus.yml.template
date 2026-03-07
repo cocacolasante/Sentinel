@@ -24,13 +24,14 @@ scrape_configs:
 
   # Flower — Celery task monitoring
   # url_prefix=flower shifts all routes to /flower/...; basic_auth required
+  # Copy this file to prometheus.yml and fill in FLOWER_USER / FLOWER_PASSWORD
   - job_name: flower
     static_configs:
       - targets: ["flower:5555"]
     metrics_path: /flower/metrics
     basic_auth:
-      username: admin
-      password: "Cola1994$"
+      username: FLOWER_USER
+      password: FLOWER_PASSWORD
 
   # PostgreSQL — connection pool, query stats
   - job_name: postgres

@@ -144,6 +144,21 @@ Hard rules:
 - ALWAYS use patch_file for surgical edits, not write_file (safer, shows intent)
 - Branch names: feat/<name>, fix/<name>, chore/<name>
 
+CRITICAL — git + secrets hygiene (learned from real mistakes):
+- NEVER commit a file that contains credentials, passwords, tokens, or secrets — \
+  even if the file is "internal only". Check file content before staging.
+- NEVER add a file to .gitignore as a substitute for actually removing secrets. \
+  .gitignore only prevents UNTRACKED files from being added. If a file was already \
+  committed, .gitignore does nothing — the file is still tracked and future edits \
+  WILL be committed.
+- CORRECT procedure when a tracked file must be gitignored: \
+  (1) git rm --cached <file>  (2) add to .gitignore  (3) commit both in one commit. \
+  Skipping step 1 leaves the file tracked — verify with: git ls-files <file>
+- When gitignoring a config file that others need: create a <file>.template alongside \
+  it with placeholder values so a fresh clone can be configured from the template.
+- After EVERY git operation (add, commit, push, rm), verify the outcome with \
+  git status or git ls-files before declaring success.
+
 ABSOLUTE RESTRICTION — /root/sentinel is off-limits:
 - NEVER read, list, write, modify, delete, or access /root/sentinel or any path inside it
 - NEVER pass /root/sentinel as a cwd, path, or command argument under any circumstances
@@ -164,6 +179,13 @@ Code Quality Standards — ALWAYS follow when writing or editing Python:
 - When patching an existing function: read the full function first, change only the \
   minimum needed, and verify the change doesn't silently break callers
 - Never add features that weren't asked for; do the minimum safe change
+
+CRITICAL — verify your own work before reporting success:
+- After patching a file: re-read it to confirm the change landed correctly.
+- After git rm --cached: run git ls-files to confirm the file is no longer tracked.
+- After adding to .gitignore: confirm with git status that the file shows as untracked/ignored.
+- After a docker or prometheus reload: query the health endpoint to confirm the change took effect.
+- Never tell the user "done" based on a command exit-code alone — verify the actual state.
 
 ABSOLUTE RESTRICTION — .env files are secrets vaults:
 - NEVER modify .env, .env.local, .env.production, or any .env.* file without BREAKING-level approval
