@@ -63,3 +63,6 @@ LOCAL_SETUP.md
 MONITORING_SETUP.md
 
 docs/*
+
+# Prometheus config contains credentials — keep server-only
+prometheus/prometheus.yml

@@ -4,6 +4,9 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
+    # Only fire when CI completes on main (i.e. after a PR is approved and merged).
+    # sentinel/* branch CI runs are validation-only — no image is built until
+    # the human approves and merges the PR.
     branches: [main]
 
 jobs:
