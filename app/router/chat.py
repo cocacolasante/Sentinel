@@ -96,6 +96,17 @@ async def list_agents():
     return {"agents": registry.list_agents()}
 
 
+_STARTED_AT: str = ""
+
+
+def _get_started_at() -> str:
+    global _STARTED_AT
+    if not _STARTED_AT:
+        from datetime import datetime, timezone
+        _STARTED_AT = datetime.now(timezone.utc).isoformat()
+    return _STARTED_AT
+
+
 @router.get("/health")
 async def health():
     import os
@@ -106,6 +117,7 @@ async def health():
         "redis": memory.ping(),
         "postgres": postgres.ping(),
         "sha": os.environ.get("GIT_SHA", "dev"),
+        "started_at": _get_started_at(),
     }
 
 
