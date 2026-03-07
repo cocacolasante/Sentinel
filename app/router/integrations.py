@@ -7,6 +7,7 @@ Provides:
   GET  /integrations/calendar         — list upcoming events (direct)
   GET  /integrations/github           — list notifications (direct)
   GET  /integrations/home-assistant   — list HA entity states (direct)
+  GET  /integrations/slack/messages   — list recent messages from a channel (direct)
   POST /integrations/n8n/trigger      — manually trigger an n8n workflow
 """
 
@@ -145,6 +146,74 @@ async def ha_call_service(call: ServiceCall) -> dict:
     if not ha.is_configured():
         raise HTTPException(status_code=503, detail="Home Assistant not configured")
     return await ha.call_service(call.domain, call.service, call.data)
+
+
+# ── Slack ─────────────────────────────────────────────────────────────────────
+
+
+@router.get("/slack/messages")
+async def slack_messages(
+    channel: str = Query(..., description="Channel name without #, e.g. sentinel-alerts"),
+    limit: int = Query(default=25, ge=1, le=100),
+) -> list[dict]:
+    """Return recent messages from a Slack channel directly via the Slack Web API."""
+    from app.config import get_settings
+    settings = get_settings()
+    if not settings.slack_bot_token:
+        raise HTTPException(status_code=503, detail="Slack not configured")
+
+    from slack_sdk.web.async_client import AsyncWebClient
+    client = AsyncWebClient(token=settings.slack_bot_token)
+
+    # Resolve channel name → ID
+    channel_id = None
+    cursor = None
+    while True:
+        kwargs: dict = {"types": "public_channel,private_channel", "exclude_archived": True, "limit": 200}
+        if cursor:
+            kwargs["cursor"] = cursor
+        resp = await client.conversations_list(**kwargs)
+        for ch in resp.get("channels", []):
+            if ch.get("name") == channel:
+                channel_id = ch["id"]
+                break
+        if channel_id:
+            break
+        cursor = (resp.get("response_metadata") or {}).get("next_cursor")
+        if not cursor:
+            break
+
+    if not channel_id:
+        raise HTTPException(status_code=404, detail=f"Channel #{channel} not found or bot not a member")
+
+    hist = await client.conversations_history(channel=channel_id, limit=limit)
+
+    # Cache user display names
+    user_cache: dict[str, str] = {}
+
+    async def _username(uid: str) -> str:
+        if uid not in user_cache:
+            try:
+                info = await client.users_info(user=uid)
+                profile = info["user"].get("profile", {})
+                user_cache[uid] = profile.get("display_name") or profile.get("real_name") or uid
+            except Exception:
+                user_cache[uid] = uid
+        return user_cache[uid]
+
+    messages = []
+    for msg in reversed(hist.get("messages", [])):
+        if msg.get("subtype") in ("channel_join", "channel_leave", "bot_message" if False else None):
+            pass  # include bot messages
+        user = await _username(msg.get("user") or msg.get("bot_id") or "unknown")
+        messages.append({
+            "ts": msg.get("ts"),
+            "user": user,
+            "text": msg.get("text", ""),
+            "bot": bool(msg.get("bot_id")),
+        })
+
+    return messages
 
 
 # ── n8n ───────────────────────────────────────────────────────────────────────
