@@ -4,9 +4,10 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    # Fire on main (post-merge deploy) AND sentinel/* (pre-merge image build).
-    # Previously only [main] — CI on PR branches never triggered a release.
-    branches: [main, "sentinel/**"]
+    # Only fire when CI completes on main (i.e. after a PR is approved and merged).
+    # sentinel/* branch CI runs are validation-only — no image is built until
+    # the human approves and merges the PR.
+    branches: [main]
 
 jobs:
   push:
@@ -29,14 +30,12 @@ jobs:
       - name: Lowercase image name
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
-      # On main: tag latest + sha  (deploy will use :latest)
-      # On sentinel/*: tag sha only (no :latest, prevents overwriting prod tag)
       - uses: docker/metadata-action@v5
         id: meta
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=latest,enable=${{ github.event.workflow_run.head_branch == 'main' }}
+            type=raw,value=latest
             type=sha,prefix=sha-,format=short
 
       - uses: docker/setup-buildx-action@v3
@@ -53,10 +52,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Deploy only fires on main — sentinel/* branches build the image but
-      # do not push to prod until the PR is merged and main CI passes.
       - name: Trigger server deploy
-        if: ${{ github.event.workflow_run.head_branch == 'main' }}
         run: |
           curl -fsS -X POST https://sentinelai.cloud/webhooks/deploy \
             -H "Content-Type: application/json" \

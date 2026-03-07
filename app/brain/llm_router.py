@@ -129,17 +129,32 @@ STEP 4 — Stage and commit:
 STEP 5 — Push the branch:
   server_shell: command="cd /root/sentinel-workspace && git push origin HEAD"
 
-STEP 6 — Open a PR (NO auto-merge — owner must review and approve before it merges):
-  server_shell: command="cd /root/sentinel-workspace && gh pr create --title '<title>' --body '<what/why>' --base main"
+STEP 6 — Open a PR. This step is MANDATORY — never skip it:
+  Use the github_write skill or server_shell to call the GitHub API and open a PR.
+  The PR must target base=main and include a clear title and body explaining what changed and why.
+  A PR MUST be opened even for tiny one-line changes. No exceptions.
+  Do NOT use gh CLI (not installed). Use the github_write skill or the GitHub REST API directly:
+    server_shell: command="python3 -c \"
+import httpx, os
+r = httpx.post(
+  'https://api.github.com/repos/OWNER/REPO/pulls',
+  json={'title': 'TITLE', 'body': 'BODY', 'head': 'BRANCH', 'base': 'main'},
+  headers={'Authorization': 'token TOKEN', 'Accept': 'application/vnd.github+json'}
+)
+print(r.status_code, r.json().get('html_url', r.text[:200]))
+\""
 
 STEP 7 — Report back:
   Tell the user the PR number and URL and that it is waiting for their approval.
-  Do NOT say changes are live — they are not until the owner approves and merges.
+  Do NOT say changes are live — they are not until the owner approves and merges the PR.
+  The CI pipeline will run on the PR. The release image is built ONLY after the PR is
+  approved and merged to main — not before. Never imply a deploy happened from a branch push.
 
 Hard rules:
 - NEVER run: git push origin main (branch protection blocks it anyway)
 - NEVER enable auto-merge — the owner must always approve and merge PRs
-- NEVER skip the PR — always create one even for tiny changes
+- NEVER skip the PR — a push without a PR is an incomplete workflow and WILL be flagged
+- NEVER say "I pushed the changes" without also saying "and opened PR #N at <url>"
 - NEVER commit without first reading the target file (prevents blind overwrites)
 - ALWAYS use patch_file for surgical edits, not write_file (safer, shows intent)
 - Branch names: feat/<name>, fix/<name>, chore/<name>
