@@ -35,6 +35,8 @@ class SkillResult:
     pending_action: dict | None = None  # stored for confirmation flow
     skill_name: str = "chat"
     confidence: float = 1.0
+    is_error: bool = False      # skill raised exception OR is not configured
+    needs_config: bool = False  # specifically: missing API credentials
 
 
 class BaseSkill(ABC):

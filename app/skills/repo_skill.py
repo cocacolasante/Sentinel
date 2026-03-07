@@ -42,6 +42,8 @@ class RepoReadSkill(BaseSkill):
             return SkillResult(
                 context_data="[Repo not configured — GITHUB_BRAIN_REPO_URL missing in .env]",
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
 
         # Ensure the repo is cloned / up to date
@@ -80,7 +82,12 @@ class RepoWriteSkill(BaseSkill):
         from app.integrations.repo import RepoClient
 
         if not RepoClient().is_configured():
-            return SkillResult(context_data="[Repo not configured]", skill_name=self.name)
+            return SkillResult(
+                context_data="[Repo not configured]",
+                skill_name=self.name,
+                is_error=True,
+                needs_config=True,
+            )
 
         action = params.get("action", "write_file")
         path = params.get("path", "")
@@ -141,7 +148,12 @@ class RepoCommitSkill(BaseSkill):
 
         client = RepoClient()
         if not client.is_configured():
-            return SkillResult(context_data="[Repo not configured]", skill_name=self.name)
+            return SkillResult(
+                context_data="[Repo not configured]",
+                skill_name=self.name,
+                is_error=True,
+                needs_config=True,
+            )
 
         action = params.get("action", "commit_push")
         message = params.get("message", "Brain: automated update")
@@ -203,7 +215,12 @@ class CodeChangeSkill(BaseSkill):
 
         client = RepoClient()
         if not client.is_configured():
-            return SkillResult(context_data="[Repo not configured]", skill_name=self.name)
+            return SkillResult(
+                context_data="[Repo not configured]",
+                skill_name=self.name,
+                is_error=True,
+                needs_config=True,
+            )
 
         branch = params.get("branch", "")
         path = params.get("path", "")

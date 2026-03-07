@@ -122,34 +122,9 @@ class SkillDiscoverySkill(BaseSkill):
             integration = proposed.get("integration", "")
             hints = proposed.get("implementation_hints", "")
 
-            # Auto-build: create a workspace task to scaffold + commit the new skill
-            skill_file = f"app/skills/{skill_name}.py"
-            build_cmds = [
-                "cd /root/sentinel-workspace && git checkout main && git pull origin main",
-                (
-                    f"cat > {skill_file} << 'PYEOF'\n"
-                    f'"""\n{skill_desc}\nIntegration: {integration}\n"""\n\n'
-                    "from __future__ import annotations\n"
-                    "from app.skills.base import ApprovalCategory, BaseSkill, SkillResult\n\n\n"
-                    f"class {_snake_to_camel(skill_name)}Skill(BaseSkill):\n"
-                    f'    name              = "{skill_name}"\n'
-                    f'    description       = "{skill_desc}"\n'
-                    f'    trigger_intents   = ["{skill_intent}"]\n'
-                    "    approval_category = ApprovalCategory.NONE\n\n"
-                    "    async def execute(self, params: dict, original_message: str) -> SkillResult:\n"
-                    f"        # TODO: implement — {hints}\n"
-                    "        return SkillResult(\n"
-                    f'            context_data="[{skill_name} skill not yet implemented]",\n'
-                    "            skill_name=self.name,\n"
-                    "        )\n"
-                    "PYEOF"
-                ),
-                (
-                    f"cd /root/sentinel-workspace && git add {skill_file} && "
-                    f'git commit -m "feat: scaffold {skill_name} skill (auto-generated)" && '
-                    "git push origin HEAD"
-                ),
-            ]
+            # Auto-build: create a workspace task routed to the LLM agent loop.
+            # commands=[] routes to plan_and_execute which uses repo_write to write
+            # proper code rather than fragile shell heredocs.
             try:
                 from app.skills.task_skill import TaskCreateSkill
 
@@ -157,15 +132,18 @@ class SkillDiscoverySkill(BaseSkill):
                 _tc_params = {
                     "title": f"Build {skill_name} skill",
                     "description": (
-                        f"Auto-generated skill scaffold for: {skill_desc}\n"
+                        f"Build a new Sentinel skill: {skill_desc}\n"
+                        f"Skill name: {skill_name} | Intent: {skill_intent}\n"
                         f"Integration needed: {integration}\n"
-                        f"Implementation notes: {hints}\n"
-                        f"Working directory: /root/sentinel-workspace (Sentinel's own codebase on GitHub at cocacolasante/Sentinel). "
-                        f"Do NOT ask where the repo is — write directly to app/skills/{skill_name}.py in this workspace."
+                        f"Implementation notes: {hints}\n\n"
+                        f"Working directory: /root/sentinel-workspace\n"
+                        f"File to create: app/skills/{skill_name}.py\n"
+                        f"Follow the BaseSkill pattern from app/skills/base.py.\n"
+                        f"After writing the file, commit and push, then open a PR."
                     ),
                     "priority": 5,
                     "approval_level": 1,
-                    "commands": build_cmds,
+                    "commands": [],
                     "execution_queue": "tasks_workspace",
                     "source": "skill_discovery",
                     "session_id": params.get("session_id", ""),
@@ -290,8 +268,13 @@ class SkillGapHandler:
     @classmethod
     def should_trigger(cls, intent: str, confidence: float, message: str) -> bool:
         """Return True if we should run skill discovery instead of normal chat."""
-        if confidence < 0.4 and intent == "chat":
+        if intent == "chat":
             words = set(message.lower().split())
-            if words & cls._ACTION_KEYWORDS:
+            action_hits = words & cls._ACTION_KEYWORDS
+            # Very low confidence with any action word → trigger
+            if confidence < 0.4 and action_hits:
+                return True
+            # Medium confidence with 2+ action words → genuine novel request
+            if confidence < 0.55 and len(action_hits) >= 2:
                 return True
         return False

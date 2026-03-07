@@ -67,6 +67,8 @@ class KnowledgeGraphSkill(BaseSkill):
                     "NEO4J_PASSWORD to .env and restart]"
                 ),
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
 
         action = (params.get("action") or "show").lower().strip()

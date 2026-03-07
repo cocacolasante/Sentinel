@@ -170,6 +170,54 @@ def _build_skill_registry():
     reg.register(RMMManageSkill())
     # Slack read — channel history, DMs, search
     reg.register(SlackReadSkill())
+
+    # ── Auto-register dynamically-discovered skills ──────────────────────────
+    # Any skill module written by the self-teaching pipeline that is not already
+    # registered above will be imported and registered here automatically.
+    import pkgutil
+    import importlib
+    import app.skills as _skills_pkg
+    from app.skills.base import BaseSkill as _BaseSkill
+
+    _SKIP_MODULES = {
+        "base", "registry", "skill_discovery", "chat_skill",
+        "__init__", "reminders", "sentry_to_tasks", "command_with_fallback_skill",
+    }
+    _registered_intents = set(reg._skills.keys())
+
+    for _mod_info in pkgutil.iter_modules(_skills_pkg.__path__):
+        if _mod_info.name in _SKIP_MODULES:
+            continue
+        try:
+            _mod = importlib.import_module(f"app.skills.{_mod_info.name}")
+            for _attr_name in dir(_mod):
+                _cls = getattr(_mod, _attr_name)
+                if (
+                    isinstance(_cls, type)
+                    and issubclass(_cls, _BaseSkill)
+                    and _cls is not _BaseSkill
+                    and hasattr(_cls, "trigger_intents")
+                    and _cls.trigger_intents
+                    and not any(i in _registered_intents for i in _cls.trigger_intents)
+                ):
+                    try:
+                        reg.register(_cls())
+                        for _i in _cls.trigger_intents:
+                            _registered_intents.add(_i)
+                        logger.info(
+                            "Auto-registered dynamically-discovered skill: {} (intents: {})",
+                            _cls.__name__,
+                            _cls.trigger_intents,
+                        )
+                    except Exception as _reg_exc:
+                        logger.warning(
+                            "Auto-registration of {} failed: {}", _cls.__name__, _reg_exc
+                        )
+        except Exception as _import_exc:
+            logger.warning(
+                "Auto-registration skipped module {}: {}", _mod_info.name, _import_exc
+            )
+
     return reg
 
 
@@ -312,7 +360,7 @@ class Dispatcher:
             result_context = f"[Skill error — {skill.name} failed: {exc}. Inform the user gracefully.]"
             from app.skills.base import SkillResult
 
-            result = SkillResult(context_data=result_context, skill_name=skill.name)
+            result = SkillResult(context_data=result_context, skill_name=skill.name, is_error=True)
 
         sk_latency = round((time.monotonic() - sk_t0) * 1000, 1)
         await event_bus.publish(
@@ -391,6 +439,8 @@ class Dispatcher:
             mem_ctx.warm_summary,
             mem_ctx.cold_matches,
             mem_ctx.cross_session_context,
+            is_skill_error=result.is_error,
+            needs_config=result.needs_config,
         )
 
         # 8. Call LLM
@@ -502,6 +552,8 @@ class Dispatcher:
         warm_summary: str,
         cold_matches: list[dict],
         cross_session_context: str = "",
+        is_skill_error: bool = False,
+        needs_config: bool = False,
     ) -> str:
         parts: list[str] = []
 
@@ -535,11 +587,25 @@ class Dispatcher:
             parts.append(f"[Relevant past context]:\n{json.dumps(cold_matches, indent=2)}")
 
         if context_data:
-            parts.append(
-                f"[Live data from {intent}]:\n{context_data}\n\n"
-                "Respond to the user naturally using the data above. "
-                "Format clearly — use bullet points or short paragraphs as appropriate."
-            )
+            if needs_config:
+                parts.append(
+                    f"[Configuration note — {intent} is not yet connected]:\n{context_data}\n\n"
+                    "Tell the user this capability needs credentials set up in .env — offer to help "
+                    "configure it. Do NOT say you lack this capability permanently. The skill exists "
+                    "and will work once the credentials are added."
+                )
+            elif is_skill_error:
+                parts.append(
+                    f"[Skill execution error — {intent}]:\n{context_data}\n\n"
+                    "Report the error clearly to the user. Do NOT say you don't have this skill — "
+                    "the skill exists but encountered a runtime error."
+                )
+            else:
+                parts.append(
+                    f"[Live data from {intent}]:\n{context_data}\n\n"
+                    "Respond to the user naturally using the data above. "
+                    "Format clearly — use bullet points or short paragraphs as appropriate."
+                )
 
         parts.append(f"User message: {message}")
         return "\n\n".join(parts)

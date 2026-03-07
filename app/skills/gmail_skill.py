@@ -38,6 +38,8 @@ class GmailReadSkill(BaseSkill):
             return SkillResult(
                 context_data="[Gmail not configured — GOOGLE_REFRESH_TOKEN missing in .env]",
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
 
         label = _account_label(client.account_name)
@@ -98,7 +100,12 @@ class GmailSendSkill(BaseSkill):
         client = get_gmail_client(account_name=account)
 
         if not client.is_configured():
-            return SkillResult(context_data="[Gmail not configured]", skill_name=self.name)
+            return SkillResult(
+                context_data="[Gmail not configured]",
+                skill_name=self.name,
+                is_error=True,
+                needs_config=True,
+            )
 
         pending = {
             "intent": "gmail_send",
@@ -146,7 +153,12 @@ class GmailReplySkill(BaseSkill):
         client = get_gmail_client(account_name=account)
 
         if not client.is_configured():
-            return SkillResult(context_data="[Gmail not configured]", skill_name=self.name)
+            return SkillResult(
+                context_data="[Gmail not configured]",
+                skill_name=self.name,
+                is_error=True,
+                needs_config=True,
+            )
 
         msg_id = params.get("msg_id", "")
         if not msg_id:

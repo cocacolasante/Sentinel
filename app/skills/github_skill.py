@@ -28,6 +28,8 @@ class GitHubReadSkill(BaseSkill):
             return SkillResult(
                 context_data="[GitHub not configured — GITHUB_TOKEN missing]",
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
         resource = params.get("resource", "notifications")
         repo = params.get("repo", "")
@@ -56,7 +58,12 @@ class GitHubWriteSkill(BaseSkill):
 
         client = GitHubClient()
         if not client.is_configured():
-            return SkillResult(context_data="[GitHub not configured]", skill_name=self.name)
+            return SkillResult(
+                context_data="[GitHub not configured]",
+                skill_name=self.name,
+                is_error=True,
+                needs_config=True,
+            )
         action = params.get("action", "create_issue")
         if action == "create_issue":
             result = await client.create_issue(

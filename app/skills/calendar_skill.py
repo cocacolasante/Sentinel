@@ -39,6 +39,8 @@ class CalendarReadSkill(BaseSkill):
                 return SkillResult(
                     context_data=f"[Google Calendar not configured for account '{account}']",
                     skill_name=self.name,
+                    is_error=True,
+                    needs_config=True,
                 )
             events = await client.list_events(period=period)
             result = {client.account_name: events}
@@ -49,6 +51,8 @@ class CalendarReadSkill(BaseSkill):
                 return SkillResult(
                     context_data="[Google Calendar not configured — GOOGLE_REFRESH_TOKEN missing]",
                     skill_name=self.name,
+                    is_error=True,
+                    needs_config=True,
                 )
             result = {}
             for acc in accounts:
@@ -90,6 +94,8 @@ class CalendarWriteSkill(BaseSkill):
             return SkillResult(
                 context_data="[Google Calendar not configured — GOOGLE_REFRESH_TOKEN missing in .env]",
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
 
         pending = {

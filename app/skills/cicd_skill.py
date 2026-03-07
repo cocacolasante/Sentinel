@@ -35,6 +35,8 @@ class CICDReadSkill(BaseSkill):
             return SkillResult(
                 context_data="[GitHub not configured — GITHUB_TOKEN missing in .env]",
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
 
         from app.config import get_settings

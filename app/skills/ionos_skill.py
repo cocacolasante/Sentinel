@@ -225,6 +225,8 @@ class IONOSCloudSkill(BaseSkill):
             return SkillResult(
                 context_data="[IONOS not configured — set IONOS_TOKEN or IONOS_USERNAME/IONOS_PASSWORD in .env]",
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
 
         action = params.get("action", "list_datacenters")
@@ -286,6 +288,8 @@ class IONOSDNSSkill(BaseSkill):
             return SkillResult(
                 context_data="[IONOS not configured — set IONOS_TOKEN in .env]",
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
 
         action = params.get("action", "list_zones")

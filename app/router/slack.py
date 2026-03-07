@@ -128,14 +128,14 @@ def _build_skills_help() -> str:
         if skill.is_available():
             available_lines.append(line)
         else:
-            unavailable_lines.append(f"{line} _(not configured)_")
+            unavailable_lines.append(f"{line} _(setup required)_")
 
     parts = ["*🧠 Sentinel Skills — All Capabilities*\n"]
     if available_lines:
         parts.append("*Ready to use:*")
         parts.extend(available_lines)
     if unavailable_lines:
-        parts.append("\n*Needs API keys / configuration:*")
+        parts.append("\n*Setup required — add credentials to .env to enable:*")
         parts.extend(unavailable_lines)
     parts.append(
         "\n*✏️ Codebase self-editing workflow:*\n"
