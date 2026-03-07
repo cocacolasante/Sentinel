@@ -29,7 +29,13 @@ settings = get_settings()
 # actionable and create false Sentry alerts.
 class _SuppressSocketMonitorErrors(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        return "Failed to check the cur" not in record.getMessage()
+        message = record.getMessage()
+        # Suppress transient connection check and handshake failures
+        return not any([
+            "Failed to check the cur" in message,
+            "Failed to connect" in message and "error: 408" in message,
+            "WSServerHandshakeError" in message,
+        ])
 
 logging.getLogger("slack_sdk.socket_mode.aiohttp").addFilter(
     _SuppressSocketMonitorErrors()
