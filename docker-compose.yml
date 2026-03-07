@@ -408,6 +408,10 @@ services:
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/brain_overview.json"
       GF_INSTALL_PLUGINS:              "grafana-sentry-datasource"
       GF_PANELS_DISABLE_SANITIZE_HTML: "true"
+      # Dataproxy: time Grafana waits for a datasource response (seconds)
+      GF_DATAPROXY_TIMEOUT:            "300"
+      GF_DATAPROXY_KEEP_ALIVE_SECONDS: "300"
+      GF_DATAPROXY_DIAL_TIMEOUT:       "10"
       SENTRY_AUTH_TOKEN:               "${SENTRY_AUTH_TOKEN:-}"
       SENTRY_ORG:                      "${SENTRY_ORG:-}"
       POSTGRES_USER:                   "${POSTGRES_USER}"

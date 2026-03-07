@@ -109,7 +109,7 @@ class Settings(BaseSettings):
     # ── GitHub ─────────────────────────────────────────────────
     github_token: str = ""
     github_username: str = ""
-    github_default_repo: str = ""  # e.g. "anthonycolasante/my-repo"
+    github_default_repo: str = ""  # e.g. "cocacolasante/Sentinel"
     github_webhook_secret: str = ""  # shared secret for verifying GitHub webhook payloads
 
     # ── Home Assistant ─────────────────────────────────────────

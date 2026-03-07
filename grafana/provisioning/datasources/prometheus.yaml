@@ -11,6 +11,8 @@ datasources:
     jsonData:
       httpMethod: POST
       timeInterval: 15s
+      queryTimeout: "300s"
+      timeoutSeconds: 300
 
   - name: Loki
     type: loki
@@ -18,6 +20,9 @@ datasources:
     url: http://loki:3100
     access: proxy
     editable: false
+    jsonData:
+      timeout: 300
+      maxLines: 1000
 
   - name: PostgreSQL
     type: postgres
@@ -30,6 +35,7 @@ datasources:
       database: ${POSTGRES_DB}
       sslmode: disable
       postgresVersion: 1600
+      queryTimeout: "300"
     editable: false
 
   - name: Sentry
