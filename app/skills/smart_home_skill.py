@@ -26,6 +26,8 @@ class SmartHomeSkill(BaseSkill):
             return SkillResult(
                 context_data="[Home Assistant not configured — HOME_ASSISTANT_URL or HOME_ASSISTANT_TOKEN missing]",
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
 
         action = params.get("action", "status")

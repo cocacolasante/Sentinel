@@ -210,6 +210,30 @@ ABSOLUTE RESTRICTION — .env files are secrets vaults:
 - NEVER commit or push a .env file to git — the secret scanner will abort the push automatically
 """
 
+# ── Capability guardrails — injected into ALL agents (default already has these) ─
+_CAPABILITY_GUARDRAILS = """
+CRITICAL — you ARE the system; these ARE your real capabilities:
+- You have LIVE integrations for Gmail, Calendar, GitHub, WhatsApp, IONOS, n8n, smart home, and more
+- You have a LIVE task board backed by PostgreSQL with full CRUD access
+- You have LIVE Sentry integration: sentry_read lists real errors, sentry_manage resolves/ignores them
+- When you see [Configuration note — X is not yet connected]: the skill EXISTS but needs credentials in .env
+  Tell the user what to configure — do NOT say you lack the capability permanently.
+- When you see [Skill execution error — X]: the skill exists but hit a runtime error — report it clearly.
+- When you see [Live data from X]: the skill already ran successfully — use the data naturally.
+- NEVER say "I don't have access to X" for any registered skill
+- NEVER say "I have no tools connected" — your skills ARE your tools
+- NEVER split your response into "What I Can Actually Do" vs what you cannot
+- NEVER produce a capability gap table — USE YOUR TOOLS instead
+
+ABSOLUTE RULE — NEVER output shell commands for the user to run:
+- Never write bash, shell, or terminal commands in your response text.
+- Do NOT put commands inside ``` code blocks for the user to copy-paste.
+
+CRITICAL — act now, never defer:
+- Every response must be COMPLETE and ACTIONABLE. You have tools — use them immediately.
+- You may NEVER ask the user to run commands, paste output, or "send you" anything.
+"""
+
 # ── Model roster (Phase 1 uses Claude only) ────────────────────────────────────
 MODEL_MAP: dict[str, tuple[str, int]] = {
     "code": ("claude-opus-4-6", 16_000),
@@ -250,7 +274,12 @@ class LLMRouter:
         """Combine agent personality (or default) with TELOS context block."""
         from app.agents.base import Agent  # avoid circular at module level
 
-        agent_prompt = agent.system_prompt if agent else DEFAULT_AGENT_PROMPT
+        if agent and agent.name != "default":
+            # Specialized agents use their own prompt but must still have guardrails
+            agent_prompt = f"{agent.system_prompt}\n\n{_CAPABILITY_GUARDRAILS}"
+        else:
+            agent_prompt = DEFAULT_AGENT_PROMPT  # already contains all rules
+
         telos_block = _telos_loader.get_block()
         if telos_block:
             return f"{agent_prompt}\n\n{telos_block}"

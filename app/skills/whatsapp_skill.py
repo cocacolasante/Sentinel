@@ -32,6 +32,8 @@ class WhatsAppReadSkill(BaseSkill):
             return SkillResult(
                 context_data="[WhatsApp not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM in .env]",
                 skill_name=self.name,
+                is_error=True,
+                needs_config=True,
             )
 
         action = params.get("action", "list")
@@ -68,7 +70,12 @@ class WhatsAppSendSkill(BaseSkill):
         from app.integrations.whatsapp import WhatsAppClient
 
         if not WhatsAppClient().is_configured():
-            return SkillResult(context_data="[WhatsApp not configured]", skill_name=self.name)
+            return SkillResult(
+                context_data="[WhatsApp not configured]",
+                skill_name=self.name,
+                is_error=True,
+                needs_config=True,
+            )
 
         to = params.get("to", "")
         body = params.get("body", params.get("message", ""))

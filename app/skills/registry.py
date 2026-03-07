@@ -45,11 +45,23 @@ class SkillRegistry:
     def list_all_descriptions(self) -> str:
         """
         Return a formatted string of all skill intents + descriptions.
-        Injected into the intent classifier prompt so the list is registry-driven.
+        Injected into the intent classifier prompt — availability markers are
+        omitted so unconfigured skills are still routed correctly.
         """
         lines: list[str] = []
         for skill in self._all:
             intents = ", ".join(skill.trigger_intents) if skill.trigger_intents else "(fallback)"
-            available = "" if skill.is_available() else " [unavailable]"
-            lines.append(f"{intents}{available}  — {skill.description}")
+            lines.append(f"{intents}  — {skill.description}")
+        return "\n".join(lines)
+
+    def list_all_descriptions_with_status(self) -> str:
+        """
+        Return a formatted string of all skill intents + descriptions with
+        availability status. Used only for human-facing help messages.
+        """
+        lines: list[str] = []
+        for skill in self._all:
+            intents = ", ".join(skill.trigger_intents) if skill.trigger_intents else "(fallback)"
+            status = "" if skill.is_available() else " [needs configuration]"
+            lines.append(f"{intents}{status}  — {skill.description}")
         return "\n".join(lines)
