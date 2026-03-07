@@ -870,6 +870,11 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
                 raise ValueError("LLM returned empty response")
             action = json.loads(raw)
             parse_errors = 0  # reset on success
+        except anthropic.BadRequestError as exc:
+            # 422 from the Anthropic API — malformed request, retrying won't help
+            results.append(f"❌ *API validation error (422):* {exc} — aborting")
+            all_passed = False
+            break
         except Exception as exc:
             parse_errors += 1
             logger.error("LLM round %d failed for task #%s: %s", round_num, task_id, exc)

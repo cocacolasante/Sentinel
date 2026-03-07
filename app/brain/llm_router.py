@@ -11,11 +11,13 @@ Phase 2+: GPT-4o (multimodal/fallback) and Gemini Pro (large context/research)
 
 from __future__ import annotations
 
+import asyncio
 import time
+from collections.abc import Awaitable, Callable
 
 import anthropic
 from loguru import logger
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_exponential
 
 from app.brain.cost_tracker import BudgetExceeded, cost_tracker
 from app.config import get_settings
@@ -244,6 +246,94 @@ MODEL_MAP: dict[str, tuple[str, int]] = {
     "default": ("claude-sonnet-4-6", 2048),
 }
 
+# ── Agentic tool schemas (passed to Claude tool_use API) ───────────────────────
+AGENTIC_TOOLS: list[dict] = [
+    {
+        "name": "server_shell",
+        "description": (
+            "Read files, list directories, search code, or run shell commands on the server. "
+            "Use action=read_file to read a file, action=list_files to list a directory, "
+            "action=search_code to search for a pattern, or provide a command string to run it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["read_file", "list_files", "search_code", "run_command"],
+                    "description": "The shell action to perform.",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "File or directory path (relative to workspace root).",
+                },
+                "command": {
+                    "type": "string",
+                    "description": "Shell command to execute (when action=run_command).",
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Search pattern (when action=search_code).",
+                },
+            },
+        },
+    },
+    {
+        "name": "task_read",
+        "description": "Read tasks from the live task board (PostgreSQL).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "integer", "description": "Fetch a specific task by ID."},
+                "status": {
+                    "type": "string",
+                    "description": "Filter by status: pending, running, completed, failed.",
+                },
+                "limit": {"type": "integer", "description": "Max tasks to return (default 10)."},
+            },
+        },
+    },
+    {
+        "name": "sentry_read",
+        "description": "List Sentry error issues.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Sentry project slug."},
+                "limit": {"type": "integer", "description": "Max issues to return."},
+            },
+        },
+    },
+    {
+        "name": "task_create",
+        "description": "Create a new task on the task board.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Task title."},
+                "description": {"type": "string", "description": "Task description."},
+                "priority": {
+                    "type": "string",
+                    "description": "Priority level: low, medium, high, urgent.",
+                },
+            },
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "task_update",
+        "description": "Update a task's status or fields on the task board.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "integer", "description": "ID of the task to update."},
+                "status": {"type": "string", "description": "New status value."},
+            },
+            "required": ["task_id"],
+        },
+    },
+]
+
 # Shared TELOS loader (one instance, 5-min cache)
 _telos_loader = TelosLoader(
     telos_dir=settings.telos_dir,
@@ -286,6 +376,7 @@ class LLMRouter:
         return agent_prompt
 
     @retry(
+        retry=retry_if_not_exception_type(anthropic.BadRequestError),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
@@ -315,6 +406,7 @@ class LLMRouter:
         messages: list[dict] = []
         if history:
             messages.extend(history[-40:])
+        messages = [m for m in messages if m.get("content")]
         messages.append({"role": "user", "content": message})
 
         # ── Budget check (raises BudgetExceeded if ceiling is hit) ───────────
@@ -378,3 +470,132 @@ class LLMRouter:
         )
 
         return response.content[0].text
+
+    async def route_agentic(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+        agent: "Agent | None" = None,
+        tool_executor: Callable[[str, dict], Awaitable[str]] | None = None,
+        max_rounds: int = 8,
+    ) -> str:
+        """
+        Agentic tool-use loop.  Calls the LLM repeatedly until stop_reason is
+        'end_turn', executing any tool_use blocks via tool_executor between rounds.
+
+        Args:
+            message:       Augmented user message (may contain skill context).
+            history:       Prior conversation turns in Anthropic message format.
+            agent:         Optional Agent personality.
+            tool_executor: Async callable(tool_name, params) → result string.
+                           When None, tools are not passed and a single-shot call is made.
+            max_rounds:    Safety ceiling on the tool-call loop.
+        """
+        if agent:
+            model = agent.preferred_model
+            max_tokens = agent.max_tokens
+        else:
+            model, max_tokens = self._select_model("default")
+
+        system = self._build_system_prompt(agent)
+
+        messages: list[dict] = []
+        if history:
+            messages.extend(history[-40:])
+        messages = [m for m in messages if m.get("content")]
+        messages.append({"role": "user", "content": message})
+
+        cost_tracker.check_budget(model)
+
+        tools = AGENTIC_TOOLS if tool_executor else []
+        response = None
+
+        for _round in range(max_rounds):
+            t0 = time.monotonic()
+            kwargs: dict = dict(
+                model=model,
+                max_tokens=max_tokens,
+                system=system,
+                messages=messages,
+            )
+            if tools:
+                kwargs["tools"] = tools
+
+            try:
+                response = await asyncio.to_thread(self.client.messages.create, **kwargs)
+            except anthropic.BadRequestError:
+                raise  # let caller handle 422 immediately — no retry
+            latency_s = time.monotonic() - t0
+
+            input_tok = getattr(response.usage, "input_tokens", 0)
+            output_tok = getattr(response.usage, "output_tokens", 0)
+            call_cost = cost_tracker.record(model, input_tok, output_tok)
+
+            # ── Prometheus + event bus (best-effort) ──────────────────────────
+            try:
+                from app.observability.prometheus_metrics import (
+                    LLM_COST_USD,
+                    LLM_LATENCY,
+                    LLM_REQUESTS,
+                    LLM_TOKENS,
+                )
+
+                agent_name = agent.name if agent else "default"
+                LLM_REQUESTS.labels(
+                    model=model, agent=agent_name, source="chat", intent="agentic"
+                ).inc()
+                LLM_COST_USD.labels(model=model, agent=agent_name).inc(call_cost.call_cost_usd)
+                LLM_TOKENS.labels(model=model, direction="input").inc(input_tok)
+                LLM_TOKENS.labels(model=model, direction="output").inc(output_tok)
+                LLM_LATENCY.labels(model=model, agent=agent_name).observe(latency_s)
+            except Exception:
+                pass
+
+            latency_ms = round(latency_s * 1000, 1)
+            logger.info(
+                "LLM[agentic] round={round} | model={model} | in={in_tok} | out={out_tok} | stop={stop} | {ms}ms",
+                round=_round,
+                model=model,
+                in_tok=input_tok,
+                out_tok=output_tok,
+                stop=response.stop_reason,
+                ms=latency_ms,
+            )
+
+            if response.stop_reason == "end_turn":
+                text_blocks = [b.text for b in response.content if hasattr(b, "text")]
+                return text_blocks[-1] if text_blocks else "[no response]"
+
+            if response.stop_reason == "tool_use" and tool_executor:
+                tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+
+                # Append assistant message with all content blocks (preserves tool_use blocks)
+                messages.append({"role": "assistant", "content": response.content})
+
+                # Execute each tool call and collect results
+                tool_results = []
+                for block in tool_use_blocks:
+                    logger.info(
+                        "Agentic tool call: tool={} input={}", block.name, block.input
+                    )
+                    result_text = await tool_executor(block.name, block.input)
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": result_text,
+                        }
+                    )
+
+                messages.append({"role": "user", "content": tool_results})
+                continue
+
+            # Unexpected stop reason — break and return what we have
+            logger.warning("route_agentic: unexpected stop_reason={}", response.stop_reason)
+            break
+
+        # Fallback: return last text block from final response (or error sentinel)
+        if response is not None:
+            text_blocks = [b.text for b in response.content if hasattr(b, "text")]
+            return text_blocks[-1] if text_blocks else "[no response]"
+        return "[agentic loop produced no response]"

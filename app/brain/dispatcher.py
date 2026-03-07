@@ -260,6 +260,24 @@ class Dispatcher:
             primary_session=settings.brain_primary_session,
         )
 
+    # ── Agentic tool executor ─────────────────────────────────────────────────
+
+    async def _tool_executor(self, tool_name: str, params: dict) -> str:
+        """Execute a named skill and return its context_data as a plain string.
+
+        Called by LLMRouter.route_agentic() for each tool_use block.
+        """
+        skill = self.skills.get(tool_name)
+        # skills.get() falls back to ChatSkill for unknown names — detect that case
+        if skill.__class__.__name__ == "ChatSkill" and tool_name not in ("chat",):
+            return f"[Unknown tool: {tool_name}]"
+        try:
+            result = await skill.execute(params, "")
+            return result.context_data or "[no output]"
+        except Exception as exc:
+            logger.warning("_tool_executor error for {}: {}", tool_name, exc)
+            return f"[Tool error: {exc}]"
+
     # ── Public entry point ────────────────────────────────────────────────────
 
     async def process(self, message: str, session_id: str) -> DispatchResult:
@@ -443,9 +461,11 @@ class Dispatcher:
             needs_config=result.needs_config,
         )
 
-        # 8. Call LLM
+        # 8. Call LLM (agentic loop — stays in "thinking" until all tool calls resolve)
         try:
-            reply = await asyncio.to_thread(self.llm.route, augmented, history, agent)
+            reply = await self.llm.route_agentic(
+                augmented, history, agent, tool_executor=self._tool_executor
+            )
         except BudgetExceeded as exc:
             try:
                 from app.observability.prometheus_metrics import BUDGET_EXCEEDED_TOTAL
