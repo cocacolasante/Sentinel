@@ -31,6 +31,8 @@ class _SuppressSocketMonitorErrors(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
         # Suppress transient connection check and handshake failures
+        # Note: invalid_auth errors are NOT suppressed — they indicate credential expiry
+        # and require manual intervention (token rotation)
         return not any([
             "Failed to check the cur" in message,
             "Failed to connect" in message and "error: 408" in message,
@@ -40,11 +42,17 @@ class _SuppressSocketMonitorErrors(logging.Filter):
 logging.getLogger("slack_sdk.socket_mode.aiohttp").addFilter(
     _SuppressSocketMonitorErrors()
 )
+logging.getLogger("slack_sdk.socket_mode.async_client").addFilter(
+    _SuppressSocketMonitorErrors()
+)
 
 dispatch = Dispatcher()
 
 # Bot user ID — fetched once at startup; used to detect thread replies to bot messages
 _bot_user_id: str = ""
+
+# Socket Mode handler instance — global for reconnection management
+_handler: AsyncSocketModeHandler | None = None
 
 # Phrases that trigger the built-in skills/help listing (no LLM call)
 _HELP_PHRASES = {
