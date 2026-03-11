@@ -646,3 +646,6 @@ When no existing skill covers a request, analyzes the gap and proposes a new ski
 | rmm_read | rmm_read | MESHCENTRAL_URL + USER + PASSWORD |
 | rmm_manage | rmm_manage | MESHCENTRAL_URL + USER + PASSWORD |
 | skill_discover | skill_discover | ANTHROPIC_API_KEY |
+
+| reddit_read | reddit_read | — (public API) |
+| reddit_schedule | reddit_schedule | — |

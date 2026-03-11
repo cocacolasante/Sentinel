@@ -98,6 +98,7 @@ def _build_skill_registry():
     from app.skills.data_intelligence_skill import DataIntelligenceSkill
     from app.skills.rmm_skill import RMMReadSkill, RMMManageSkill
     from app.skills.slack_read_skill import SlackReadSkill
+    from app.skills.reddit_skill import RedditReadSkill, RedditScheduleSkill
 
     reg = SkillRegistry()
     reg.register(ChatSkill())
@@ -170,6 +171,9 @@ def _build_skill_registry():
     reg.register(RMMManageSkill())
     # Slack read — channel history, DMs, search
     reg.register(SlackReadSkill())
+    # Reddit — news feed digest + schedule management
+    reg.register(RedditReadSkill())
+    reg.register(RedditScheduleSkill())
 
     # ── Auto-register dynamically-discovered skills ──────────────────────────
     # Any skill module written by the self-teaching pipeline that is not already

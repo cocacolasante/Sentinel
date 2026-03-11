@@ -213,6 +213,12 @@ class Settings(BaseSettings):
     slack_rmm_prod_channel: str = "rmm-production"
     slack_rmm_dev_channel: str = "rmm-dev-staging"
 
+    # ── Reddit news feed ────────────────────────────────────────
+    slack_reddit_channel: str = "sentinel-reddit"
+    reddit_user_agent: str = "sentinel-ai-brain/1.0 (by /u/sentinel_ai)"
+    reddit_subreddits: str = ""          # comma-separated, static daily digest
+    reddit_schedule_hour: int = 8        # UTC hour for static digest; -1 = disabled
+
     # ── Neo4j Knowledge Graph ───────────────────────────────────
     neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"

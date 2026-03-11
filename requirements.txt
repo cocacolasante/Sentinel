@@ -52,3 +52,6 @@ python-multipart==0.0.20
 
 # Knowledge Graph
 neo4j>=5.0
+
+# Cron schedule parsing (Reddit digest scheduler)
+croniter>=1.3

@@ -34,6 +34,7 @@ celery_app = Celery(
         "app.worker.bug_hunter_tasks",
         "app.worker.pr_tasks",
         "app.worker.rmm_tasks",
+        "app.worker.reddit_tasks",
     ],
 )
 
@@ -141,6 +142,12 @@ celery_app.conf.beat_schedule = {
     "rmm-incident-check": {
         "task": "app.worker.rmm_tasks.rmm_incident_detection",
         "schedule": crontab(minute="*/2"),
+        "options": {"queue": "celery"},
+    },
+    # Reddit — every hour: check schedules and dispatch due digests
+    "reddit-digest-dispatch": {
+        "task": "app.worker.reddit_tasks.dispatch_reddit_digests",
+        "schedule": crontab(minute=0),
         "options": {"queue": "celery"},
     },
 }
