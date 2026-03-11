@@ -33,3 +33,23 @@ docker pull "$IMAGE"
 # ── 3. Restart services with the new image ────────────────────────────────────
 docker compose -p sentinel -f "$COMPOSE_FILE" up -d --no-deps --pull never $SERVICES
 log "=== Deploy complete ==="
+
+# ── 4. Broadcast self-update to connected mesh agents if sentinel-agent changed ─
+AGENT_CHANGED=$(git diff HEAD~1 HEAD --name-only 2>/dev/null | grep -c "^sentinel-agent/" || true)
+if [ "$AGENT_CHANGED" -gt 0 ]; then
+  log "sentinel-agent code changed ($AGENT_CHANGED files) — broadcasting self-update to connected agents"
+  sleep 5  # allow celery-worker to finish initialising
+  docker compose -p sentinel -f "$COMPOSE_FILE" exec -T celery-worker \
+    python3 -c "
+import sys; sys.path.insert(0, '/app')
+from app.worker.celery_app import celery_app
+task = celery_app.send_task(
+    'app.worker.agent_tasks.broadcast_agent_updates',
+    args=['${SHA:-}', 'main', False]
+)
+print('broadcast task queued:', task.id)
+" 2>&1 | tee -a /tmp/deploy.log \
+  || log "WARNING: Agent self-update broadcast skipped (non-fatal)"
+else
+  log "No sentinel-agent changes detected — skipping agent self-update broadcast"
+fi

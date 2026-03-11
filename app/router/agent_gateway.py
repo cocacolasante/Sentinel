@@ -9,6 +9,8 @@ REST endpoints (prefix /api/v1):
   POST /agents/{id}/revoke                  — revoke agent
   POST /agents/{id}/command                 — send CHAT_COMMAND to agent
   GET  /agents/{id}/responses/{corr_id}     — poll for CHAT_RESPONSE
+  POST /agents/{id}/self-update             — push SELF_UPDATE to one agent
+  POST /agents/update-all                   — broadcast SELF_UPDATE to all connected agents
 
 WebSocket endpoint (no prefix):
   WS   /ws/agent/{agent_id}       — agent long-lived connection
@@ -98,6 +100,12 @@ class AgentChatRequest(BaseModel):
 class AgentTaskRequest(BaseModel):
     description: str              # natural language task description
     autonomous: bool = True       # if False, requires step-by-step confirmation
+
+
+class AgentSelfUpdateRequest(BaseModel):
+    target_sha: str = ""          # specific commit SHA; empty = latest on branch
+    branch: str = "main"
+    force: bool = False           # update even if already on target SHA
 
 
 # ── REST endpoints ─────────────────────────────────────────────────────────────
@@ -396,6 +404,62 @@ async def agent_task(agent_id: str, req: AgentTaskRequest):
         "agent_id": agent_id,
         "app_name": agent["app_name"],
         "description": req.description,
+    }
+
+
+@router.post("/update-all")
+async def broadcast_self_update(req: AgentSelfUpdateRequest):
+    """
+    Push a SELF_UPDATE command to every currently-connected mesh agent.
+    Called automatically by deploy.sh when sentinel-agent/ code changes.
+    """
+    from app.worker.agent_tasks import broadcast_agent_updates
+    task = broadcast_agent_updates.delay(req.target_sha, req.branch, req.force)
+    logger.info("Agent self-update broadcast queued | sha={} branch={}", req.target_sha or "latest", req.branch)
+    return {"status": "queued", "celery_task_id": task.id, "target_sha": req.target_sha, "branch": req.branch}
+
+
+@router.post("/{agent_id}/self-update")
+async def self_update_agent(agent_id: str, req: AgentSelfUpdateRequest):
+    """Push a SELF_UPDATE command to a single agent."""
+    agent = await asyncio.to_thread(
+        postgres.execute_one,
+        "SELECT app_name, hmac_secret, sentinel_env, is_connected FROM mesh_agents "
+        "WHERE agent_id = %s AND is_revoked = FALSE",
+        (agent_id,),
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if not agent["is_connected"]:
+        raise HTTPException(status_code=503, detail="Agent is offline — cannot push update")
+
+    correlation_id = str(uuid.uuid4())
+    ts = time.time()
+    payload = {
+        "correlation_id": correlation_id,
+        "target_sha": req.target_sha,
+        "branch": req.branch,
+        "force": req.force,
+    }
+    canonical = f"{ts}:SELF_UPDATE:{json.dumps(payload, sort_keys=True, separators=(',', ':'))}"
+    sig = hmac.new(agent["hmac_secret"].encode(), canonical.encode(), "sha256").hexdigest()
+    cmd_msg = json.dumps({"type": "SELF_UPDATE", "payload": payload, "ts": ts, "sig": sig})
+
+    redis = _get_redis()
+    try:
+        await redis.rpush(f"sentinel:agent:cmd:{agent_id}", cmd_msg)
+        await redis.expire(f"sentinel:agent:cmd:{agent_id}", 3600)
+    finally:
+        await redis.aclose()
+
+    asyncio.create_task(_audit(agent_id, "self_update_sent", "outbound", {"type": "SELF_UPDATE", **payload}, True))
+    logger.info("SELF_UPDATE dispatched | agent={} sha={}", agent_id, req.target_sha or "latest")
+    return {
+        "status": "dispatched",
+        "agent_id": agent_id,
+        "app_name": agent["app_name"],
+        "correlation_id": correlation_id,
+        "target_sha": req.target_sha,
     }
 
 

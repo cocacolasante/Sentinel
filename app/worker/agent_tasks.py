@@ -151,6 +151,8 @@ def _route_stream_message(msg: dict, conn, redis):
             _handle_resource_alert(agent_id, msg, payload)
         elif msg_type == "CHAT_RESPONSE":
             _handle_chat_response(agent_id, payload, redis)
+        elif msg_type == "SELF_UPDATE_RESULT":
+            _handle_self_update_result(agent_id, msg, payload)
 
 
 def _handle_register(cur, agent_id: str, msg: dict, redis):
@@ -263,6 +265,34 @@ def _handle_patch_result(cur, agent_id: str, payload: dict):
         logger.warning("Slack patch result notification failed: {}", e)
 
 
+def _handle_self_update_result(agent_id: str, msg: dict, payload: dict):
+    """Post Slack alert with the agent self-update outcome."""
+    app_name = msg.get("app_name", agent_id)
+    success = payload.get("success", False)
+    old_sha = payload.get("old_sha", "?")[:8]
+    new_sha = payload.get("new_sha", "?")[:8]
+    message = payload.get("message", "")
+    elapsed = payload.get("elapsed_ms", 0)
+
+    if old_sha == new_sha:
+        # Already up to date — don't spam Slack
+        logger.info("Self-update noop | agent={} sha={}", agent_id, new_sha)
+        return
+
+    icon = "✅" if success else "❌"
+    alert = (
+        f"{icon} *Agent Self-Update {'Complete' if success else 'Failed'}* | `{app_name}`\n"
+        f"{old_sha} → {new_sha} | {elapsed}ms\n"
+        f"{message}"
+    )
+    try:
+        post_alert_sync(alert, settings.slack_agents_channel)
+    except Exception as e:
+        logger.warning("Slack self-update notification failed: {}", e)
+
+    logger.info("SELF_UPDATE_RESULT | agent={} success={} {} → {}", agent_id, success, old_sha, new_sha)
+
+
 def _handle_chat_response(agent_id: str, payload: dict, redis):
     """Store CHAT_RESPONSE in Redis (idempotent — fast-path in _recv_loop may have already written it)."""
     corr_id = payload.get("correlation_id")
@@ -293,6 +323,74 @@ def _handle_resource_alert(agent_id: str, msg: dict, payload: dict):
         post_alert_sync(alert, settings.slack_agents_channel)
     except Exception as e:
         logger.warning("Slack resource alert failed: {}", e)
+
+
+# ── Task: broadcast self-update to all connected agents ───────────────────────
+
+@shared_task(name="app.worker.agent_tasks.broadcast_agent_updates")
+def broadcast_agent_updates(target_sha: str = "", branch: str = "main", force: bool = False):
+    """
+    Push a SELF_UPDATE command to every currently-connected mesh agent.
+
+    Each agent will git-pull to target_sha (or latest on branch), run pip
+    install if requirements changed, and restart its own daemon. Agents
+    already on the target SHA skip the update silently.
+    """
+    conn = _get_db_sync()
+    redis = _get_redis_sync()
+    notified = []
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT agent_id, app_name, hmac_secret FROM mesh_agents "
+                "WHERE is_connected = TRUE AND is_revoked = FALSE"
+            )
+            agents = cur.fetchall()
+    finally:
+        conn.close()
+
+    for agent_id, app_name, hmac_secret in agents:
+        try:
+            corr_id = str(__import__("uuid").uuid4())
+            ts = __import__("time").time()
+            payload = {
+                "correlation_id": corr_id,
+                "target_sha": target_sha,
+                "branch": branch,
+                "force": force,
+            }
+            canonical = (
+                f"{ts}:SELF_UPDATE:"
+                f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}"
+            )
+            sig = __import__("hmac").new(
+                hmac_secret.encode(), canonical.encode(), "sha256"
+            ).hexdigest()
+            cmd_msg = json.dumps({"type": "SELF_UPDATE", "payload": payload, "ts": ts, "sig": sig})
+
+            redis.rpush(f"sentinel:agent:cmd:{agent_id}", cmd_msg)
+            redis.expire(f"sentinel:agent:cmd:{agent_id}", 3600)
+            notified.append(app_name)
+            logger.info("SELF_UPDATE queued | agent={} app={} sha={}", agent_id, app_name, target_sha or "latest")
+        except Exception as exc:
+            logger.error("Failed to queue SELF_UPDATE for agent {}: {}", agent_id, exc)
+
+    redis.close()
+
+    if notified:
+        sha_label = target_sha[:8] if target_sha else f"latest@{branch}"
+        try:
+            post_alert_sync(
+                f"🔄 *Agent Self-Update Broadcast* | sha=`{sha_label}`\n"
+                f"Notified {len(notified)} agent(s): {', '.join(f'`{n}`' for n in notified)}",
+                settings.slack_agents_channel,
+            )
+        except Exception:
+            pass
+
+    logger.info("broadcast_agent_updates: notified {} agents", len(notified))
+    return {"notified": notified, "target_sha": target_sha}
 
 
 # ── Task: autonomous agent task execution ─────────────────────────────────────
