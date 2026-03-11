@@ -128,6 +128,11 @@ Intent-specific param examples:
   slack_read:     {{"action": "history" | "search" | "list_channels" | "dm_history", "channel": "sentinel-alerts", "query": "search term", "user": "username", "limit": 20}}
   reddit_read:    {{"subreddit": "python", "limit": 10, "time_filter": "day" | "week" | "month" | "year" | "all", "channel": "sentinel-reddit"}}
   reddit_schedule: {{"action": "add" | "list" | "remove" | "pause" | "resume", "subreddit": "worldnews", "cron": "0 8 * * *", "channel": "sentinel-reddit", "time_filter": "day", "limit": 10, "id": ""}}
+  agent_registry: {{"action": "list" | "get" | "fleet_summary" | "health", "agent_id": "", "env": "staging" | "production", "connected": true | false}}
+  agent_manage:   {{"action": "provision" | "revoke" | "dispatch_patch", "agent_id": "", "app_name": "", "sentinel_env": "staging", "hostname": "", "diff_text": ""}}
+  remote_log_analysis: {{"agent_id": "", "error_event": {{"stack_trace": "", "context_lines": [], "file_paths": []}}}}
+  patch_dispatch: {{"agent_id": "", "diff_text": "", "triggered_by": "manual" | "log_error" | "sentry", "files_changed": []}}
+  cross_agent_query: {{"query": "search term", "namespace_filter": "all" | "<agent_id>" | "<app_name>"}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
@@ -259,6 +264,13 @@ Routing guidance:
   - "knowledge graph stats", "how many nodes", "graph overview" → knowledge_graph with action=stats
   - "show the knowledge graph", "open the graph", "visualize the graph", "knowledge graph visualization" → knowledge_graph with action=visualize
   - "what's in my knowledge graph", "show all graph nodes", "graph summary" → knowledge_graph with action=stats
+  - "list agents" | "show mesh agents" | "fleet status" | "connected agents" | "agent health" → agent_registry action=list
+  - "fleet summary" | "how many agents online" | "mesh fleet" → agent_registry action=fleet_summary
+  - "provision agent" | "add server to mesh" | "register new agent" → agent_manage action=provision
+  - "revoke agent" | "disconnect agent" | "remove agent" → agent_manage action=revoke, agent_id={{id}}
+  - "dispatch patch to agent" | "patch remote server" | "send patch to agent" → patch_dispatch agent_id={{id}}
+  - "cross-agent errors" | "same error on multiple agents" | "fleet-wide search" → cross_agent_query
+  - "analyze agent logs" | "agent error analysis" | "remote log" → remote_log_analysis
   Tech stack detection for project_create:
     - "python", "fastapi", "flask", "django", "rest api" in description → tech_stack=python or fastapi/flask/django
     - "react", "frontend", "ui" → tech_stack=react
@@ -309,6 +321,11 @@ knowledge_graph — personal knowledge graph: add nodes (projects/repos/servers/
 slack_read      — read Slack channel history, search messages, list channels, fetch DMs; channels: sentinel-alerts, sentinel-evals, sentinel-milestones, rmm-production, rmm-dev-staging
 reddit_read     — fetch + AI-summarize top/hot posts from any subreddit; posts digest to sentinel-reddit Slack channel
 reddit_schedule — add, list, remove, pause, or resume recurring Reddit digest schedules (cron-based, stored in Redis)
+agent_registry   — list Sentinel Mesh Agents, fleet health, heartbeat status, connected agents
+agent_manage     — provision new agent, revoke credentials, dispatch manual patch
+remote_log_analysis — analyze error logs from remote agent, generate patch suggestion
+patch_dispatch   — sign and send a code patch to a remote Sentinel Mesh Agent
+cross_agent_query — fleet-wide query: find similar errors across all agents
 code            — software engineering help, code review, debugging, architecture — no file edits
 skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
 chat            — anything else: analysis, writing, questions, conversation"""

@@ -35,6 +35,7 @@ celery_app = Celery(
         "app.worker.pr_tasks",
         "app.worker.rmm_tasks",
         "app.worker.reddit_tasks",
+        "app.worker.agent_tasks",
     ],
 )
 
@@ -148,6 +149,24 @@ celery_app.conf.beat_schedule = {
     "reddit-digest-dispatch": {
         "task": "app.worker.reddit_tasks.dispatch_reddit_digests",
         "schedule": crontab(minute=0),
+        "options": {"queue": "celery"},
+    },
+    # Mesh Agent — every 2min: detect offline agents and alert
+    "agent-heartbeat-monitor": {
+        "task": "app.worker.agent_tasks.check_agent_heartbeats",
+        "schedule": crontab(minute="*/2"),
+        "options": {"queue": "celery"},
+    },
+    # Mesh Agent — every 1min: process inbound stream messages
+    "agent-stream-consumer": {
+        "task": "app.worker.agent_tasks.process_agent_stream",
+        "schedule": crontab(minute="*/1"),
+        "options": {"queue": "celery"},
+    },
+    # Mesh Agent — daily 03:00 UTC: purge old heartbeat rows
+    "agent-heartbeat-purge": {
+        "task": "app.worker.agent_tasks.purge_old_heartbeats",
+        "schedule": crontab(hour=3, minute=0),
         "options": {"queue": "celery"},
     },
 }

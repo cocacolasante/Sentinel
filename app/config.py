@@ -219,6 +219,14 @@ class Settings(BaseSettings):
     reddit_subreddits: str = ""          # comma-separated, static daily digest
     reddit_schedule_hour: int = 8        # UTC hour for static digest; -1 = disabled
 
+    # ── Sentinel Mesh Agent Gateway ─────────────────────────────────────────────
+    agent_gateway_master_secret: str = ""   # 256-bit master key for agent provisioning
+    agent_hmac_ts_drift_max: int = 60       # replay-attack window (seconds)
+    agent_heartbeat_timeout: int = 120      # seconds before agent marked offline
+    agent_stream_key: str = "sentinel:agents:stream"
+    slack_agents_channel: str = "sentinel-agents"
+    agent_ws_path: str = "/ws/agent"        # WS endpoint base path
+
     # ── Neo4j Knowledge Graph ───────────────────────────────────
     neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"

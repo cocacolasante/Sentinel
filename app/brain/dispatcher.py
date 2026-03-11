@@ -174,6 +174,16 @@ def _build_skill_registry():
     # Reddit — news feed digest + schedule management
     reg.register(RedditReadSkill())
     reg.register(RedditScheduleSkill())
+    # Sentinel Mesh Agent — fleet management, remote log analysis, patch dispatch
+    from app.skills.agent_registry_skill import AgentRegistrySkill, AgentManageSkill
+    from app.skills.remote_log_skill import RemoteLogSkill
+    from app.skills.patch_dispatch_skill import PatchDispatchSkill
+    from app.skills.cross_agent_context import CrossAgentContextSkill
+    reg.register(AgentRegistrySkill())
+    reg.register(AgentManageSkill())
+    reg.register(RemoteLogSkill())
+    reg.register(PatchDispatchSkill())
+    reg.register(CrossAgentContextSkill())
 
     # ── Auto-register dynamically-discovered skills ──────────────────────────
     # Any skill module written by the self-teaching pipeline that is not already
