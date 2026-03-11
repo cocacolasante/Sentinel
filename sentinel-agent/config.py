@@ -23,6 +23,10 @@ class AgentSettings(BaseSettings):
     # Identity
     sentinel_env: str = "staging"
 
+    # Agent self-update
+    agent_source_dir: str = ""   # defaults to auto-detect from __file__
+    agent_restart_cmd: str = ""  # e.g. "systemctl restart sentinel-agent"; defaults to os.execv
+
     # Heartbeat / monitoring
     heartbeat_interval: int = 30
     resource_cpu_threshold: float = 90.0

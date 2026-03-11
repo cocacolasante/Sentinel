@@ -226,6 +226,9 @@ class Settings(BaseSettings):
     agent_stream_key: str = "sentinel:agents:stream"
     slack_agents_channel: str = "sentinel-agents"
     agent_ws_path: str = "/ws/agent"        # WS endpoint base path
+    # URL for remote sentinel-agent installs; embed a PAT for private repos:
+    #   https://USER:TOKEN@github.com/cocacolasante/Sentinel.git
+    sentinel_agent_repo_url: str = "https://github.com/cocacolasante/Sentinel.git"
 
     # ── Neo4j Knowledge Graph ───────────────────────────────────
     neo4j_uri: str = "bolt://neo4j:7687"

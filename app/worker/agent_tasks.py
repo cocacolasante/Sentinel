@@ -149,6 +149,10 @@ def _route_stream_message(msg: dict, conn, redis):
             )
         elif msg_type == "RESOURCE_ALERT":
             _handle_resource_alert(agent_id, msg, payload)
+        elif msg_type == "CHAT_RESPONSE":
+            _handle_chat_response(agent_id, payload, redis)
+        elif msg_type == "SELF_UPDATE_RESULT":
+            _handle_self_update_result(agent_id, msg, payload)
 
 
 def _handle_register(cur, agent_id: str, msg: dict, redis):
@@ -261,6 +265,48 @@ def _handle_patch_result(cur, agent_id: str, payload: dict):
         logger.warning("Slack patch result notification failed: {}", e)
 
 
+def _handle_self_update_result(agent_id: str, msg: dict, payload: dict):
+    """Post Slack alert with the agent self-update outcome."""
+    app_name = msg.get("app_name", agent_id)
+    success = payload.get("success", False)
+    old_sha = payload.get("old_sha", "?")[:8]
+    new_sha = payload.get("new_sha", "?")[:8]
+    message = payload.get("message", "")
+    elapsed = payload.get("elapsed_ms", 0)
+
+    if old_sha == new_sha:
+        # Already up to date — don't spam Slack
+        logger.info("Self-update noop | agent={} sha={}", agent_id, new_sha)
+        return
+
+    icon = "✅" if success else "❌"
+    alert = (
+        f"{icon} *Agent Self-Update {'Complete' if success else 'Failed'}* | `{app_name}`\n"
+        f"{old_sha} → {new_sha} | {elapsed}ms\n"
+        f"{message}"
+    )
+    try:
+        post_alert_sync(alert, settings.slack_agents_channel)
+    except Exception as e:
+        logger.warning("Slack self-update notification failed: {}", e)
+
+    logger.info("SELF_UPDATE_RESULT | agent={} success={} {} → {}", agent_id, success, old_sha, new_sha)
+
+
+def _handle_chat_response(agent_id: str, payload: dict, redis):
+    """Store CHAT_RESPONSE in Redis (idempotent — fast-path in _recv_loop may have already written it)."""
+    corr_id = payload.get("correlation_id")
+    if not corr_id:
+        logger.warning("CHAT_RESPONSE from {} missing correlation_id", agent_id)
+        return
+    resp_key = f"sentinel:agent:chat_response:{agent_id}:{corr_id}"
+    pend_key = f"sentinel:agent:chat_pending:{agent_id}:{corr_id}"
+    if not redis.exists(resp_key):
+        redis.set(resp_key, json.dumps(payload), ex=300)
+        redis.delete(pend_key)
+    logger.info("CHAT_RESPONSE | agent={} corr={} success={}", agent_id, corr_id, payload.get("success"))
+
+
 def _handle_resource_alert(agent_id: str, msg: dict, payload: dict):
     """Post Slack alert for resource threshold breach."""
     metric = payload.get("metric", "unknown")
@@ -277,6 +323,156 @@ def _handle_resource_alert(agent_id: str, msg: dict, payload: dict):
         post_alert_sync(alert, settings.slack_agents_channel)
     except Exception as e:
         logger.warning("Slack resource alert failed: {}", e)
+
+
+# ── Task: broadcast self-update to all connected agents ───────────────────────
+
+@shared_task(name="app.worker.agent_tasks.broadcast_agent_updates")
+def broadcast_agent_updates(target_sha: str = "", branch: str = "main", force: bool = False):
+    """
+    Push a SELF_UPDATE command to every currently-connected mesh agent.
+
+    Each agent will git-pull to target_sha (or latest on branch), run pip
+    install if requirements changed, and restart its own daemon. Agents
+    already on the target SHA skip the update silently.
+    """
+    conn = _get_db_sync()
+    redis = _get_redis_sync()
+    notified = []
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT agent_id, app_name, hmac_secret FROM mesh_agents "
+                "WHERE is_connected = TRUE AND is_revoked = FALSE"
+            )
+            agents = cur.fetchall()
+    finally:
+        conn.close()
+
+    for agent_id, app_name, hmac_secret in agents:
+        try:
+            corr_id = str(__import__("uuid").uuid4())
+            ts = __import__("time").time()
+            payload = {
+                "correlation_id": corr_id,
+                "target_sha": target_sha,
+                "branch": branch,
+                "force": force,
+            }
+            canonical = (
+                f"{ts}:SELF_UPDATE:"
+                f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}"
+            )
+            sig = __import__("hmac").new(
+                hmac_secret.encode(), canonical.encode(), "sha256"
+            ).hexdigest()
+            cmd_msg = json.dumps({"type": "SELF_UPDATE", "payload": payload, "ts": ts, "sig": sig})
+
+            redis.rpush(f"sentinel:agent:cmd:{agent_id}", cmd_msg)
+            redis.expire(f"sentinel:agent:cmd:{agent_id}", 3600)
+            notified.append(app_name)
+            logger.info("SELF_UPDATE queued | agent={} app={} sha={}", agent_id, app_name, target_sha or "latest")
+        except Exception as exc:
+            logger.error("Failed to queue SELF_UPDATE for agent {}: {}", agent_id, exc)
+
+    redis.close()
+
+    if notified:
+        sha_label = target_sha[:8] if target_sha else f"latest@{branch}"
+        try:
+            post_alert_sync(
+                f"🔄 *Agent Self-Update Broadcast* | sha=`{sha_label}`\n"
+                f"Notified {len(notified)} agent(s): {', '.join(f'`{n}`' for n in notified)}",
+                settings.slack_agents_channel,
+            )
+        except Exception:
+            pass
+
+    logger.info("broadcast_agent_updates: notified {} agents", len(notified))
+    return {"notified": notified, "target_sha": target_sha}
+
+
+# ── Task: autonomous agent task execution ─────────────────────────────────────
+
+@shared_task(name="app.worker.agent_tasks.run_agent_task", bind=True, max_retries=0)
+def run_agent_task(self, agent_id: str, app_name: str, sentinel_env: str, description: str):
+    """
+    Execute an autonomous multi-step task on behalf of a mesh agent.
+
+    Routes the task through the full Brain Dispatcher (all skills available)
+    with agent context injected. Brain handles planning + execution including
+    remote commands via AgentExecSkill. Reports progress to Slack.
+    """
+    import asyncio
+    from app.brain.dispatcher import Dispatcher
+
+    redis = _get_redis_sync()
+    task_key = f"sentinel:agent:task:{agent_id}:{self.request.id}"
+    redis.set(task_key, json.dumps({"status": "running", "description": description}), ex=3600)
+    redis.close()
+
+    # Notify Slack
+    try:
+        post_alert_sync(
+            f"🤖 *Autonomous Task Started*\n"
+            f"app=`{app_name}` | env={sentinel_env}\n"
+            f"task_id=`{self.request.id}`\n"
+            f"```{description[:500]}```",
+            settings.slack_agents_channel,
+        )
+    except Exception:
+        pass
+
+    # Build the full autonomous task prompt with agent context
+    autonomous_prompt = (
+        f"[AGENT CONTEXT]\n"
+        f"agent_id: {agent_id}\n"
+        f"app_name: {app_name} | env: {sentinel_env}\n"
+        f"[/AGENT CONTEXT]\n\n"
+        f"[AUTONOMOUS TASK — complete fully without pausing for confirmation]\n"
+        f"{description}\n"
+        f"[/AUTONOMOUS TASK]\n\n"
+        f"Work through this task step by step using all available skills. "
+        f"For operations that need to run on the remote agent server, use agent_exec. "
+        f"For code changes, use repo_write and repo_commit. "
+        f"Complete the full task and report what was done."
+    )
+
+    session_id = f"agent:{agent_id}:task:{self.request.id}"
+
+    async def _run():
+        dispatch = Dispatcher()
+        return await dispatch.process(autonomous_prompt, session_id)
+
+    try:
+        result = asyncio.run(_run())
+        reply = result.reply
+        status = "completed"
+    except Exception as exc:
+        reply = f"Task failed: {exc}"
+        status = "failed"
+        logger.error("Autonomous task failed agent={}: {}", agent_id, exc)
+
+    # Update Redis status
+    redis = _get_redis_sync()
+    redis.set(task_key, json.dumps({"status": status, "description": description, "result": reply[:500]}), ex=3600)
+    redis.close()
+
+    # Final Slack report
+    icon = "✅" if status == "completed" else "❌"
+    try:
+        post_alert_sync(
+            f"{icon} *Autonomous Task {status.title()}* | `{app_name}`\n"
+            f"task_id=`{self.request.id}`\n"
+            f"```{reply[:800]}```",
+            settings.slack_agents_channel,
+        )
+    except Exception:
+        pass
+
+    logger.info("Autonomous task {} | agent={} status={}", self.request.id, agent_id, status)
+    return {"status": status, "reply": reply}
 
 
 # ── Task: heartbeat purge ──────────────────────────────────────────────────────

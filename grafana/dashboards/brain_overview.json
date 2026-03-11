@@ -9,7 +9,7 @@
     "to": "now"
   },
   "schemaVersion": 39,
-  "version": 12,
+  "version": 15,
   "tags": [
     "brain",
     "meshcentral",
@@ -49,10 +49,10 @@
       "title": "Brain Health",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 20
+        "y": 20,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -60,10 +60,10 @@
       "type": "stat",
       "title": "Requests / sec",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 21
+        "y": 21,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -71,7 +71,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))",
+          "expr": "sum(rate(brain_requests_total[1m]))",
           "legendFormat": "req/s",
           "refId": "A",
           "interval": "5s"
@@ -116,10 +116,10 @@
       "type": "stat",
       "title": "p95 Latency",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 6,
-        "y": 21
+        "y": 21,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -127,7 +127,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{job=\"brain\"}[1m]))) * 1000",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000",
           "legendFormat": "p95 ms",
           "refId": "A",
           "interval": "5s"
@@ -172,10 +172,10 @@
       "type": "stat",
       "title": "Error Rate %",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 12,
-        "y": 21
+        "y": 21,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -183,7 +183,7 @@
       },
       "targets": [
         {
-          "expr": "100 * sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m])) / (sum(rate(http_requests_total{job=\"brain\"}[1m])) > 0 or vector(0))",
+          "expr": "100 * sum(rate(brain_requests_total{success=\"false\"}[1m])) / (sum(rate(brain_requests_total[1m])) > 0 or vector(0))",
           "legendFormat": "error %",
           "refId": "A",
           "interval": "5s"
@@ -228,10 +228,10 @@
       "type": "stat",
       "title": "Active Sessions",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 18,
-        "y": 21
+        "y": 21,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -287,13 +287,13 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))",
+          "expr": "sum(rate(brain_requests_total[1m]))",
           "legendFormat": "total req/s",
           "refId": "A",
           "interval": "5s"
         },
         {
-          "expr": "sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m]))",
+          "expr": "sum(rate(brain_requests_total{success=\"false\"}[1m]))",
           "legendFormat": "errors/s",
           "refId": "B",
           "interval": "5s"
@@ -520,10 +520,10 @@
       "type": "timeseries",
       "title": "Requests by Agent",
       "gridPos": {
-        "h": 6,
-        "w": 12,
         "x": 0,
-        "y": 20
+        "y": 25,
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -556,10 +556,10 @@
       "type": "timeseries",
       "title": "Daily Cost Accumulation",
       "gridPos": {
-        "h": 6,
-        "w": 12,
         "x": 12,
-        "y": 20
+        "y": 25,
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -616,10 +616,10 @@
     {
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 29
+        "y": 44,
+        "w": 24,
+        "h": 1
       },
       "id": 9000,
       "title": "Task Board",
@@ -649,10 +649,10 @@
         }
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 0,
-        "y": 30
+        "y": 45,
+        "w": 6,
+        "h": 3
       },
       "id": 9001,
       "options": {
@@ -703,10 +703,10 @@
         }
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 6,
-        "y": 30
+        "y": 45,
+        "w": 6,
+        "h": 3
       },
       "id": 9002,
       "options": {
@@ -757,10 +757,10 @@
         }
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 12,
-        "y": 30
+        "y": 45,
+        "w": 6,
+        "h": 3
       },
       "id": 9003,
       "options": {
@@ -811,10 +811,10 @@
         }
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 18,
-        "y": 30
+        "y": 45,
+        "w": 6,
+        "h": 3
       },
       "id": 9004,
       "options": {
@@ -843,10 +843,10 @@
     },
     {
       "gridPos": {
-        "h": 20,
-        "w": 24,
         "x": 0,
-        "y": 33
+        "y": 48,
+        "w": 24,
+        "h": 20
       },
       "id": 9010,
       "options": {
@@ -861,10 +861,10 @@
       "title": "AI Activity Monitor",
       "type": "text",
       "gridPos": {
-        "h": 14,
-        "w": 24,
         "x": 0,
-        "y": 53
+        "y": 68,
+        "w": 24,
+        "h": 14
       },
       "options": {
         "content": "<div style=\"font-family:monospace;background:#0d1117;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">\ud83e\udd16 AI Activity \u2014 Live</span>\n  <div style=\"display:flex;gap:8px;align-items:center\">\n    <span id=\"act-dot\" style=\"font-size:14px;color:#374151\" title=\"Idle\">\u25cf</span>\n    <span id=\"act-time\" style=\"color:#4b5563;font-size:10px\"></span>\n    <button onclick=\"loadActivity()\" style=\"background:#1f2937;color:#9ca3af;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n  </div>\n</div>\n<div id=\"act-body\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar ACT_BASE='[[brain_url]]';\nfunction actAgo(iso){\n  var d=new Date(iso),now=new Date(),s=Math.floor((now-d)/1000);\n  if(s<60) return s+'s ago';\n  if(s<3600) return Math.floor(s/60)+'m ago';\n  if(s<86400) return Math.floor(s/3600)+'h ago';\n  return Math.floor(s/86400)+'d ago';\n}\nfunction loadActivity(){\n  fetch(ACT_BASE+'/api/v1/board/activity',{cache:'no-store'})\n    .then(function(r){return r.json();})\n    .then(function(data){\n      var dot=document.getElementById('act-dot');\n      var body=document.getElementById('act-body');\n      document.getElementById('act-time').textContent=new Date().toLocaleTimeString();\n      var html='';\n      if(data.in_progress&&data.in_progress.length){\n        dot.style.color='#fbbf24';dot.title='Active';\n        html+='<div style=\"margin-bottom:10px\">';\n        html+='<div style=\"color:#fbbf24;font-size:10px;font-weight:bold;margin-bottom:6px;letter-spacing:0.05em\">\u26a1 IN PROGRESS</div>';\n        data.in_progress.forEach(function(t){\n          html+='<div style=\"background:#1a1a2e;border:1px solid #2a2a4a;border-left:3px solid #fbbf24;padding:8px;margin-bottom:6px;border-radius:4px\">';\n          html+='<div style=\"display:flex;justify-content:space-between;align-items:center\">';\n          html+='<span style=\"color:#e2e8f0;font-size:12px;font-weight:bold\">#'+t.id+' '+(t.title||'')+'</span>';\n          html+='<span style=\"color:#4b5563;font-size:10px\">'+actAgo(t.updated_at)+'</span>';\n          html+='</div>';\n          if(t.description){var desc=(t.description||'').substring(0,140);html+='<div style=\"color:#9ca3af;font-size:10px;margin-top:4px\">'+desc+(desc.length>=140?'\u2026':'')+'</div>';}\n          html+='</div>';\n        });\n        html+='</div>';\n      } else {\n        dot.style.color='#374151';dot.title='Idle';\n        html+='<div style=\"color:#4b5563;font-size:12px;padding:8px;text-align:center;border:1px dashed #1f2937;border-radius:4px;margin-bottom:10px\">\ud83d\udca4 No active tasks \u2014 idle</div>';\n      }\n      if(data.recent_milestones&&data.recent_milestones.length){\n        html+='<div style=\"margin-bottom:8px\">';\n        html+='<div style=\"color:#6b7280;font-size:10px;font-weight:bold;margin-bottom:4px;letter-spacing:0.05em\">RECENT STEPS</div>';\n        var milColors={shell:['#1a3a2a','#4caf50'],code:['#1a2a3a','#42a5f5'],write:['#2a1a3a','#ce93d8'],email:['#3a2a1a','#ffa726'],task:['#1a2a1a','#86efac']};\n        data.recent_milestones.forEach(function(m){\n          var action=m.action||'';\n          var key=Object.keys(milColors).find(function(k){return action.startsWith(k);})||'';\n          var col=key?milColors[key]:['#222','#9ca3af'];\n          html+='<div style=\"display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #111\">';\n          html+='<span style=\"background:'+col[0]+';color:'+col[1]+';font-size:9px;padding:1px 5px;border-radius:2px;white-space:nowrap;min-width:60px;text-align:center\">'+action+'</span>';\n          html+='<span style=\"color:#d1d5db;font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+(m.summary||m.intent||'')+'</span>';\n          html+='<span style=\"color:#4b5563;font-size:9px;white-space:nowrap\">'+actAgo(m.triggered_at)+'</span>';\n          html+='</div>';\n        });\n        html+='</div>';\n      }\n      if(data.pending_next&&data.pending_next.length){\n        html+='<div>';\n        html+='<div style=\"color:#6b7280;font-size:10px;font-weight:bold;margin-bottom:4px;letter-spacing:0.05em\">NEXT IN QUEUE</div>';\n        data.pending_next.forEach(function(t){\n          html+='<div style=\"display:flex;align-items:center;gap:6px;padding:3px 0\">';\n          html+='<span style=\"color:#6b7280;font-size:10px\">#'+t.id+'</span>';\n          html+='<span style=\"color:#9ca3af;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+(t.title||'')+'</span>';\n          html+='<span style=\"color:#fb923c;font-size:9px\">P'+(t.priority_num||3)+'</span>';\n          html+='</div>';\n        });\n        html+='</div>';\n      }\n      body.innerHTML=html||'<div style=\"color:#4b5563;font-size:11px\">No data</div>';\n    })\n    .catch(function(e){document.getElementById('act-body').innerHTML='<div style=\"color:#f87171;font-size:11px\">Error: '+e.message+'</div>';});\n}\nloadActivity();\nsetInterval(loadActivity,5000);\n</script>",
@@ -877,10 +877,10 @@
       "title": "Recent Milestones & Updates",
       "type": "text",
       "gridPos": {
-        "h": 10,
-        "w": 24,
         "x": 0,
-        "y": 67
+        "y": 82,
+        "w": 24,
+        "h": 10
       },
       "options": {
         "mode": "html",
@@ -894,10 +894,10 @@
       "title": "Errors (Sentry)",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 77
+        "y": 92,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -905,10 +905,10 @@
       "type": "stat",
       "title": "Unresolved Issues",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 78
+        "y": 93,
+        "w": 4,
+        "h": 4
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -958,10 +958,10 @@
       "type": "timeseries",
       "title": "HTTP Error Rate (5xx / min)",
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 6,
-        "y": 78
+        "x": 0,
+        "y": 97,
+        "w": 18,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -969,14 +969,14 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) * 60",
-          "legendFormat": "5xx errors/min",
+          "expr": "sum(rate(brain_requests_total{success=\"false\"}[5m])) * 60",
+          "legendFormat": "brain errors/min",
           "refId": "A",
           "interval": "5s"
         },
         {
-          "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) * 60",
-          "legendFormat": "4xx errors/min",
+          "expr": "sum(rate(brain_rate_limited_total[5m])) * 60",
+          "legendFormat": "rate-limited/min",
           "refId": "B",
           "interval": "5s"
         }
@@ -1017,10 +1017,10 @@
       "type": "table",
       "title": "Top Errors by Frequency",
       "gridPos": {
-        "h": 8,
-        "w": 6,
         "x": 18,
-        "y": 78
+        "y": 97,
+        "w": 6,
+        "h": 8
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -1053,10 +1053,10 @@
       "title": "Infrastructure",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 86
+        "y": 115,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -1064,10 +1064,10 @@
       "type": "timeseries",
       "title": "CPU % per Container",
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 87
+        "y": 116,
+        "w": 12,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1075,7 +1075,7 @@
       },
       "targets": [
         {
-          "expr": "sum by(name) (rate(container_cpu_usage_seconds_total{name=~\"(ai|brain)-.+\",container!=\"\"}[1m])) * 100",
+          "expr": "sum by(name) (rate(container_cpu_usage_seconds_total{name=~\"ai-.+\",container!=\"\"}[1m])) * 100",
           "legendFormat": "{{name}}",
           "refId": "A",
           "interval": "5s"
@@ -1098,10 +1098,10 @@
       "type": "timeseries",
       "title": "Memory MB per Container",
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 12,
-        "y": 87
+        "y": 116,
+        "w": 12,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1109,7 +1109,7 @@
       },
       "targets": [
         {
-          "expr": "sum by(name) (container_memory_usage_bytes{name=~\"(ai|brain)-.+\",container!=\"\"}) / 1024 / 1024",
+          "expr": "sum by(name) (container_memory_usage_bytes{name=~\"ai-.+\",container!=\"\"}) / 1024 / 1024",
           "legendFormat": "{{name}}",
           "refId": "A",
           "interval": "5s"
@@ -1131,10 +1131,10 @@
       "type": "stat",
       "title": "Disk Free",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 95
+        "y": 124,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -1188,10 +1188,10 @@
       "type": "stat",
       "title": "Redis Memory",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 6,
-        "y": 95
+        "y": 124,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -1245,10 +1245,10 @@
       "type": "stat",
       "title": "PostgreSQL Connections",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 12,
-        "y": 95
+        "y": 124,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -1303,9 +1303,9 @@
       "title": "Redis Hit Rate",
       "gridPos": {
         "x": 18,
-        "y": 95,
-        "h": 4,
-        "w": 6
+        "y": 124,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -1368,9 +1368,9 @@
       "title": "Network I/O \u2014 Inbound (KB/s)",
       "gridPos": {
         "x": 0,
-        "y": 99,
-        "h": 6,
-        "w": 12
+        "y": 128,
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -1404,7 +1404,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by(name) (rate(container_network_receive_bytes_total{name=~\"(ai|brain)-.+\"}[1m])) / 1024",
+          "expr": "sum by(name) (rate(container_network_receive_bytes_total{name=~\"ai-.+\"}[1m])) / 1024",
           "legendFormat": "{{name}}",
           "interval": "5s"
         }
@@ -1416,9 +1416,9 @@
       "title": "Network I/O \u2014 Outbound (KB/s)",
       "gridPos": {
         "x": 12,
-        "y": 99,
-        "h": 6,
-        "w": 12
+        "y": 128,
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -1452,7 +1452,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by(name) (rate(container_network_transmit_bytes_total{name=~\"(ai|brain)-.+\"}[1m])) / 1024",
+          "expr": "sum by(name) (rate(container_network_transmit_bytes_total{name=~\"ai-.+\"}[1m])) / 1024",
           "legendFormat": "{{name}}",
           "interval": "5s"
         }
@@ -1463,10 +1463,10 @@
       "title": "Host Memory Usage",
       "type": "timeseries",
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 105
+        "y": 134,
+        "w": 12,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1513,10 +1513,10 @@
       "title": "Disk I/O (KB/s)",
       "type": "timeseries",
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 12,
-        "y": 105
+        "y": 134,
+        "w": 12,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1562,12 +1562,12 @@
       "id": 9112,
       "type": "stat",
       "title": "Docker Container Status",
-      "description": "Uptime of each container. Green = stable (>1h), yellow = recently restarted (<1h), orange = just started (<5m), gray = no data (down).",
+      "description": "Uptime per container (all 24 services). Green=stable >1h, yellow=restarted <1h, orange=just started <5m, gray=down.",
       "gridPos": {
-        "h": 8,
-        "w": 24,
         "x": 0,
-        "y": 113
+        "y": 142,
+        "w": 24,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1575,7 +1575,7 @@
       },
       "targets": [
         {
-          "expr": "label_replace(time() - container_start_time_seconds{name=~\"(ai|brain)-.+\"}, \"service\", \"$1\", \"name\", \"(?:ai|brain)-(.+)\")",
+          "expr": "label_replace(time() - container_start_time_seconds{name=~\"ai-.+\"}, \"service\", \"$1\", \"name\", \"ai-(.+)\")",
           "legendFormat": "{{service}}",
           "refId": "A",
           "instant": true,
@@ -1630,10 +1630,10 @@
       "title": "Live Logs",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 121
+        "y": 160,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -1641,10 +1641,10 @@
       "type": "logs",
       "title": "All Sentinel Services \u2014 Live",
       "gridPos": {
-        "h": 10,
-        "w": 24,
         "x": 0,
-        "y": 122
+        "y": 161,
+        "w": 24,
+        "h": 10
       },
       "datasource": {
         "type": "loki",
@@ -1673,10 +1673,10 @@
       "type": "logs",
       "title": "Errors & Warnings",
       "gridPos": {
-        "h": 9,
-        "w": 12,
         "x": 0,
-        "y": 132
+        "y": 171,
+        "w": 8,
+        "h": 9
       },
       "datasource": {
         "type": "loki",
@@ -1703,10 +1703,10 @@
       "type": "logs",
       "title": "Celery Worker Logs",
       "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 132
+        "x": 8,
+        "y": 171,
+        "w": 8,
+        "h": 9
       },
       "datasource": {
         "type": "loki",
@@ -1734,10 +1734,10 @@
       "title": "Approval Controls",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 141
+        "y": 189,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -1745,10 +1745,10 @@
       "type": "text",
       "title": "Write Approval Level",
       "gridPos": {
-        "h": 7,
-        "w": 10,
         "x": 0,
-        "y": 142
+        "y": 190,
+        "w": 10,
+        "h": 7
       },
       "options": {
         "mode": "html",
@@ -1760,10 +1760,10 @@
       "type": "text",
       "title": "Pending Approvals",
       "gridPos": {
-        "h": 7,
-        "w": 14,
         "x": 10,
-        "y": 142
+        "y": 190,
+        "w": 14,
+        "h": 7
       },
       "options": {
         "mode": "html",
@@ -1797,7 +1797,7 @@
       },
       "options": {
         "mode": "html",
-        "content": "<div style=\"font-family:monospace;background:#0d1117;padding:10px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:6px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-shrink:0\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">Slack Channel Reader</span>\n  <div style=\"display:flex;gap:6px;align-items:center\">\n    <span id=\"slk-time\" style=\"color:#4b5563;font-size:10px\"></span>\n    <button onclick=\"loadSlack()\" style=\"background:#1f2937;color:#9ca3af;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px\">&#x27F3;</button>\n  </div>\n</div>\n<div style=\"display:flex;gap:4px;flex-wrap:wrap;flex-shrink:0\" id=\"slk-tabs\">\n  <button onclick=\"setChannel('sentinel-alerts')\"   id=\"tab-sentinel-alerts\"       class=\"slk-tab\" style=\"background:#1e1a2e;color:#a78bfa;border:1px solid #4c1d95;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x26A1; alerts</button>\n  <button onclick=\"setChannel('sentinel-evals')\"    id=\"tab-sentinel-evals\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x2705; evals</button>\n  <button onclick=\"setChannel('sentinel-milestones')\" id=\"tab-sentinel-milestones\" class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F3C6; milestones</button>\n  <button onclick=\"setChannel('rmm-production')\"    id=\"tab-rmm-production\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F4E1; rmm-prod</button>\n  <button onclick=\"setChannel('rmm-dev-staging')\"   id=\"tab-rmm-dev-staging\"       class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F527; rmm-dev</button>\n</div>\n<div id=\"slk-status\" style=\"font-size:10px;color:#6b7280;flex-shrink:0\"></div>\n<div id=\"slk-body\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px\"></div>\n</div>\n\n<script>\nvar SLK_BASE='[[brain_url]]';\nvar SLK_CH='sentinel-alerts';\nvar SLK_TIMER=null;\n\nfunction esc2(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\n\nfunction setChannel(ch){\n  SLK_CH=ch;\n  document.querySelectorAll('.slk-tab').forEach(function(b){\n    b.style.background='#1f2937';b.style.color='#6b7280';b.style.borderColor='#374151';\n  });\n  var active=document.getElementById('tab-'+ch);\n  if(active){active.style.background='#1e1a2e';active.style.color='#a78bfa';active.style.borderColor='#4c1d95';}\n  loadSlack();\n}\n\nasync function loadSlack(){\n  var body=document.getElementById('slk-body');\n  var status=document.getElementById('slk-status');\n  status.textContent='Loading #'+SLK_CH+'\\u2026';\n  body.innerHTML='';\n  try{\n    var r=await fetch(SLK_BASE+'/api/v1/integrations/slack/messages?channel='+encodeURIComponent(SLK_CH)+'&limit=25');\n    if(!r.ok){\n      var err=await r.json().catch(function(){return {detail:r.statusText};});\n      status.textContent='Error: '+(err.detail||r.statusText);\n      return;\n    }\n    var msgs=await r.json();\n    document.getElementById('slk-time').textContent=new Date().toLocaleTimeString();\n    status.textContent='';\n    msgs.forEach(function(msg){\n      var div=document.createElement('div');\n      div.style.cssText='padding:3px 4px;border-bottom:1px solid #161b22;font-size:11px;color:#d1d5db;white-space:pre-wrap;word-break:break-word';\n      var user='<span style=\"color:'+(msg.bot?'#6b7280':'#a78bfa')+';font-weight:bold\">'+esc2(msg.user)+'</span>';\n      var text=esc2(msg.text);\n      text=text.replace(/(critical|error|exception|traceback)/gi,'<span style=\"color:#f87171;font-weight:bold\">$1</span>');\n      text=text.replace(/(warning|warn)/gi,'<span style=\"color:#fb923c\">$1</span>');\n      text=text.replace(/(success|ok|all.green|healthy)/gi,'<span style=\"color:#86efac\">$1</span>');\n      div.innerHTML=user+': '+text;\n      body.appendChild(div);\n    });\n    if(!body.children.length){\n      var e=document.createElement('div');\n      e.style.cssText='color:#6b7280;font-size:11px;padding:8px';\n      e.textContent='No messages (bot may not be in #'+SLK_CH+')';\n      body.appendChild(e);\n    }\n  }catch(err){\n    status.textContent='Error: '+err.message;\n  }\n}\n\nfunction startSlkRefresh(){\n  if(SLK_TIMER)clearInterval(SLK_TIMER);\n  SLK_TIMER=setInterval(loadSlack,60000);\n}\n\nloadSlack();\nstartSlkRefresh();\n</script>"
+        "content": "<div style=\"font-family:monospace;background:#0d1117;padding:10px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:6px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-shrink:0\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">Slack Channel Reader</span>\n  <div style=\"display:flex;gap:6px;align-items:center\">\n    <span id=\"slk-time\" style=\"color:#4b5563;font-size:10px\"></span>\n    <button onclick=\"loadSlack()\" style=\"background:#1f2937;color:#9ca3af;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px\">&#x27F3;</button>\n  </div>\n</div>\n<div style=\"display:flex;gap:4px;flex-wrap:wrap;flex-shrink:0\" id=\"slk-tabs\">\n  <button onclick=\"setChannel('sentinel-alerts')\"   id=\"tab-sentinel-alerts\"       class=\"slk-tab\" style=\"background:#1e1a2e;color:#a78bfa;border:1px solid #4c1d95;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x26A1; alerts</button>\n  <button onclick=\"setChannel('sentinel-evals')\"    id=\"tab-sentinel-evals\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x2705; evals</button>\n  <button onclick=\"setChannel('sentinel-milestones')\" id=\"tab-sentinel-milestones\" class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F3C6; milestones</button>\n  <button onclick=\"setChannel('rmm-production')\"    id=\"tab-rmm-production\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F4E1; rmm-prod</button>\n  <button onclick=\"setChannel('sentinel-agents')\"   id=\"tab-sentinel-agents\"       class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F916; agents</button>\n  <button onclick=\"setChannel('sentinel-reddit')\"    id=\"tab-sentinel-reddit\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F4F0; reddit</button>\n  <button onclick=\"setChannel('rmm-dev-staging')\"   id=\"tab-rmm-dev-staging\"       class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F527; rmm-dev</button>\n</div>\n<div id=\"slk-status\" style=\"font-size:10px;color:#6b7280;flex-shrink:0\"></div>\n<div id=\"slk-body\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px\"></div>\n</div>\n\n<script>\nvar SLK_BASE='[[brain_url]]';\nvar SLK_CH='sentinel-alerts';\nvar SLK_TIMER=null;\n\nfunction esc2(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\n\nfunction setChannel(ch){\n  SLK_CH=ch;\n  document.querySelectorAll('.slk-tab').forEach(function(b){\n    b.style.background='#1f2937';b.style.color='#6b7280';b.style.borderColor='#374151';\n  });\n  var active=document.getElementById('tab-'+ch);\n  if(active){active.style.background='#1e1a2e';active.style.color='#a78bfa';active.style.borderColor='#4c1d95';}\n  loadSlack();\n}\n\nasync function loadSlack(){\n  var body=document.getElementById('slk-body');\n  var status=document.getElementById('slk-status');\n  status.textContent='Loading #'+SLK_CH+'\\u2026';\n  body.innerHTML='';\n  try{\n    var r=await fetch(SLK_BASE+'/api/v1/integrations/slack/messages?channel='+encodeURIComponent(SLK_CH)+'&limit=25');\n    if(!r.ok){\n      var err=await r.json().catch(function(){return {detail:r.statusText};});\n      status.textContent='Error: '+(err.detail||r.statusText);\n      return;\n    }\n    var msgs=await r.json();\n    document.getElementById('slk-time').textContent=new Date().toLocaleTimeString();\n    status.textContent='';\n    msgs.forEach(function(msg){\n      var div=document.createElement('div');\n      div.style.cssText='padding:3px 4px;border-bottom:1px solid #161b22;font-size:11px;color:#d1d5db;white-space:pre-wrap;word-break:break-word';\n      var user='<span style=\"color:'+(msg.bot?'#6b7280':'#a78bfa')+';font-weight:bold\">'+esc2(msg.user)+'</span>';\n      var text=esc2(msg.text);\n      text=text.replace(/(critical|error|exception|traceback)/gi,'<span style=\"color:#f87171;font-weight:bold\">$1</span>');\n      text=text.replace(/(warning|warn)/gi,'<span style=\"color:#fb923c\">$1</span>');\n      text=text.replace(/(success|ok|all.green|healthy)/gi,'<span style=\"color:#86efac\">$1</span>');\n      div.innerHTML=user+': '+text;\n      body.appendChild(div);\n    });\n    if(!body.children.length){\n      var e=document.createElement('div');\n      e.style.cssText='color:#6b7280;font-size:11px;padding:8px';\n      e.textContent='No messages (bot may not be in #'+SLK_CH+')';\n      body.appendChild(e);\n    }\n  }catch(err){\n    status.textContent='Error: '+err.message;\n  }\n}\n\nfunction startSlkRefresh(){\n  if(SLK_TIMER)clearInterval(SLK_TIMER);\n  SLK_TIMER=setInterval(loadSlack,60000);\n}\n\nloadSlack();\nstartSlkRefresh();\n</script>"
       }
     },
     {
@@ -1806,10 +1806,10 @@
       "title": "RMM Infrastructure",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 151
+        "y": 197,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -1821,10 +1821,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 0,
-        "y": 152
+        "y": 198,
+        "w": 6,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -1876,10 +1876,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 6,
-        "y": 152
+        "y": 198,
+        "w": 6,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -1934,10 +1934,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 12,
-        "y": 152
+        "y": 198,
+        "w": 6,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -1996,10 +1996,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 18,
-        "y": 152
+        "y": 198,
+        "w": 6,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2058,10 +2058,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 12,
-        "w": 14,
         "x": 0,
-        "y": 155
+        "y": 201,
+        "w": 14,
+        "h": 12
       },
       "fieldConfig": {
         "defaults": {
@@ -2194,10 +2194,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 12,
-        "w": 10,
         "x": 14,
-        "y": 155
+        "y": 201,
+        "w": 10,
+        "h": 12
       },
       "fieldConfig": {
         "defaults": {
@@ -2242,10 +2242,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
         "x": 0,
-        "y": 167
+        "y": 213,
+        "w": 24,
+        "h": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -2357,10 +2357,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 8,
-        "w": 24,
         "x": 0,
-        "y": 176
+        "y": 222,
+        "w": 24,
+        "h": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -2409,10 +2409,10 @@
       "type": "text",
       "title": "Deployed Version",
       "gridPos": {
-        "h": 3,
-        "w": 24,
         "x": 0,
-        "y": 25
+        "y": 31,
+        "w": 24,
+        "h": 3
       },
       "options": {
         "mode": "html",
@@ -2425,10 +2425,10 @@
       "title": "Sentinel Mesh Agents",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 184
+        "y": 230,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -2440,10 +2440,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 0,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2495,10 +2495,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 4,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2553,10 +2553,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 8,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2615,10 +2615,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 12,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2670,10 +2670,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 16,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2728,10 +2728,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 20,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2786,10 +2786,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 10,
-        "w": 14,
         "x": 0,
-        "y": 188
+        "y": 234,
+        "w": 14,
+        "h": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -2958,10 +2958,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 10,
-        "w": 10,
         "x": 14,
-        "y": 188
+        "y": 234,
+        "w": 10,
+        "h": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -3072,32 +3072,18 @@
     {
       "id": 1120,
       "type": "text",
-      "title": "Fleet Live Status",
+      "title": "Agent Intelligence Center",
       "gridPos": {
-        "h": 16,
-        "w": 14,
         "x": 0,
-        "y": 198
+        "y": 244,
+        "w": 24,
+        "h": 32
       },
       "options": {
-        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">\u2b21 Mesh Agent Fleet</span>\n  <div style=\"display:flex;gap:6px;align-items:center\">\n    <select id=\"ma-env-filter\" onchange=\"loadAgents()\" style=\"background:#1f2937;color:#9ca3af;border:1px solid #374151;padding:3px 6px;border-radius:4px;font-size:11px\">\n      <option value=\"\">All Envs</option>\n      <option value=\"staging\">Staging</option>\n      <option value=\"production\">Production</option>\n    </select>\n    <span id=\"ma-updated\" style=\"color:#4b5563;font-size:10px\"></span>\n    <button onclick=\"loadAgents()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n  </div>\n</div>\n<div id=\"ma-fleet-stats\" style=\"display:flex;gap:12px;padding:6px 0;border-bottom:1px solid #1f2937\"></div>\n<div id=\"ma-table\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar MA_BASE='[[brain_url]]';\nfunction bar(val,color){\n  if(val==null)return '<span style=\"color:#4b5563\">n/a</span>';\n  var pct=Math.min(100,Math.round(val));\n  var c=pct>90?'#f87171':pct>75?'#fb923c':'#86efac';\n  if(color)c=color;\n  return '<div style=\"display:inline-flex;align-items:center;gap:4px\">'\n    +'<div style=\"width:48px;height:8px;background:#1f2937;border-radius:2px;overflow:hidden\">'\n    +'<div style=\"width:'+pct+'%;height:100%;background:'+c+'\"></div></div>'\n    +'<span style=\"font-size:10px;color:'+c+'\">'+pct+'%</span></div>';\n}\nfunction loadAgents(){\n  var env=document.getElementById('ma-env-filter').value;\n  var url=MA_BASE+'/api/v1/agents/?'+(env?'env='+env:'');\n  fetch(url).then(function(r){return r.json();}).then(function(data){\n    var agents=data.agents||[];\n    var online=agents.filter(function(a){return a.is_connected;}).length;\n    var offline=agents.length-online;\n    var fst=document.getElementById('ma-fleet-stats');\n    fst.innerHTML='<span style=\"color:#9ca3af;font-size:11px\">Total: <b style=\"color:#93c5fd\">'+agents.length+'</b></span>'\n      +'<span style=\"color:#9ca3af;font-size:11px\">Online: <b style=\"color:#86efac\">'+online+'</b></span>'\n      +'<span style=\"color:#9ca3af;font-size:11px\">Offline: <b style=\"color:' +(offline>0?'#f87171':'#6b7280')+'\">'+offline+'</b></span>';\n    if(!agents.length){\n      document.getElementById('ma-table').innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:12px\">No agents registered.</div>';\n      return;\n    }\n    var rows=agents.map(function(a){\n      var dot=a.is_connected?'<span style=\"color:#86efac\">\u25cf</span>':'<span style=\"color:#f87171\">\u25cf</span>';\n      var env_badge='<span style=\"background:'+(a.sentinel_env==='production'?'#3b1515':'#1c2a1c')\n        +';color:'+(a.sentinel_env==='production'?'#f87171':'#86efac')\n        +';padding:1px 5px;border-radius:3px;font-size:10px\">'+a.sentinel_env+'</span>';\n      var sha=a.git_sha?('<span style=\"color:#6b7280;font-size:10px\">'+a.git_sha.slice(0,10)+'</span>'):'<span style=\"color:#374151\">\u2014</span>';\n      var seen=a.last_seen?a.last_seen.replace('T',' ').slice(0,16):'never';\n      return '<tr style=\"border-top:1px solid #1f2937\">'\n        +'<td style=\"padding:5px 8px\">'+dot+' <span style=\"color:#e5e7eb\">'+a.app_name+'</span></td>'\n        +'<td style=\"padding:5px 8px;color:#9ca3af;font-size:11px\">'+(a.hostname||'\u2014')+'</td>'\n        +'<td style=\"padding:5px 8px\">'+env_badge+'</td>'\n        +'<td style=\"padding:5px 8px\">'+sha+'</td>'\n        +'<td style=\"padding:5px 8px;color:#6b7280;font-size:10px\">'+seen+'</td>'\n        +'</tr>';\n    }).join('');\n    document.getElementById('ma-table').innerHTML='<table style=\"width:100%;border-collapse:collapse;font-size:12px\">'\n      +'<thead><tr style=\"color:#6b7280;font-size:10px;text-transform:uppercase\">'\n      +'<th style=\"padding:4px 8px;text-align:left\">App</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Host</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Env</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">SHA</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Last Seen</th>'\n      +'</tr></thead><tbody>'+rows+'</tbody></table>';\n    document.getElementById('ma-updated').textContent='updated '+new Date().toLocaleTimeString();\n  }).catch(function(e){\n    document.getElementById('ma-table').innerHTML='<div style=\"color:#f87171;font-size:11px\">Error: '+e+'</div>';\n  });\n}\nloadAgents();\nsetInterval(loadAgents,15000);\n</script>",
-        "mode": "html"
-      }
-    },
-    {
-      "id": 1121,
-      "type": "text",
-      "title": "Latest Heartbeats",
-      "gridPos": {
-        "h": 16,
-        "w": 10,
-        "x": 14,
-        "y": 198
+        "mode": "html",
+        "content": "<style>\n#ac-wrap{display:flex;gap:0;height:780px;font-family:'Roboto Mono',monospace;font-size:12px;color:#d0d0d0;background:#111;border-radius:4px;overflow:hidden}\n#ac-left{width:36%;min-width:280px;border-right:1px solid #2a2a2a;display:flex;flex-direction:column;overflow:hidden}\n#ac-right{flex:1;display:none;flex-direction:column;overflow:hidden}\n#ac-right.visible{display:flex}\n.ac-toolbar{padding:8px 12px;background:#161616;border-bottom:1px solid #222;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0}\n.ac-fleet-stats{display:flex;gap:8px;font-size:11px}\n.ac-stat{padding:2px 7px;border-radius:3px;font-weight:700}\n.ac-stat.total{background:#1a2e4a;color:#6ab0f5}\n.ac-stat.on{background:#162b1e;color:#4ec96a}\n.ac-stat.off{background:#2b1616;color:#e05252}\n#ac-env-sel{background:#1a1a1a;color:#bbb;border:1px solid #333;border-radius:3px;padding:2px 5px;font-size:11px}\n#ac-ref-btn{background:#1e1e1e;color:#888;border:1px solid #333;border-radius:3px;padding:2px 7px;font-size:11px;cursor:pointer}\n#ac-ref-btn:hover{color:#ccc}\n.ac-upd{font-size:10px;color:#444;margin-left:auto}\n#ac-list{overflow-y:auto;flex:1}\n.ac-row{display:flex;align-items:center;gap:8px;padding:7px 11px;border-bottom:1px solid #181818;cursor:pointer;transition:background .1s}\n.ac-row:hover{background:#1a241a}\n.ac-row.sel{background:#162b1e;border-left:3px solid #4ec96a}\n.ac-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}\n.ac-dot.on{background:#4ec96a;box-shadow:0 0 5px #4ec96a88}\n.ac-dot.off{background:#444}\n.ac-ai{flex:1;min-width:0}\n.ac-an{font-weight:600;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n.ac-am{font-size:10px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n.ac-eb{font-size:10px;padding:1px 4px;border-radius:2px;flex-shrink:0}\n.ac-eb.prod{background:#3a1218;color:#f06;border:1px solid #721}\n.ac-eb.stg{background:#0e2233;color:#4af;border:1px solid #135}\n.ac-dh{padding:9px 13px;background:#161616;border-bottom:1px solid #222;display:flex;align-items:center;gap:9px;flex-shrink:0}\n.ac-dn{font-size:13px;font-weight:700;color:#ddd;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n#ac-cb{background:none;border:none;color:#555;font-size:16px;cursor:pointer;padding:0 3px;line-height:1}\n#ac-cb:hover{color:#aaa}\n.ac-cards{display:flex;gap:7px;padding:8px 12px;background:#131313;border-bottom:1px solid #222;flex-wrap:wrap;flex-shrink:0}\n.ac-card{background:#1a1a1a;border:1px solid #252525;border-radius:4px;padding:5px 9px;min-width:70px;text-align:center}\n.ac-cv{font-size:15px;font-weight:700}\n.ac-cv.ok{color:#4ec96a}\n.ac-cv.warn{color:#f0a030}\n.ac-cv.err{color:#e05252}\n.ac-cl{font-size:10px;color:#555;margin-top:1px}\n.ac-tabs{display:flex;background:#111;border-bottom:1px solid #222;flex-shrink:0}\n.ac-tab{padding:7px 14px;font-size:11px;color:#666;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}\n.ac-tab:hover{color:#aaa}\n.ac-tab.act{color:#4ec96a;border-bottom-color:#4ec96a}\n.ac-pane{flex:1;overflow:hidden;display:none;flex-direction:column}\n.ac-pane.vis{display:flex}\n#ac-chat-msgs{flex:1;overflow-y:auto;padding:10px 13px;display:flex;flex-direction:column;gap:8px}\n.ac-msg{max-width:88%;padding:7px 10px;border-radius:5px;font-size:11px;line-height:1.5;word-break:break-word}\n.ac-msg.usr{align-self:flex-end;background:#163026;color:#a8e6c0;border:1px solid #1e4a35}\n.ac-msg.bot{align-self:flex-start;background:#1a1a2e;color:#c8d8f0;border:1px solid #2a3050;white-space:pre-wrap}\n.ac-msg.thinking{align-self:flex-start;background:#1c1c1c;color:#555;font-style:italic;border:1px solid #222}\n.ac-chat-input{display:flex;gap:6px;padding:8px 12px;border-top:1px solid #222;flex-shrink:0;align-items:flex-end}\n#ac-chat-txt{flex:1;background:#141414;color:#ccc;border:1px solid #2a2a2a;border-radius:4px;padding:6px 8px;font-size:11px;font-family:inherit;resize:none;min-height:34px;max-height:100px;overflow-y:auto}\n#ac-chat-txt:focus{outline:none;border-color:#4ec96a}\n.ac-send-grp{display:flex;flex-direction:column;gap:4px}\n.ac-sbtn{padding:5px 10px;border-radius:3px;border:1px solid;font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap}\n.ac-sbtn:disabled{opacity:.4;cursor:default}\n.ac-sbtn.pri{background:#163026;color:#4ec96a;border-color:#1e4a35}\n.ac-sbtn.pri:hover:not(:disabled){background:#1e3d2e}\n.ac-sbtn.aut{background:#1a1a2e;color:#7ab0f0;border-color:#2a3050;font-size:10px}\n.ac-sbtn.aut:hover:not(:disabled){background:#22224a}\n#ac-cmd-pane{overflow-y:auto;flex:1;padding:10px 13px;display:flex;flex-direction:column;gap:8px}\n.ac-cmd-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}\n.ac-btn{padding:5px 9px;border-radius:3px;border:1px solid;font-size:11px;cursor:pointer;font-family:inherit}\n.ac-btn:hover{filter:brightness(1.2)}\n.ac-btn:disabled{opacity:.4;cursor:default}\n.ac-btn.inf{background:#0e2233;color:#4af;border-color:#135}\n.ac-btn.dng{background:#2b1218;color:#f06;border-color:#721}\n.ac-shell-r{display:flex;gap:6px}\n#ac-sh-in{flex:1;background:#141414;color:#ccc;border:1px solid #2a2a2a;border-radius:3px;padding:5px 7px;font-size:11px;font-family:inherit}\n#ac-sh-in:focus{outline:none;border-color:#4af}\n.ac-resp-hdr{font-size:10px;color:#444;margin-bottom:4px;flex-shrink:0}\n#ac-resp{flex:1;overflow-y:auto;background:#0c0c0c;border:1px solid #1e1e1e;border-radius:3px;padding:7px;font-size:11px;white-space:pre-wrap;word-break:break-word;min-height:80px;max-height:350px}\n.ac-rok{color:#4ec96a}\n.ac-rer{color:#e05252}\n#ac-info-pane{overflow-y:auto;flex:1;padding:10px 13px}\n.ac-info-section{margin-bottom:12px}\n.ac-info-title{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}\n.ac-kv{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;font-size:11px}\n.ac-k{color:#666}\n.ac-v{color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n.ac-ptable{width:100%;font-size:11px;border-collapse:collapse}\n.ac-ptable th{color:#555;text-align:left;font-weight:normal;padding:2px 0;border-bottom:1px solid #1e1e1e}\n.ac-ptable td{padding:3px 0;border-bottom:1px solid #151515;color:#aaa;vertical-align:top}\n.ac-ps{font-size:10px;padding:1px 4px;border-radius:2px}\n.ps-applied{background:#162b1e;color:#4ec96a}\n.ps-failed,.ps-rolled_back{background:#2b1618;color:#e05252}\n.ps-dispatched,.ps-pending{background:#2b2518;color:#f0c030}\n</style>\n<div id=\"ac-wrap\">\n  <div id=\"ac-left\">\n    <div class=\"ac-toolbar\">\n      <div class=\"ac-fleet-stats\">\n        <span class=\"ac-stat total\" id=\"ac-total\">\u2b21 0</span>\n        <span class=\"ac-stat on\"    id=\"ac-on\">\u25cf 0</span>\n        <span class=\"ac-stat off\"   id=\"ac-off\">\u25cb 0</span>\n      </div>\n      <select id=\"ac-env-sel\" onchange=\"acLoad()\">\n        <option value=\"\">All</option>\n        <option value=\"staging\">Staging</option>\n        <option value=\"production\">Production</option>\n      </select>\n      <button id=\"ac-ref-btn\" onclick=\"acLoad()\">\u21ba</button>\n      <span class=\"ac-upd\" id=\"ac-upd\"></span>\n    </div>\n    <div id=\"ac-list\"><div style=\"padding:16px;color:#444\">Loading\u2026</div></div>\n  </div>\n  <div id=\"ac-right\">\n    <div class=\"ac-dh\">\n      <span class=\"ac-dot on\" id=\"ac-ddot\"></span>\n      <span class=\"ac-dn\"     id=\"ac-dname\">\u2014</span>\n      <span class=\"ac-eb\"     id=\"ac-denv\"></span>\n      <button id=\"ac-cb\" onclick=\"acClose()\">\u2715</button>\n    </div>\n    <div class=\"ac-cards\" id=\"ac-cards\">\n      <div class=\"ac-card\"><div class=\"ac-cv\" id=\"ac-c0\">\u2014</div><div class=\"ac-cl\">Process</div></div>\n      <div class=\"ac-card\"><div class=\"ac-cv\" id=\"ac-c1\">\u2014</div><div class=\"ac-cl\">CPU %</div></div>\n      <div class=\"ac-card\"><div class=\"ac-cv\" id=\"ac-c2\">\u2014</div><div class=\"ac-cl\">Mem %</div></div>\n      <div class=\"ac-card\"><div class=\"ac-cv\" id=\"ac-c3\">\u2014</div><div class=\"ac-cl\">Disk %</div></div>\n      <div class=\"ac-card\"><div class=\"ac-cv\" id=\"ac-c4\" style=\"font-size:13px\">\u2014</div><div class=\"ac-cl\">HTTP</div></div>\n      <div class=\"ac-card\"><div class=\"ac-cv\" id=\"ac-c5\" style=\"font-size:11px\">\u2014</div><div class=\"ac-cl\">Last seen</div></div>\n    </div>\n    <div class=\"ac-tabs\">\n      <div class=\"ac-tab act\" onclick=\"acTab('chat')\">\ud83d\udcac Chat</div>\n      <div class=\"ac-tab\"     onclick=\"acTab('cmd')\">\u26a1 Commands</div>\n      <div class=\"ac-tab\"     onclick=\"acTab('info')\">\u2139 Info</div>\n    </div>\n    <!-- Chat pane -->\n    <div class=\"ac-pane vis\" id=\"ac-chat-pane\">\n      <div id=\"ac-chat-msgs\"></div>\n      <div class=\"ac-chat-input\">\n        <textarea id=\"ac-chat-txt\" rows=\"1\" placeholder=\"Ask anything\u2026 (Shift+Enter for newline)\" onkeydown=\"acChatKey(event)\" oninput=\"acGrow(this)\"></textarea>\n        <div class=\"ac-send-grp\">\n          <button class=\"ac-sbtn pri\" id=\"ac-send-btn\" onclick=\"acSendChat()\">Send</button>\n          <button class=\"ac-sbtn aut\" id=\"ac-task-btn\" onclick=\"acSendTask()\" title=\"Run as autonomous task (Brain completes without prompts)\">\u26a1 Auto</button>\n        </div>\n      </div>\n    </div>\n    <!-- Commands pane -->\n    <div class=\"ac-pane\" id=\"ac-cmd-pane-wrap\">\n      <div id=\"ac-cmd-pane\">\n        <div class=\"ac-cmd-btns\">\n          <button class=\"ac-btn inf\" onclick=\"acExec('read_logs',{})\">\ud83d\udccb Logs</button>\n          <button class=\"ac-btn inf\" onclick=\"acExec('process_status',{})\">\u2699 Process</button>\n          <button class=\"ac-btn inf\" onclick=\"acExec('disk_usage',{})\">\ud83d\udcbe Disk</button>\n          <button class=\"ac-btn inf\" onclick=\"acExec('env_info',{})\">\ud83d\udda5 Env</button>\n          <button class=\"ac-btn inf\" onclick=\"acExec('list_files',{})\">\ud83d\udcc1 Files</button>\n          <button class=\"ac-btn dng\" id=\"ac-rst-btn\" onclick=\"acRestart()\">\u21ba Restart</button>\n        </div>\n        <div class=\"ac-shell-r\">\n          <input id=\"ac-sh-in\" placeholder=\"Shell command\u2026\" onkeydown=\"if(event.key==='Enter')acRunShell()\">\n          <button class=\"ac-btn inf\" onclick=\"acRunShell()\">Run</button>\n        </div>\n        <div class=\"ac-resp-hdr\" id=\"ac-resp-hdr\">Response</div>\n        <div id=\"ac-resp\" style=\"color:#444\">Select a command\u2026</div>\n      </div>\n    </div>\n    <!-- Info pane -->\n    <div class=\"ac-pane\" id=\"ac-info-pane\">\n      <div id=\"ac-info-content\"><div style=\"color:#444\">Loading\u2026</div></div>\n    </div>\n  </div>\n</div>\n<script>\n(function(){\nvar BASE='[[brain_url]]';\nvar AID=null,AENV=null,ANAME=null;\nvar PTIMER=null,CHAT_SID=null;\nvar CURRENT_TAB='chat';\n\n// \u2500\u2500 Agent list \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction acLoad(){\n  var env=document.getElementById('ac-env-sel').value;\n  fetch(BASE+'/api/v1/agents/'+(env?'?env='+env:'')).then(r=>r.json()).then(d=>{\n    var a=d.agents||[];\n    var on=a.filter(x=>x.is_connected).length;\n    document.getElementById('ac-total').textContent='\u2b21 '+a.length;\n    document.getElementById('ac-on').textContent='\u25cf '+on;\n    document.getElementById('ac-off').textContent='\u25cb '+(a.length-on);\n    document.getElementById('ac-upd').textContent=new Date().toLocaleTimeString();\n    var h='';\n    a.forEach(function(x){\n      var s=x.agent_id===AID?'sel':'';\n      var dc=x.is_connected?'on':'off';\n      var el=x.sentinel_env==='production'?'prod':'stg';\n      var sha=x.git_sha?x.git_sha.slice(0,7):'\u2014';\n      h+='<div class=\"ac-row '+s+'\" onclick=\"acSel(\\''+x.agent_id+'\\',\\''+eq(x.app_name)+'\\',\\''+x.sentinel_env+'\\')\">'\n        +'<span class=\"ac-dot '+dc+'\"></span>'\n        +'<div class=\"ac-ai\"><div class=\"ac-an\">'+eh(x.app_name)+'</div>'\n        +'<div class=\"ac-am\">'+eh(x.hostname||'')+'  '+sha+'</div></div>'\n        +'<span class=\"ac-eb '+el+'\">'+el+'</span></div>';\n    });\n    document.getElementById('ac-list').innerHTML=h||'<div style=\"padding:16px;color:#444\">No agents</div>';\n  }).catch(e=>{ document.getElementById('ac-list').innerHTML='<div style=\"padding:16px;color:#e05252\">'+eh(String(e))+'</div>'; });\n}\n\n// \u2500\u2500 Select agent \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction acSel(id,name,env){\n  AID=id; ANAME=name; AENV=env;\n  CHAT_SID='agent:'+id;\n  document.getElementById('ac-right').classList.add('visible');\n  document.getElementById('ac-dname').textContent=name;\n  var el=document.getElementById('ac-denv');\n  el.textContent=env==='production'?'prod':'stg';\n  el.className='ac-eb '+(env==='production'?'prod':'stg');\n  document.getElementById('ac-chat-msgs').innerHTML='';\n  addMsg('bot','\ud83d\udc4b Connected to **'+name+'** ('+env+'). I have full access to all Brain skills and can run commands on this agent. What would you like to do?');\n  acLoadCards();\n  if(CURRENT_TAB==='info')acLoadInfo();\n  acLoad();\n}\n\nfunction acClose(){\n  AID=null;AENV=null;ANAME=null;CHAT_SID=null;\n  if(PTIMER){clearTimeout(PTIMER);PTIMER=null;}\n  document.getElementById('ac-right').classList.remove('visible');\n  acLoad();\n}\n\n// \u2500\u2500 Stats cards \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction acLoadCards(){\n  if(!AID)return;\n  fetch(BASE+'/api/v1/agents/'+AID+'/health').then(r=>r.json()).then(d=>{\n    var h=d.latest_heartbeat||{};\n    var a=d.agent||{};\n    function sc(id,val,w,e){\n      var el=document.getElementById(id);\n      if(val===null||val===undefined){el.textContent='\u2014';el.className='ac-cv';return;}\n      el.textContent=typeof val==='number'?val.toFixed(1)+'%':String(val);\n      el.className='ac-cv'+(val>=e?' err':val>=w?' warn':' ok');\n    }\n    var p=document.getElementById('ac-c0');\n    p.textContent=h.process_up===true?'UP':h.process_up===false?'DOWN':'\u2014';\n    p.className='ac-cv'+(h.process_up===true?' ok':h.process_up===false?' err':'');\n    sc('ac-c1',h.cpu_pct,75,90);sc('ac-c2',h.mem_pct,80,95);sc('ac-c3',h.disk_pct,80,90);\n    var ht=document.getElementById('ac-c4');\n    ht.textContent=h.http_status||'\u2014';\n    ht.className='ac-cv'+(h.http_status&&h.http_status<400?' ok':h.http_status?' err':'');\n    var ls=document.getElementById('ac-c5');\n    ls.textContent=a.last_seen?new Date(a.last_seen).toLocaleTimeString():'\u2014';\n    ls.className='ac-cv';\n    document.getElementById('ac-ddot').className='ac-dot '+(a.is_connected?'on':'off');\n  }).catch(()=>{});\n}\n\n// \u2500\u2500 Tab switching \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction acTab(t){\n  CURRENT_TAB=t;\n  document.querySelectorAll('.ac-tab').forEach(function(el,i){\n    el.classList.toggle('act',['chat','cmd','info'][i]===t);\n  });\n  document.getElementById('ac-chat-pane').classList.toggle('vis',t==='chat');\n  document.getElementById('ac-cmd-pane-wrap').classList.toggle('vis',t==='cmd');\n  document.getElementById('ac-info-pane').classList.toggle('vis',t==='info');\n  if(t==='info'&&AID)acLoadInfo();\n}\n\n// \u2500\u2500 Chat pane \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction addMsg(role,text){\n  var el=document.createElement('div');\n  el.className='ac-msg '+role;\n  el.textContent=text;\n  var msgs=document.getElementById('ac-chat-msgs');\n  msgs.appendChild(el);\n  msgs.scrollTop=msgs.scrollHeight;\n  return el;\n}\n\nfunction acChatKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();acSendChat();}}\nfunction acGrow(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px';}\n\nfunction acSendChat(){\n  if(!AID)return;\n  var txt=document.getElementById('ac-chat-txt');\n  var msg=txt.value.trim();\n  if(!msg)return;\n  txt.value='';txt.style.height='auto';\n  setInputs(true);\n  addMsg('usr',msg);\n  var thinking=addMsg('thinking','\u23f3 Thinking\u2026');\n  fetch(BASE+'/api/v1/agents/'+AID+'/chat',{\n    method:'POST',\n    headers:{'Content-Type':'application/json'},\n    body:JSON.stringify({message:msg,session_id:CHAT_SID})\n  }).then(r=>r.json()).then(d=>{\n    thinking.remove();\n    addMsg('bot',d.reply||'(no reply)');\n    setInputs(false);\n    acLoadCards();\n  }).catch(e=>{\n    thinking.textContent='Error: '+String(e);\n    thinking.className='ac-msg bot';\n    setInputs(false);\n  });\n}\n\nfunction acSendTask(){\n  if(!AID)return;\n  var txt=document.getElementById('ac-chat-txt');\n  var msg=txt.value.trim();\n  if(!msg)return;\n  txt.value='';txt.style.height='auto';\n  setInputs(true);\n  addMsg('usr','[AUTONOMOUS TASK] '+msg);\n  var thinking=addMsg('thinking','\u26a1 Queuing autonomous task\u2026');\n  fetch(BASE+'/api/v1/agents/'+AID+'/task',{\n    method:'POST',\n    headers:{'Content-Type':'application/json'},\n    body:JSON.stringify({description:msg,autonomous:true})\n  }).then(r=>r.json()).then(d=>{\n    thinking.textContent='\u2705 Task queued (id: '+d.celery_task_id+') \u2014 Brain is working autonomously. Progress reported to Slack.';\n    thinking.className='ac-msg bot';\n    setInputs(false);\n  }).catch(e=>{\n    thinking.textContent='Error: '+String(e);\n    thinking.className='ac-msg bot';\n    setInputs(false);\n  });\n}\n\nfunction setInputs(dis){\n  document.getElementById('ac-send-btn').disabled=dis;\n  document.getElementById('ac-task-btn').disabled=dis;\n  document.getElementById('ac-chat-txt').disabled=dis;\n}\n\n// \u2500\u2500 Commands pane \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction acExec(cmd,args){\n  if(!AID)return;\n  setBtns(true);\n  document.getElementById('ac-resp').innerHTML='<span style=\"color:#6ab0f5\">Running '+cmd+'\u2026</span>';\n  document.getElementById('ac-resp-hdr').textContent=cmd+' @ '+new Date().toLocaleTimeString();\n  fetch(BASE+'/api/v1/agents/'+AID+'/command',{\n    method:'POST',\n    headers:{'Content-Type':'application/json'},\n    body:JSON.stringify({command:cmd,args:args,timeout_secs:30})\n  }).then(r=>r.ok?r.json():r.json().then(e=>{throw new Error(e.detail);})).then(d=>{\n    acPoll(d.correlation_id,Date.now()+d.timeout_secs*1000);\n  }).catch(e=>{setBtns(false);document.getElementById('ac-resp').innerHTML='<span class=\"ac-rer\">'+eh(String(e))+'</span>';});\n}\n\nfunction acRunShell(){\n  var cmd=document.getElementById('ac-sh-in').value.trim();\n  if(cmd)acExec('shell',{cmd:cmd});\n}\n\nfunction acRestart(){\n  if(!AID)return;\n  var args={};\n  if(AENV==='production'){\n    if(!confirm('\u26a0\ufe0f PRODUCTION RESTART\\n\\nRestart '+ANAME+' in production?'))return;\n    args.approved=true;\n  }\n  acExec('restart_app',args);\n}\n\nfunction acPoll(cid,deadline){\n  if(PTIMER)clearTimeout(PTIMER);\n  fetch(BASE+'/api/v1/agents/'+AID+'/responses/'+cid).then(r=>{\n    if(r.status===404){acRender({success:false,error:'Expired'});setBtns(false);return;}\n    return r.json().then(d=>{\n      if(d.status==='ready'){acRender(d.response);setBtns(false);}\n      else if(d.status==='pending'&&Date.now()<deadline)PTIMER=setTimeout(()=>acPoll(cid,deadline),2000);\n      else{acRender({success:false,error:'Timed out'});setBtns(false);}\n    });\n  }).catch(e=>{acRender({success:false,error:String(e)});setBtns(false);});\n}\n\nfunction acRender(data){\n  var ok=data&&data.success;\n  var cls=ok?'ac-rok':'ac-rer';\n  var hdr=(ok?'\u2713':'\u2717')+' '+(data.command||'')+(data.elapsed_ms?' ('+data.elapsed_ms+'ms)':'');\n  var body='';\n  if(data.error)body=data.error;\n  else if(data.result){\n    var r=data.result;\n    if(typeof r.output==='string')body=r.output;\n    else if(typeof r.stdout==='string')body='STDOUT:\\n'+r.stdout+(r.stderr?'\\nSTDERR:\\n'+r.stderr:'')+(r.exit_code!=null?'\\nExit: '+r.exit_code:'');\n    else body=JSON.stringify(r,null,2);\n  }\n  document.getElementById('ac-resp').innerHTML='<span class=\"'+cls+'\">\u2500\u2500 '+eh(hdr)+' \u2500\u2500</span>\\n'+eh(body);\n}\n\nfunction setBtns(d){document.querySelectorAll('.ac-btn').forEach(b=>b.disabled=d);}\n\n// \u2500\u2500 Info pane \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction acLoadInfo(){\n  if(!AID)return;\n  var el=document.getElementById('ac-info-content');\n  el.innerHTML='<div style=\"color:#444\">Loading\u2026</div>';\n  Promise.all([\n    fetch(BASE+'/api/v1/agents/'+AID+'/health').then(r=>r.json()),\n    fetch(BASE+'/api/v1/agents/'+AID+'/patches?limit=10').then(r=>r.json())\n  ]).then(([hd,pd])=>{\n    var a=hd.agent||{};\n    var hb=hd.latest_heartbeat||{};\n    var ps=pd.patches||[];\n    var h='<div class=\"ac-info-section\"><div class=\"ac-info-title\">Agent</div><div class=\"ac-kv\">'\n      +'<span class=\"ac-k\">agent_id</span><span class=\"ac-v\">'+eh(a.agent_id||'')+'</span>'\n      +'<span class=\"ac-k\">app_name</span><span class=\"ac-v\">'+eh(a.app_name||'')+'</span>'\n      +'<span class=\"ac-k\">hostname</span><span class=\"ac-v\">'+eh(a.hostname||'')+'</span>'\n      +'<span class=\"ac-k\">env</span><span class=\"ac-v\">'+eh(a.sentinel_env||'')+'</span>'\n      +'<span class=\"ac-k\">version</span><span class=\"ac-v\">'+eh(a.agent_version||'')+'</span>'\n      +'<span class=\"ac-k\">git_sha</span><span class=\"ac-v\">'+eh(a.git_sha||'')+'</span>'\n      +'<span class=\"ac-k\">ip</span><span class=\"ac-v\">'+eh(a.ip_address||'')+'</span>'\n      +'<span class=\"ac-k\">os</span><span class=\"ac-v\">'+eh(a.os_name||'')+'</span>'\n      +'</div></div>';\n    if(hb&&Object.keys(hb).length){\n      h+='<div class=\"ac-info-section\"><div class=\"ac-info-title\">Latest Heartbeat</div><div class=\"ac-kv\">'\n        +'<span class=\"ac-k\">process</span><span class=\"ac-v '+(hb.process_up?'ac-cv ok':'ac-cv err')+'\">'+(hb.process_up?'UP':'DOWN')+'</span>'\n        +'<span class=\"ac-k\">cpu</span><span class=\"ac-v\">'+(hb.cpu_pct!=null?hb.cpu_pct.toFixed(1)+'%':'\u2014')+'</span>'\n        +'<span class=\"ac-k\">memory</span><span class=\"ac-v\">'+(hb.mem_pct!=null?hb.mem_pct.toFixed(1)+'%':'\u2014')+'</span>'\n        +'<span class=\"ac-k\">disk</span><span class=\"ac-v\">'+(hb.disk_pct!=null?hb.disk_pct.toFixed(1)+'%':'\u2014')+'</span>'\n        +'<span class=\"ac-k\">http</span><span class=\"ac-v\">'+(hb.http_status||'\u2014')+'</span>'\n        +'<span class=\"ac-k\">received</span><span class=\"ac-v\">'+(hb.received_at?new Date(hb.received_at).toLocaleString():'\u2014')+'</span>'\n        +'</div></div>';\n    }\n    if(ps.length){\n      h+='<div class=\"ac-info-section\"><div class=\"ac-info-title\">Patches</div>'\n        +'<table class=\"ac-ptable\"><tr><th>Date</th><th>Triggered by</th><th>Status</th></tr>';\n      ps.forEach(p=>{\n        h+='<tr><td>'+(p.created_at?new Date(p.created_at).toLocaleDateString():'\u2014')+'</td>'\n          +'<td>'+eh(p.triggered_by||'manual')+'</td>'\n          +'<td><span class=\"ac-ps ps-'+p.status+'\">'+p.status+'</span></td></tr>';\n      });\n      h+='</table></div>';\n    }\n    el.innerHTML=h;\n  }).catch(()=>{ el.innerHTML='<div style=\"color:#e05252\">Failed to load info</div>'; });\n}\n\n// \u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction eh(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nfunction eq(s){return String(s).replace(/'/g,\"\\\\'\");}\n\nwindow.acSel=acSel;window.acClose=acClose;window.acLoad=acLoad;window.acTab=acTab;\nwindow.acSendChat=acSendChat;window.acSendTask=acSendTask;window.acChatKey=acChatKey;window.acGrow=acGrow;\nwindow.acExec=acExec;window.acRunShell=acRunShell;window.acRestart=acRestart;\n\nacLoad();\nsetInterval(function(){acLoad();if(AID){acLoadCards();if(CURRENT_TAB==='info')acLoadInfo();}},15000);\n})();\n</script>"
       },
-      "options": {
-        "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">\ud83d\udc93 Latest Heartbeats</span>\n  <button onclick=\"loadHB()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n</div>\n<div id=\"hb-table\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar HB_BASE='[[brain_url]]';\nfunction hbBar(val,warn,crit){\n  if(val==null)return '<span style=\"color:#4b5563\">n/a</span>';\n  var pct=Math.min(100,Math.round(val));\n  var c=pct>=crit?'#f87171':pct>=warn?'#fb923c':'#86efac';\n  return '<div style=\"display:inline-flex;align-items:center;gap:4px\">'\n    +'<div style=\"width:44px;height:7px;background:#1f2937;border-radius:2px;overflow:hidden\">'\n    +'<div style=\"width:'+pct+'%;height:100%;background:'+c+'\"></div></div>'\n    +'<span style=\"font-size:10px;color:'+c+'\">'+pct+'%</span></div>';\n}\nfunction loadHB(){\n  fetch(HB_BASE+'/api/v1/agents/').then(function(r){return r.json();}).then(function(data){\n    var agents=(data.agents||[]).filter(function(a){return a.is_connected;});\n    if(!agents.length){\n      document.getElementById('hb-table').innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:12px\">No connected agents.</div>';\n      return;\n    }\n    return Promise.all(agents.map(function(a){\n      return fetch(HB_BASE+'/api/v1/agents/'+a.agent_id+'/health')\n        .then(function(r){return r.json();})\n        .then(function(h){return {agent:a,hb:h.latest_heartbeat};});\n    }));\n  }).then(function(results){\n    if(!results)return;\n    var rows=results.map(function(r){\n      var a=r.agent; var hb=r.hb||{};\n      var proc=hb.process_up===true?'<span style=\"color:#86efac\">\u25b2 up</span>'\n               :hb.process_up===false?'<span style=\"color:#f87171\">\u25bc down</span>'\n               :'<span style=\"color:#6b7280\">?</span>';\n      var http=hb.http_status?'<span style=\"color:'+(hb.http_status<400?'#86efac':'#f87171')+'\">'+hb.http_status+'</span>'\n               :'<span style=\"color:#6b7280\">\u2014</span>';\n      var lat=hb.http_latency_ms!=null?'<span style=\"color:#9ca3af;font-size:10px\">'+Math.round(hb.http_latency_ms)+'ms</span>':'';\n      return '<tr style=\"border-top:1px solid #1f2937\">'\n        +'<td style=\"padding:5px 8px;color:#e5e7eb\">'+a.app_name+'</td>'\n        +'<td style=\"padding:5px 8px\">'+proc+'</td>'\n        +'<td style=\"padding:5px 8px\">'+hbBar(hb.cpu_pct,75,90)+'</td>'\n        +'<td style=\"padding:5px 8px\">'+hbBar(hb.mem_pct,80,90)+'</td>'\n        +'<td style=\"padding:5px 8px\">'+hbBar(hb.disk_pct,80,90)+'</td>'\n        +'<td style=\"padding:5px 8px\">'+http+' '+lat+'</td>'\n        +'</tr>';\n    }).join('');\n    document.getElementById('hb-table').innerHTML='<table style=\"width:100%;border-collapse:collapse;font-size:12px\">'\n      +'<thead><tr style=\"color:#6b7280;font-size:10px;text-transform:uppercase\">'\n      +'<th style=\"padding:4px 8px;text-align:left\">Agent</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Process</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">CPU</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Mem</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Disk</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">HTTP</th>'\n      +'</tr></thead><tbody>'+rows+'</tbody></table>';\n  }).catch(function(e){\n    document.getElementById('hb-table').innerHTML='<div style=\"color:#f87171;font-size:11px\">'+e+'</div>';\n  });\n}\nloadHB();\nsetInterval(loadHB,15000);\n</script>",
-        "mode": "html"
-      }
+      "transparent": false
     },
     {
       "id": 1130,
@@ -3108,10 +3094,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 214
+        "y": 276,
+        "w": 12,
+        "h": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -3155,10 +3141,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 12,
-        "y": 214
+        "y": 276,
+        "w": 12,
+        "h": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -3202,10 +3188,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
         "x": 0,
-        "y": 222
+        "y": 284,
+        "w": 24,
+        "h": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -3331,6 +3317,1085 @@
           "rawSql": "SELECT\n  TO_CHAR(l.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,\n  a.app_name,\n  l.direction,\n  l.message_type,\n  l.sig_valid,\n  ROUND(l.ts_drift_ms::numeric, 1) AS ts_drift_ms\nFROM mesh_audit_log l\nLEFT JOIN mesh_agents a ON a.agent_id = l.agent_id\nORDER BY l.created_at DESC\nLIMIT 50",
           "refId": "A",
           "interval": "15s"
+        }
+      ]
+    },
+    {
+      "id": 300,
+      "type": "row",
+      "title": "Celery Queues & Workers",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 301,
+      "type": "timeseries",
+      "title": "Celery Queue Depths",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "celery_queue_length{queue_name=\"evals\"}",
+          "legendFormat": "evals",
+          "refId": "A",
+          "interval": "15s"
+        },
+        {
+          "expr": "celery_queue_length{queue_name=\"celery\"}",
+          "legendFormat": "celery",
+          "refId": "B",
+          "interval": "15s"
+        },
+        {
+          "expr": "celery_queue_length{queue_name=\"tasks_general\"}",
+          "legendFormat": "tasks_general",
+          "refId": "C",
+          "interval": "15s"
+        },
+        {
+          "expr": "celery_queue_length{queue_name=\"tasks_workspace\"}",
+          "legendFormat": "tasks_workspace",
+          "refId": "D",
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 8
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 302,
+      "type": "timeseries",
+      "title": "Celery Task Rate (tasks/min by state)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 35,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "sum by(state) (rate(celery_tasks_total[1m])) * 60",
+          "legendFormat": "{{state}}",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 8
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 303,
+      "type": "stat",
+      "title": "Workers Online",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 6,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "celery_workers_online",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 304,
+      "type": "stat",
+      "title": "Tasks Succeeded (1h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 41,
+        "w": 6,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(celery_tasks_total{state=\"SUCCESS\"}[1h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 305,
+      "type": "stat",
+      "title": "Tasks Failed (1h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 41,
+        "w": 6,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(celery_tasks_total{state=\"FAILURE\"}[1h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 306,
+      "type": "stat",
+      "title": "Tasks Retried (1h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 41,
+        "w": 6,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(celery_tasks_total{state=\"RETRY\"}[1h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 401,
+      "type": "stat",
+      "title": "Sentry Triage Tasks (24h)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 93,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE source='sentry-triage' AND created_at > NOW() - INTERVAL '24 hours'",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#a78bfa",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#a78bfa",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 402,
+      "type": "stat",
+      "title": "Auto-Fixed Issues (24h)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 93,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM sentry_issues WHERE status='resolved' AND updated_at > NOW() - INTERVAL '24 hours'",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#86efac",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#86efac",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 403,
+      "type": "stat",
+      "title": "Open Sentry Issues",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 93,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM sentry_issues WHERE status NOT IN ('resolved','ignored')",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#fde68a",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#fde68a",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 404,
+      "type": "stat",
+      "title": "Critical Sentry Issues",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 19,
+        "y": 93,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM sentry_issues WHERE level IN ('critical','fatal') AND status NOT IN ('resolved','ignored')",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#f87171",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#f87171",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 405,
+      "type": "table",
+      "title": "Recent Sentry Issues",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 105,
+        "w": 24,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "filterable": true
+          }
+        }
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "created_at",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT TO_CHAR(created_at,'YYYY-MM-DD HH24:MI') AS created_at, level, title, project, count, status FROM sentry_issues ORDER BY created_at DESC LIMIT 30",
+          "refId": "A",
+          "interval": "30s"
+        }
+      ]
+    },
+    {
+      "id": 510,
+      "type": "stat",
+      "title": "Neo4j Bolt Latency",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 150,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "rate(neo4j_bolt_accumulated_processing_time_total[1m]) * 1000",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 511,
+      "type": "stat",
+      "title": "Neo4j Open Connections",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 150,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "neo4j_bolt_connections_opened_total - neo4j_bolt_connections_closed_total",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 512,
+      "type": "timeseries",
+      "title": "Neo4j Transactions / min",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 150,
+        "w": 12,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "rate(neo4j_transaction_started_total[1m]) * 60",
+          "legendFormat": "started/min",
+          "refId": "A",
+          "interval": "15s"
+        },
+        {
+          "expr": "rate(neo4j_transaction_committed_total[1m]) * 60",
+          "legendFormat": "committed/min",
+          "refId": "B",
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 8
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 520,
+      "type": "logs",
+      "title": "Neo4j Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 154,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\",container_name=\"ai-neo4j\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 521,
+      "type": "logs",
+      "title": "Qdrant / Vector DB Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 154,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\",container_name=\"ai-qdrant\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 601,
+      "type": "logs",
+      "title": "Mesh Agent Gateway Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 171,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\"} |= \"agent\" |~ \"gateway|mesh_agent|ws/agent\"",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 602,
+      "type": "logs",
+      "title": "Reddit / RMM Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 180,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\"} |~ \"reddit|rmm|meshcentral\" | json",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 1200,
+      "type": "row",
+      "title": "Reddit Feed Activity",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 277,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 1201,
+      "type": "stat",
+      "title": "Active Reddit Schedules",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 278,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE source='reddit-schedule' AND status NOT IN ('done','cancelled')",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#fb923c",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#fb923c",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 1202,
+      "type": "stat",
+      "title": "Digests Sent (7d)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 278,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM ai_milestones WHERE action LIKE 'reddit%' AND triggered_at > NOW() - INTERVAL '7 days'",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#86efac",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#86efac",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 1203,
+      "type": "stat",
+      "title": "Reddit Tasks Today",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 278,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE source='reddit-triage' AND created_at > NOW() - INTERVAL '24 hours'",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#a78bfa",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#a78bfa",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 1210,
+      "type": "logs",
+      "title": "Reddit Skill Logs (Live)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 281,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\",container_name=\"ai-brain\"} |~ \"(?i)reddit\"",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 1211,
+      "type": "table",
+      "title": "Reddit Milestones (last 20)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 281,
+        "w": 12,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "filterable": true
+          }
+        }
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "triggered_at",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT TO_CHAR(triggered_at,'YYYY-MM-DD HH24:MI') AS triggered_at, action, intent, summary, agent FROM ai_milestones WHERE action LIKE 'reddit%' OR intent LIKE 'reddit%' ORDER BY triggered_at DESC LIMIT 20",
+          "refId": "A",
+          "interval": "60s"
         }
       ]
     }

@@ -341,7 +341,20 @@ class IONOSClient:
             f"docker rm -f {container_name} 2>/dev/null || true && "
             f"docker run -d --name {container_name} -p {port_map} {env_flags} --restart unless-stopped {image}"
         )
-        return await self.ssh_exec(host, cmd, username)
+        result = await self.ssh_exec(host, cmd, username)
+
+        # Auto-install MeshCentral + Sentinel agents after Docker deployment
+        if result.get("exit_code") == 0:
+            try:
+                from app.integrations.agent_installer import install_agents_on_server
+                agents = await install_agents_on_server(
+                    self, host, container_name, "staging", username=username
+                )
+                result["agents"] = agents
+            except Exception as _exc:
+                logger.warning("Agent install skipped after deploy_docker_app: %s", _exc)
+
+        return result
 
     async def configure_server(
         self,
@@ -785,35 +798,24 @@ class IONOSClient:
             server_id, dc_id, vol_id, nic_id, static_ip_addr or "dhcp",
         )
 
-        # ── 10. Auto-install MeshCentral agent (optional) ─────────────────────
-        # Only when: MeshCentral is configured, a mesh ID is set, server has a
-        # known IP, and we waited for it to be ready (so SSH is up).
+        # ── 10. Auto-install MeshCentral + Sentinel agents ────────────────────
+        # Only when: server has a known IP and we waited for it to be ready
+        # (so SSH is up).  Both installs are best-effort — failure is logged.
         if wait_for_ready and static_ip_addr:
-            try:
-                from app.integrations.meshcentral import MeshCentralClient
-                mc = MeshCentralClient()
-                mesh_id = s.meshcentral_default_mesh_id
-                if mc.is_configured() and mesh_id:
-                    install_cmd = mc.get_agent_install_command(mesh_id, "linux")
-                    result["steps"].append("Installing MeshCentral agent...")
-                    agent_result = await self.ssh_exec(
-                        static_ip_addr,
-                        install_cmd,
-                        username="ubuntu",
-                        timeout=120,
-                    )
-                    if agent_result.get("exit_code") == 0:
-                        result["steps"].append("MeshCentral agent installed successfully")
-                        result["meshcentral_agent"] = "installed"
-                    else:
-                        result["steps"].append(
-                            f"MeshCentral agent install failed (exit {agent_result.get('exit_code')}): "
-                            f"{agent_result.get('stderr', '')[:200]}"
-                        )
-                        result["meshcentral_agent"] = "failed"
-            except Exception as mc_exc:
-                logger.warning("MeshCentral agent install skipped: %s", mc_exc)
-                result["steps"].append(f"MeshCentral agent install skipped: {mc_exc}")
+            result["steps"].append("Installing MeshCentral + Sentinel agents...")
+            from app.integrations.agent_installer import install_agents_on_server
+            agent_name = name  # use server name as app_name
+            agents = await install_agents_on_server(
+                self, static_ip_addr, agent_name, "staging", username="ubuntu"
+            )
+            mc_status = agents["meshcentral"]["status"]
+            sa_status = agents["sentinel_agent"]["status"]
+            result["steps"].append(f"MeshCentral agent: {mc_status}")
+            result["steps"].append(
+                f"Sentinel agent: {sa_status}"
+                + (f" (id={agents['sentinel_agent'].get('agent_id', '')})" if sa_status == "installed" else "")
+            )
+            result["agents"] = agents
 
         return result
 
@@ -900,6 +902,15 @@ class IONOSClient:
         if last.get("stdout", "").strip():
             public_ip = last["stdout"].strip().split()[0]
 
+        # Auto-install MeshCentral + Sentinel agents after successful deployment
+        agents: dict = {}
+        try:
+            from app.integrations.agent_installer import install_agents_on_server
+            app_name = domain or host
+            agents = await install_agents_on_server(self, host, app_name, "staging", username=username)
+        except Exception as _exc:
+            logger.warning("Agent install skipped after deploy_website: %s", _exc)
+
         return {
             "success": success,
             "host": host,
@@ -907,6 +918,7 @@ class IONOSClient:
             "public_ip": public_ip,
             "url": f"http://{public_ip}",
             "steps": results,
+            "agents": agents,
         }
 
     # ── Datacenter update ─────────────────────────────────────────────────────

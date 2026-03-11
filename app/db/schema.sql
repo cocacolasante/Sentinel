@@ -351,3 +351,19 @@ CREATE TABLE IF NOT EXISTS mesh_audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_mesh_audit_agent ON mesh_audit_log (agent_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mesh_audit_type  ON mesh_audit_log (event_type, created_at DESC);
+
+-- Interactive chat command history (Brain → Agent direct commands)
+CREATE TABLE IF NOT EXISTS mesh_chat_commands (
+    id              BIGSERIAL   PRIMARY KEY,
+    agent_id        UUID        NOT NULL REFERENCES mesh_agents(agent_id) ON DELETE CASCADE,
+    correlation_id  UUID        NOT NULL UNIQUE,
+    command         TEXT        NOT NULL,
+    args            JSONB       DEFAULT '{}',
+    issued_by       TEXT,
+    success         BOOLEAN,
+    elapsed_ms      INT,
+    error           TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    responded_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_mesh_chat_agent ON mesh_chat_commands (agent_id, created_at DESC);

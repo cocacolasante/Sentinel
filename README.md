@@ -1,6 +1,6 @@
-# AI Brain — CSuite Code
+# Sentinel AI Brain
 
-Personalized AI assistant for Anthony. Runs on an Ubuntu server as a FastAPI/Python application. Slack is the primary interface; a REST API is also available.
+Personalized AI assistant and autonomous operations platform. Runs on an Ubuntu server as a FastAPI/Python application with Celery workers, a distributed mesh agent network, and a full observability stack. Slack is the primary interface; a REST API and CLI are also available.
 
 ---
 
@@ -14,25 +14,34 @@ Personalized AI assistant for Anthony. Runs on an Ubuntu server as a FastAPI/Pyt
 6. [Dashboards](#dashboards)
 7. [TELOS — Personal Context](#telos--personal-context)
 8. [Slack Interface](#slack-interface)
-9. [REST API](#rest-api)
-10. [Intent Routing & Agent Personas](#intent-routing--agent-personas)
-11. [Cost Tracking & Rate Limiting](#cost-tracking--rate-limiting)
-12. [Memory System](#memory-system)
-13. [Task Queue — Celery + Flower](#task-queue--celery--flower)
-14. [Observability](#observability)
-15. [Eval System](#eval-system)
-16. [Security](#security)
-17. [Google OAuth Setup](#google-oauth-setup)
-18. [Updating](#updating)
-19. [CI/CD — GitOps Loop](#cicd--gitops-loop)
-20. [Troubleshooting](#troubleshooting)
+9. [CLI — brain.py](#cli--brainpy)
+10. [REST API](#rest-api)
+11. [Intent Routing & Agent Personas](#intent-routing--agent-personas)
+12. [Skills Reference](#skills-reference)
+13. [Task Board](#task-board)
+14. [Sentinel Mesh Agent System](#sentinel-mesh-agent-system)
+15. [RMM — MeshCentral Integration](#rmm--meshcentral-integration)
+16. [Reddit News-Feed](#reddit-news-feed)
+17. [Sentry Auto-Triage](#sentry-auto-triage)
+18. [Cost Tracking & Rate Limiting](#cost-tracking--rate-limiting)
+19. [Memory System](#memory-system)
+20. [Cross-Interface Memory](#cross-interface-memory)
+21. [Autonomy Mode](#autonomy-mode)
+22. [Task Queue — Celery + Flower](#task-queue--celery--flower)
+23. [Observability](#observability)
+24. [Eval System](#eval-system)
+25. [Security](#security)
+26. [Google OAuth Setup](#google-oauth-setup)
+27. [Updating](#updating)
+28. [CI/CD — GitOps Loop](#cicd--gitops-loop)
+29. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Architecture
 
 ```
-Slack / REST API
+Slack / CLI / REST API
        │
        ▼
   RateLimiter  ──── per-session request throttle (Redis sliding window)
@@ -43,7 +52,8 @@ Slack / REST API
   ├── MemoryManager
   │    ├── Redis      (hot — current session, 4hr TTL, last 20 turns)
   │    ├── Postgres   (warm — Haiku-generated session summaries)
-  │    └── Qdrant     (cold — semantic embeddings of high-signal turns)
+  │    ├── Qdrant     (cold — semantic embeddings of high-signal turns)
+  │    └── Neo4j      (graph — entity relationships, knowledge links)
   ├── IntentClassifier  (Haiku — classifies message → intent + params)
   ├── AgentRegistry     (selects persona based on intent + keywords)
   ├── SkillRegistry     (executes the matching skill, returns context data)
@@ -53,6 +63,7 @@ Slack / REST API
        └── CostTracker.record()       ← atomic Redis counters + Slack alert
        │
   LoggingHook  ──── Loguru structured log + WebSocket event bus emit
+  MilestoneHook ─── logs every confirmed write action to DB + Slack
        │
   DispatchResult (reply, intent, agent, session_id)
 ```
@@ -61,28 +72,39 @@ Slack / REST API
 
 | Container | Role | Internal port |
 |-----------|------|---------------|
-| `ai-brain` | FastAPI application | 8000 |
-| `ai-postgres` | Warm memory, ratings, eval results | 5432 |
-| `ai-redis` | Hot session memory (DB 0), Celery broker (DB 1), backend (DB 2) | 6379 |
-| `ai-qdrant` | Vector / cold memory | 6333 |
-| `ai-n8n` | Workflow automation (action executor only) | 5678 |
-| `ai-nginx` | Reverse proxy + SSL termination | 80, 443 |
-| `ai-celery-worker` | Background task executor (evals queue) | — |
-| `ai-celery-beat` | Cron scheduler (weekly evals, nightly checks) | — |
-| `ai-flower` | Celery task monitoring UI | 5555 |
-| `ai-redis-exporter` | Exports Redis metrics to Prometheus | 9121 |
-| `ai-celery-exporter` | Exports Celery metrics to Prometheus | 9808 |
-| `ai-prometheus` | Metrics scraper and time-series storage | 9090 |
-| `ai-grafana` | Metrics dashboards | 3000 |
+| `brain` | FastAPI application | 8000 |
+| `postgres` | Warm memory, tasks, eval results, audit log | 5432 |
+| `redis` | Hot session memory, Celery broker + backend, agent streams | 6379 |
+| `qdrant` | Vector / cold memory | 6333 |
+| `neo4j` | Knowledge graph (entity relationships) | 7474 / 7687 |
+| `n8n` | Workflow automation | 5678 |
+| `home-assistant` | Smart home integration | 8123 |
+| `meshcentral` | RMM console (MeshCentral) | 4430 |
+| `nginx` | Reverse proxy + SSL termination | 80, 443 |
+| `certbot` | Let's Encrypt auto-renewal | — |
+| `deploy-agent` | Webhook receiver for CI/CD | 9000 |
+| `celery-worker` | Background task executor (evals, celery, tasks_general queues) | — |
+| `celery-worker-workspace` | Serialized git/workspace operations (tasks_workspace queue) | — |
+| `celery-beat` | Cron scheduler (15 scheduled jobs) | — |
+| `flower` | Celery task monitoring UI | 5555 |
+| `prometheus` | Metrics scraper and time-series storage | 9090 |
+| `grafana` | Metrics dashboards | 3000 |
+| `loki` | Log aggregation | 3100 |
+| `promtail` | Log shipper (Docker → Loki) | — |
+| `redis-exporter` | Exports Redis metrics to Prometheus | 9121 |
+| `celery-exporter` | Exports Celery metrics to Prometheus | 9808 |
+| `postgres-exporter` | Exports Postgres metrics to Prometheus | — |
+| `node-exporter` | Host CPU/memory/disk metrics | — |
+| `cadvisor` | Container resource metrics | — |
 
 ---
 
 ## Prerequisites
 
-- Ubuntu 22.04 server (2 vCPU / 4 GB RAM recommended — Grafana + Prometheus add ~300 MB)
+- Ubuntu 22.04 server (4 vCPU / 8 GB RAM recommended — full stack with Neo4j, Loki, and MeshCentral)
 - A domain name pointing to the server's IP
 - Anthropic API key (required)
-- Optional: OpenAI API key (semantic embeddings — falls back to zero vectors without it), Google OAuth credentials, GitHub token, Slack app credentials, Sentry DSN
+- Optional: OpenAI API key (semantic embeddings — falls back to zero vectors without it), Google OAuth credentials, GitHub token, Slack app credentials, Sentry DSN, IONOS API token, Twilio credentials
 
 ---
 
@@ -91,12 +113,11 @@ Slack / REST API
 Copy the example and fill in your values:
 
 ```bash
-cd ~/ai-brain
 cp .env.example .env
 nano .env
 ```
 
-Full reference — every variable the brain reads:
+Full reference:
 
 ```bash
 # ── Core ──────────────────────────────────────────────────────────────────────
@@ -110,64 +131,128 @@ POSTGRES_DB=aibrain
 
 # ── Redis ──────────────────────────────────────────────────────────────────────
 REDIS_PASSWORD=<strong password>
-# REDIS_HOST and REDIS_PORT default to redis:6379 inside Docker
+
+# ── Neo4j (knowledge graph) ────────────────────────────────────────────────────
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<strong password>
 
 # ── LLM APIs ───────────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY=sk-ant-...     # required
 OPENAI_API_KEY=sk-...            # optional — enables real Qdrant embeddings
+GEMINI_API_KEY=...               # optional
 
 # ── Slack ──────────────────────────────────────────────────────────────────────
 SLACK_BOT_TOKEN=xoxb-...         # Bot token for posting messages
 SLACK_SIGNING_SECRET=...         # For request verification
 SLACK_APP_TOKEN=xapp-...         # Socket Mode token (starts with xapp-)
-SLACK_EVAL_CHANNEL=brain-evals   # Channel for weekly eval scorecards
-SLACK_ALERT_CHANNEL=brain-alerts # Channel for budget threshold alerts
+SLACK_OWNER_USER_ID=U0XXXXXXXX   # Owner Slack user ID (for DM approvals)
+
+# Slack channel IDs or names
+SLACK_EVAL_CHANNEL=sentinel-evals
+SLACK_ALERT_CHANNEL=sentinel-alerts
+SLACK_MILESTONE_CHANNEL=sentinel-milestones
+SLACK_TASKS_CHANNEL=sentinel-tasks
+SLACK_RESEARCH_CHANNEL=sentinel-research
+SLACK_RMM_PROD_CHANNEL=rmm-production
+SLACK_RMM_DEV_CHANNEL=rmm-dev-staging
+SLACK_AGENTS_CHANNEL=sentinel-agents
+SLACK_REDDIT_CHANNEL=sentinel-reddit
 
 # ── n8n ────────────────────────────────────────────────────────────────────────
 N8N_HOST=your-n8n-host.com
 N8N_USER=<n8n username>
 N8N_PASSWORD=<n8n password>
 N8N_WEBHOOK_URL=http://n8n:5678
+N8N_API_KEY=...
 
 # ── Domain ─────────────────────────────────────────────────────────────────────
 DOMAIN=your-domain.com
 
-# ── Google (Gmail + Calendar) ──────────────────────────────────────────────────
+# ── Google (primary account) ───────────────────────────────────────────────────
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REFRESH_TOKEN=...         # run: python3 scripts/google_auth.py
 GOOGLE_CALENDAR_ID=primary
 
+# Optional: additional Google accounts (up to 4 extra)
+GOOGLE_ACCOUNT_2_NAME=work
+GOOGLE_ACCOUNT_2_CLIENT_ID=...
+GOOGLE_ACCOUNT_2_CLIENT_SECRET=...
+GOOGLE_ACCOUNT_2_REFRESH_TOKEN=...
+GOOGLE_ACCOUNT_2_CALENDAR_ID=...
+
 # ── GitHub ─────────────────────────────────────────────────────────────────────
 GITHUB_TOKEN=ghp_...
 GITHUB_USERNAME=your-username
 GITHUB_DEFAULT_REPO=your-username/your-repo
+GITHUB_WEBHOOK_SECRET=...
+GITHUB_BRAIN_REPO_URL=git@github.com:your-username/your-repo.git  # self-modification
 
 # ── Home Assistant ─────────────────────────────────────────────────────────────
 HOME_ASSISTANT_URL=http://192.168.1.100:8123
 HOME_ASSISTANT_TOKEN=...
+HOME_ASSISTANT_VERIFY_SSL=false
+
+# ── Twilio / WhatsApp ──────────────────────────────────────────────────────────
+TWILIO_ACCOUNT_SID=ACxxxxxxxx
+TWILIO_AUTH_TOKEN=...
+TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+
+# ── IONOS Cloud ────────────────────────────────────────────────────────────────
+IONOS_TOKEN=<bearer token>
+IONOS_USERNAME=...
+IONOS_PASSWORD=...
+IONOS_SSH_PRIVATE_KEY=...
+IONOS_SSH_PUBLIC_KEY=...
+
+# ── MeshCentral RMM ────────────────────────────────────────────────────────────
+MESHCENTRAL_URL=https://your-domain.com/rmm
+MESHCENTRAL_INTERNAL_URL=http://meshcentral:4430
+MESHCENTRAL_USER=admin
+MESHCENTRAL_PASSWORD=<strong password>
+MESHCENTRAL_DOMAIN=sentinel
+MESHCENTRAL_DEFAULT_MESH_ID=...
+
+# ── Sentry ─────────────────────────────────────────────────────────────────────
+SENTRY_DSN=https://key@sentry.io/project
+SENTRY_AUTH_TOKEN=...            # for auto-triage API access
+SENTRY_ORG=your-org-slug
+SENTRY_PROJECT=your-project-slug
+SENTRY_WEBHOOK_SECRET=...        # optional — verifies inbound webhooks
+
+# ── Reddit ─────────────────────────────────────────────────────────────────────
+REDDIT_USER_AGENT=sentinel:1.0 (by u/youruser)
+REDDIT_SUBREDDITS=programming,python,devops   # comma-separated default feeds
+
+# ── Sentinel Mesh Agent Gateway ────────────────────────────────────────────────
+AGENT_GATEWAY_MASTER_SECRET=<generate: openssl rand -hex 32>
+AGENT_HMAC_TS_DRIFT_MAX=60       # seconds; replay attack window
+AGENT_HEARTBEAT_TIMEOUT=120      # seconds before agent marked offline
 
 # ── TELOS personal context ─────────────────────────────────────────────────────
-TELOS_DIR=/home/ubuntu/ai-brain/telos
-TELOS_CACHE_TTL_SECONDS=300      # how often to re-read telos/ files (seconds)
+TELOS_DIR=/root/sentinel/telos
+TELOS_CACHE_TTL_SECONDS=300
 
 # ── Observability ──────────────────────────────────────────────────────────────
-SENTRY_DSN=https://key@sentry.io/project  # leave blank to disable
-LOG_LEVEL=INFO                             # DEBUG for verbose output
+LOG_LEVEL=INFO
 LOG_DIR=/var/log/aibrain
 
 # ── Cost tracking & rate limiting ──────────────────────────────────────────────
-DAILY_COST_CEILING_USD=10.0      # hard block at this amount; 0 = disabled
-BUDGET_ALERT_THRESHOLDS=0.5,0.8,1.0  # Slack alerts at 50%, 80%, 100%
-SONNET_DAILY_TOKEN_BUDGET=0      # per-model token cap; 0 = unlimited
+DAILY_COST_CEILING_USD=10.0
+BUDGET_ALERT_THRESHOLDS=0.5,0.8,1.0
+SONNET_DAILY_TOKEN_BUDGET=0      # 0 = unlimited
 HAIKU_DAILY_TOKEN_BUDGET=0
-RATE_LIMIT_PER_MINUTE=20         # max requests per session per minute
-RATE_LIMIT_PER_HOUR=200          # max requests per session per hour
+RATE_LIMIT_PER_MINUTE=20
+RATE_LIMIT_PER_HOUR=200
+
+# ── Autonomy ───────────────────────────────────────────────────────────────────
+BRAIN_AUTONOMY=false             # true = execute all pending actions without confirmation
 
 # ── Memory ─────────────────────────────────────────────────────────────────────
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 QDRANT_COLLECTION=brain_memories
-MEMORY_FLUSH_INTERVAL_TURNS=10   # flush Postgres summary every N turns
+MEMORY_FLUSH_INTERVAL_TURNS=10
 
 # ── Monitoring dashboards ──────────────────────────────────────────────────────
 GRAFANA_USER=admin
@@ -176,12 +261,15 @@ FLOWER_USER=admin
 FLOWER_PASSWORD=<strong password>
 
 # ── Repository (Brain self-modification) ───────────────────────────────────────
-# Optional — set to clone a remote repo for isolated edits. If not set, the
-# brain reads/writes the bind-mounted live code at REPO_LOCAL_PATH.
-GITHUB_BRAIN_REPO_URL=git@github.com:your-username/your-repo.git
+REPO_LOCAL_PATH=/root/sentinel-workspace
 REPO_WORKSPACE=/workspace/repo
-REPO_LOCAL_PATH=/app              # path to live code inside the container
 REPO_SSH_KEY_PATH=/root/.ssh/id_ed25519
+
+# ── CI/CD ──────────────────────────────────────────────────────────────────────
+DEPLOY_WEBHOOK_SECRET=<generate: openssl rand -hex 32>
+
+# ── Timezone ───────────────────────────────────────────────────────────────────
+TIMEZONE=America/Chicago
 ```
 
 ---
@@ -201,7 +289,7 @@ Installs Docker + Docker Compose, configures UFW (22/80/443), enables Fail2ban. 
 
 ```bash
 # From your local machine
-scp -r . user@your-server:~/ai-brain/
+scp -r . user@your-server:~/sentinel/
 ```
 
 ### 3. Configure environment
@@ -210,11 +298,7 @@ Fill in `.env` using the reference above.
 
 ### 4. Configure Nginx
 
-Edit `nginx/nginx.conf` and replace `YOUR_DOMAIN` with your actual domain:
-
-```nginx
-server_name your-domain.com;
-```
+Edit `nginx/nginx.conf` and replace `YOUR_DOMAIN` with your actual domain.
 
 ### 5. Get SSL certificates
 
@@ -229,17 +313,16 @@ chmod +x scripts/get_ssl.sh
 ./scripts/deploy.sh
 ```
 
-This builds the brain container and starts all 13 services. Verify:
+Builds the brain container and starts all services. Verify:
 
 ```bash
-curl https://your-domain.com/
-# → {"status":"Brain is alive","version":"2.0.0"}
+curl https://your-domain.com/api/v1/health
+# → {"status":"ok","redis":true,"postgres":true}
 
-# Confirm all containers are up
 docker compose ps
 ```
 
-All 13 containers should show `running` or `healthy`. The Celery worker and beat may take 10–15 seconds to connect to Redis after startup.
+All containers should show `running` or `healthy`. The Celery workers may take 10–15 seconds to connect to Redis after startup.
 
 ---
 
@@ -260,7 +343,7 @@ docker compose logs -f brain
 docker compose logs -f celery-worker
 docker compose logs -f grafana
 
-# Show container status and health
+# Show container status
 ./scripts/deploy.sh status
 
 # Stop everything
@@ -269,66 +352,42 @@ docker compose logs -f grafana
 # Rebuild only the brain after a code change
 docker compose build --no-cache brain && docker compose up -d brain
 
-# Rebuild Celery worker after a task change
-docker compose build --no-cache celery-worker && \
-  docker compose up -d celery-worker celery-beat flower
+# Rebuild Celery workers after a task change
+docker compose build --no-cache celery-worker celery-worker-workspace && \
+  docker compose up -d celery-worker celery-worker-workspace celery-beat flower
 ```
 
 ---
 
 ## Dashboards
 
-Three monitoring UIs are available after deployment.
-
 ### Grafana — Infrastructure Metrics
 
 **URL:** `https://your-domain.com/grafana/`
-
 **Login:** `GRAFANA_USER` / `GRAFANA_PASSWORD` from `.env`
 
-#### First-time setup
-
-1. Open `https://your-domain.com/grafana/` in your browser
-2. Log in with your admin credentials
-3. The **Brain Overview** dashboard loads automatically as the home dashboard
-4. If it doesn't appear, navigate to: **Dashboards → Browse → Brain Overview**
-
-#### What you'll see on the Brain Overview dashboard
-
-The dashboard has 16 panels arranged in rows:
+The **Brain Overview** dashboard loads as the home dashboard. Rows include:
 
 | Row | Panels |
 |-----|--------|
-| Stats (top) | Request rate · Error rate · P95 latency · Celery workers online |
-| Traffic | Request rate + errors over time · Response latency percentiles (p50/p95/p99) |
-| LLM | Tokens per minute by model · LLM API latency by model |
-| Celery | Requests by intent (last 1h) · Celery tasks by state over time · Queue depth |
-| Redis | Redis hit rate over time · Redis connected clients |
-| Cost | Daily spend vs ceiling · Daily cost accumulation with ceiling line |
+| Stats | Request rate · Error rate · P95 latency · Celery workers online |
+| Traffic | Request rate + errors over time · Response latency percentiles |
+| LLM | Tokens per minute by model · LLM API latency |
+| Celery | Requests by intent · Tasks by state over time · Queue depth |
+| Redis | Hit rate over time · Connected clients |
+| Cost | Daily spend vs ceiling · Accumulation with ceiling line |
+| Mesh Agents | Connected agents · Heartbeat timeline · Patch history |
 
-#### Navigating Grafana
-
-```
-Top bar:  time range picker (top right) — try "Last 1 hour", "Last 6 hours", "Today"
-          auto-refresh selector (clock icon) — set to 30s for live monitoring
-
-Panel:    click the panel title → "Explore" to run ad hoc PromQL queries
-          click a legend item in a time series to isolate that series
-
-Explore:  Dashboards → Explore (left sidebar compass icon)
-          type any PromQL query and see raw data
-```
-
-#### Useful PromQL queries to run in Explore
+#### Useful PromQL queries
 
 ```promql
-# P95 end-to-end response latency in milliseconds
+# P95 response latency (ms)
 histogram_quantile(0.95, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000
 
-# LLM token consumption rate (tokens per minute, by model)
+# LLM token consumption (per minute, by model)
 sum by(model, direction) (rate(brain_llm_tokens_total[1m]) * 60)
 
-# Today's total API spend in USD
+# Today's total spend
 brain_cost_usd_daily
 
 # Error rate percentage
@@ -337,87 +396,32 @@ brain_cost_usd_daily
 
 # Celery task failure rate
 rate(celery_tasks_total{state="FAILURE"}[5m]) / rate(celery_tasks_total[5m])
-
-# Redis memory
-redis_memory_used_bytes
-
-# Requests broken down by intent (last hour)
-sum by(intent) (increase(brain_requests_total[1h]))
 ```
-
-#### Creating your own panels
-
-1. Click **+** (top right) → **New dashboard** — or open Brain Overview and click **Edit**
-2. **Add panel** → select metric type → paste a PromQL query
-3. Click **Save dashboard** — changes persist in the `grafana-data` Docker volume
-
----
 
 ### Flower — Celery Task Monitor
 
 **URL:** `https://your-domain.com/flower/`
-
-**Login:** `FLOWER_USER` / `FLOWER_PASSWORD` from `.env` (HTTP Basic Auth prompt)
-
-#### What you'll see
-
-| Tab | What it shows |
-|-----|---------------|
-| **Dashboard** | Active workers, processed task count, failed count, online/offline status |
-| **Tasks** | Full history of every task run — name, state, runtime, args, result or traceback |
-| **Workers** | Per-worker concurrency, queues, active tasks |
-| **Broker** | Queue names and depths (how many tasks are waiting) |
-
-#### Common things to do in Flower
-
-**Check if scheduled jobs ran:**
-1. Click **Tasks** tab
-2. Filter by task name: `app.worker.tasks.run_weekly_agent_evals`
-3. Look for `SUCCESS` state and the timestamp — confirms the Sunday job fired
-
-**Check queue depth:**
-1. Click **Broker** tab
-2. The `evals` queue should normally be 0 (empty between runs)
-3. A non-zero count means a task is queued but hasn't started yet
-
-**Inspect a failed task:**
-1. Click **Tasks** tab → find a row with state `FAILURE`
-2. Click the task UUID
-3. The traceback shows exactly where it failed
-
-**Trigger a task manually without the CLI:**
-- Use the REST API that Flower exposes: `POST /api/task/async-apply/app.worker.tasks.run_weekly_agent_evals`
-- Or use the CLI (see [Task Queue section](#task-queue--celery--flower) below)
-
----
+**Login:** `FLOWER_USER` / `FLOWER_PASSWORD` (HTTP Basic Auth)
 
 ### Prometheus — Raw Metrics
 
-Prometheus is internal-only (not exposed through Nginx). Access it via SSH tunnel:
+Access via SSH tunnel (not exposed through Nginx):
 
 ```bash
-# On your local machine — tunnel port 9090
 ssh -L 9090:localhost:9090 user@your-server
-
-# Then open in browser
-open http://localhost:9090
+# Then open: http://localhost:9090
 ```
 
-Use Prometheus directly to:
-- Check scrape health: **Status → Targets** — all four targets should show `UP`
-- Run one-off PromQL queries in the **Graph** tab
-- Inspect raw metric values: **Status → TSDB Status**
+### MeshCentral RMM Console
 
-If any target shows `DOWN`, check:
-- `brain`: is `ai-brain` container healthy? — `docker compose logs brain`
-- `redis`: is `ai-redis-exporter` running? — `docker compose logs redis-exporter`
-- `celery`: is `ai-celery-exporter` running? — `docker compose logs celery-exporter`
+**URL:** `https://your-domain.com/rmm/`
+**Login:** `MESHCENTRAL_USER` / `MESHCENTRAL_PASSWORD`
 
 ---
 
 ## TELOS — Personal Context
 
-The `telos/` directory holds Markdown files injected into every LLM system prompt. Edit them to keep the brain's context current:
+The `telos/` directory holds Markdown files injected into every LLM system prompt:
 
 ```
 telos/
@@ -430,14 +434,12 @@ telos/
 └── context.md      # personal details, stack, tools
 ```
 
-After editing, reload without restarting:
+Reload without restarting:
 
 ```bash
 curl -X POST https://your-domain.com/api/v1/telos/reload
-# → {"reloaded": ["beliefs.md", "context.md", "goals.md", ...]}
+# → {"reloaded": ["beliefs.md", "context.md", ...]}
 ```
-
-The cache also auto-refreshes every 5 minutes (`TELOS_CACHE_TTL_SECONDS`).
 
 ---
 
@@ -445,9 +447,7 @@ The cache also auto-refreshes every 5 minutes (`TELOS_CACHE_TTL_SECONDS`).
 
 The brain connects via Socket Mode — no public webhook required.
 
-**Sending messages:**
-- DM the bot directly, or
-- `@Brain` mention it in any channel
+**Sending messages:** DM the bot directly, or `@Brain` mention it in any channel.
 
 **Examples:**
 
@@ -456,42 +456,92 @@ What should I focus on this week?
 Debug this Python function: [paste code]
 Draft an email to sarah@company.com about the Q1 proposal
 What do I have tomorrow?
-What are my open GitHub issues in ai-brain?
+What are my open GitHub issues?
 Turn off the living room lights
-Write an Instagram caption for my new product launch
 Create a task: fix the mobile login bug, priority 4
 List my open tasks
+list mesh agents
+show rmm devices
+get top reddit posts from r/python
 confirm      ← executes a pending write action
 cancel       ← aborts a pending write action
 ```
 
-Write actions (send email, create calendar event, file edits) ask for `confirm` before executing.
-
 ### Codebase self-editing from Slack
-
-The brain can read, edit, commit, and deploy its own code directly from Slack:
 
 ```
 # 1. Read a file
 read app/brain/intent.py
 
-# 2. Make a targeted change
-patch app/brain/intent.py — add a routing hint for task_create
+# 2. Make a change
+patch app/brain/intent.py — add routing hint for task_create
 
-# 3. Brain shows a preview and asks to confirm
+# 3. Brain shows preview, ask to confirm
 confirm
 
-# 4. Commit and push to GitHub
+# 4. Commit and push
 commit these changes with message: improve task routing
 
-# 5. Rebuild and restart the container
+# 5. Rebuild and restart
 deploy
 ```
 
-The brain operates on the bind-mounted live code directory by default (`REPO_LOCAL_PATH=/app`).
-If `GITHUB_BRAIN_REPO_URL` is set, it uses a dedicated clone in `REPO_WORKSPACE` instead.
+---
 
-After `deploy`, the brain is offline for ~60 seconds while the Docker image rebuilds.
+## CLI — brain.py
+
+`brain.py` is a terminal client that connects to the running brain API and joins the shared cross-interface session.
+
+### Running
+
+```bash
+python3 brain.py                      # REPL (joins shared "brain" session)
+python3 brain.py --session NAME       # Private isolated session
+python3 brain.py chat "message"       # One-shot message
+```
+
+### Subcommands
+
+```bash
+# System status
+brain.py health               # Health check (Redis, Postgres)
+brain.py costs                # Today's LLM spend breakdown
+brain.py tasks                # Celery queue status
+brain.py context              # Server/repo/Docker context snapshot
+brain.py git                  # Git status + recent log
+brain.py docker               # Docker ps output
+
+# Approval workflow
+brain.py pending              # List pending write tasks
+brain.py approve <id>         # Approve a pending task
+brain.py cancel <id>          # Cancel a pending task
+brain.py level                # Show current approval level
+brain.py level [1|2|3]        # Set approval level
+
+# Sessions & tasks
+brain.py sessions             # List saved sessions
+brain.py mytasks [status]     # Task board (optional status filter)
+brain.py history              # Show chat history
+brain.py clear                # Clear session memory
+```
+
+### REPL slash commands
+
+Inside the REPL, prefix any subcommand with `/`:
+
+```
+/health  /costs  /tasks  /context  /git  /docker
+/pending  /approve <id>  /cancel <id>  /level [1|2|3]
+/mytasks [status]  /history  /clear  /sessions
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BRAIN_URL` | `http://localhost:8000` | API base URL |
+| `BRAIN_SESSION` | `brain` | Session ID override |
+| `NO_COLOR` | — | Disable ANSI colors |
 
 ---
 
@@ -501,24 +551,21 @@ Base URL: `https://your-domain.com`
 
 Interactive docs (non-production only): `https://your-domain.com/docs`
 
-### Full endpoint reference
+### Endpoint reference
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/` | Health probe — returns `{"status":"Brain is alive"}` |
-| `GET` | `/api/v1/health` | Detailed health check (Redis + Postgres) |
+| `GET` | `/api/v1/health` | Detailed health (Redis + Postgres) |
 | `POST` | `/api/v1/chat` | Send a message, get a reply |
 | `DELETE` | `/api/v1/chat/{session_id}` | Clear session history |
-| `GET` | `/api/v1/agents` | List all registered agent personas |
-| `POST` | `/api/v1/telos/reload` | Reload TELOS context files from disk |
+| `GET` | `/api/v1/agents` | List agent personas |
+| `POST` | `/api/v1/telos/reload` | Reload TELOS files from disk |
 | `GET` | `/api/v1/integrations/status` | Which integrations are configured |
 | `GET` | `/api/v1/integrations/gmail` | List emails |
 | `GET` | `/api/v1/integrations/calendar` | List calendar events |
 | `GET` | `/api/v1/integrations/github/issues` | List GitHub issues |
-| `GET` | `/api/v1/integrations/github/notifications` | GitHub notifications |
 | `GET` | `/api/v1/integrations/github/prs` | Open pull requests |
 | `GET` | `/api/v1/integrations/home-assistant/states` | All HA entity states |
-| `GET` | `/api/v1/integrations/home-assistant/entity/{id}` | Single HA entity |
 | `POST` | `/api/v1/integrations/home-assistant/service` | Call an HA service |
 | `POST` | `/api/v1/integrations/n8n/trigger` | Trigger an n8n workflow |
 | `POST` | `/api/v1/feedback/rate` | Rate a response (1–10) |
@@ -528,6 +575,22 @@ Interactive docs (non-production only): `https://your-domain.com/docs`
 | `WS` | `/api/v1/observe/stream` | Real-time event stream (WebSocket) |
 | `GET` | `/api/v1/observe/metrics` | Aggregate performance metrics |
 | `GET` | `/api/v1/observe/events` | Recent event buffer |
+| `GET` | `/api/v1/board/tasks` | List task board tasks |
+| `POST` | `/api/v1/board/tasks` | Create a task |
+| `GET` | `/api/v1/board/tasks/{id}` | Get single task |
+| `PATCH` | `/api/v1/board/tasks/{id}` | Update a task |
+| `DELETE` | `/api/v1/board/tasks/{id}` | Soft-delete (cancel) a task |
+| `POST` | `/api/v1/board/tasks/archive-done` | Archive all done tasks |
+| `DELETE` | `/api/v1/board/tasks/{id}/purge` | Hard-delete a task |
+| `GET` | `/api/v1/board/activity` | Live AI activity feed |
+| `POST` | `/api/v1/agents/provision` | Provision a new mesh agent |
+| `GET` | `/api/v1/agents/` | List mesh agents |
+| `GET` | `/api/v1/agents/{id}/health` | Agent info + latest heartbeat |
+| `GET` | `/api/v1/agents/{id}/patches` | Agent patch history |
+| `POST` | `/api/v1/agents/{id}/revoke` | Revoke agent credentials |
+| `WS` | `/ws/agent/{agent_id}` | Mesh agent WebSocket connection |
+| `POST` | `/api/v1/sentry/webhook` | Receive Sentry issue webhooks |
+| `GET` | `/api/v1/sentry/issues` | List tracked Sentry issues |
 | `GET` | `/metrics` | Prometheus scrape endpoint (internal) |
 
 ### Chat
@@ -544,80 +607,30 @@ curl -X POST https://your-domain.com/api/v1/chat \
   "intent": "github_read",
   "agent": "engineer"
 }
-
-# Clear a session's history
-curl -X DELETE https://your-domain.com/api/v1/chat/my-session
 ```
 
-### Agents
+### Task Board
 
 ```bash
-curl https://your-domain.com/api/v1/agents
+# List open tasks
+curl "https://your-domain.com/api/v1/board/tasks?status=pending&limit=20"
 
-# Response
-{
-  "agents": [
-    {"name": "engineer",   "preferred_model": "claude-sonnet-4-6", "max_tokens": 8096},
-    {"name": "writer",     "preferred_model": "claude-sonnet-4-6", "max_tokens": 4096},
-    {"name": "researcher", "preferred_model": "claude-sonnet-4-6", "max_tokens": 4096},
-    {"name": "strategist", "preferred_model": "claude-sonnet-4-6", "max_tokens": 4096},
-    {"name": "marketing",  "preferred_model": "claude-sonnet-4-6", "max_tokens": 6000},
-    {"name": "default",    "preferred_model": "claude-sonnet-4-6", "max_tokens": 2048}
-  ]
-}
+# Create a task
+curl -X POST https://your-domain.com/api/v1/board/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Fix login bug", "priority": 4, "approval_level": 1}'
+
+# Live AI activity feed
+curl https://your-domain.com/api/v1/board/activity
 ```
 
-### Feedback / Ratings
+Task fields: `title`, `description`, `status` (pending|in_progress|done|cancelled|failed|archived), `priority` (1–5), `approval_level` (1–3), `due_date`, `source`, `tags`, `assigned_to`, `blocked_by` (dependency list of task IDs).
 
-Ratings ≥ 8 are automatically stored in Qdrant and surfaced in future relevant conversations.
-
-```bash
-# Rate a response 1–10
-curl -X POST https://your-domain.com/api/v1/feedback/rate \
-  -H "Content-Type: application/json" \
-  -d '{"session_id": "my-session", "message_index": 0, "rating": 9, "intent": "code"}'
-
-# Thumbs up
-curl -X POST https://your-domain.com/api/v1/feedback/thumbs \
-  -H "Content-Type: application/json" \
-  -d '{"session_id": "my-session", "message_index": 0, "positive": true}'
-
-# Summary stats
-curl https://your-domain.com/api/v1/feedback/summary
-# → {"total_ratings": 47, "avg_rating": 8.3, "top_intent": "code"}
-```
-
-### Cost tracking
+### Costs
 
 ```bash
 curl https://your-domain.com/api/v1/costs
-
-# Response
-{
-  "date": "2026-03-01",
-  "total_cost_usd": 0.142300,
-  "daily_ceiling_usd": 10.0,
-  "pct_of_ceiling": 1.4,
-  "remaining_usd": 9.857700,
-  "rate_limits": {"per_minute": 20, "per_hour": 200},
-  "models": {
-    "claude-sonnet-4-6": {
-      "tokens_in": 42000, "tokens_out": 6800, "tokens_total": 48800,
-      "cost_usd": 0.228000, "token_budget": null, "pct_of_budget": null
-    },
-    "claude-haiku-4-5-20251001": {
-      "tokens_in": 12000, "tokens_out": 3000, "tokens_total": 15000,
-      "cost_usd": 0.006750, "token_budget": null, "pct_of_budget": null
-    }
-  }
-}
-```
-
-### Health
-
-```bash
-curl https://your-domain.com/api/v1/health
-# → {"status": "ok", "redis": true, "postgres": true}
+# → date, total_cost_usd, daily_ceiling_usd, pct_of_ceiling, remaining_usd, models breakdown
 ```
 
 ---
@@ -626,82 +639,248 @@ curl https://your-domain.com/api/v1/health
 
 Every message is classified by Claude Haiku into an intent. The intent selects both the skill to execute and the agent persona to respond as.
 
-### Intent → Skill → Agent mapping
-
-| Intent | Skill | Default Agent |
-|--------|-------|---------------|
-| `chat` | ChatSkill (no external call) | Default |
-| `code` | CodeSkill (routing hint) | Engineer |
-| `research` | ResearchSkill (Qdrant semantic search) | Researcher |
-| `reasoning` | ChatSkill | Strategist |
-| `writing` | ChatSkill | Writer |
-| `gmail_read` | GmailReadSkill | Default |
-| `gmail_send` | GmailSendSkill (**confirmation required**) | Writer |
-| `calendar_read` | CalendarReadSkill | Default |
-| `calendar_write` | CalendarWriteSkill (**confirmation required**) | Default |
-| `github_read` | GitHubReadSkill | Engineer |
-| `github_write` | GitHubWriteSkill (**confirmation required**) | Engineer |
-| `smart_home` | SmartHomeSkill | Default |
-| `n8n_execute` | N8nSkill | Default |
-| `content_draft` | ContentDraftSkill | Marketing |
-| `social_caption` | SocialCaptionSkill | Marketing |
-| `ad_copy` | AdCopySkill | Marketing |
-| `content_repurpose` | ContentRepurposeSkill | Marketing |
-| `content_calendar` | ContentCalendarSkill | Marketing |
-
 ### Agent personas
 
 | Agent | Strengths | Model | Max tokens |
 |-------|-----------|-------|-----------|
-| **Engineer** | Code, architecture, GitHub | Sonnet | 8096 |
+| **Engineer** | Code, architecture, GitHub, shell | Sonnet | 8096 |
 | **Writer** | Drafts, emails, long-form | Sonnet | 4096 |
 | **Researcher** | Analysis, comparisons, TL;DR-first | Sonnet | 4096 |
 | **Strategist** | Decisions, frameworks, go-to-market | Sonnet | 4096 |
 | **Marketing** | Platform-native copy, AIDA/PAS/BAB, 3 variations | Sonnet | 6000 |
 | **Default** | General assistant (Brain persona) | Sonnet | 2048 |
 
-Agent selection is automatic — intent match takes priority, then keyword scan, then Default.
+---
+
+## Skills Reference
+
+43 registered skills across all domains:
+
+**Communication**
+`chat` · `gmail_read` · `gmail_send` · `gmail_reply` · `whatsapp_read` · `whatsapp_send` · `contacts_read` · `contacts_write` · `slack_read`
+
+**Productivity**
+`calendar_read` · `calendar_write` · `task_create` · `task_read` · `task_update`
+
+**Code & Repositories**
+`github_read` · `github_write` · `repo_read` · `repo_write` · `repo_commit` · `code`
+
+**Infrastructure & Automation**
+`server_shell` · `deploy` · `n8n_execute` · `n8n_manage` · `cicd_read` · `cicd_trigger` · `cicd_debug` · `ionos_cloud` · `ionos_dns` · `smart_home`
+
+**Content Creation**
+`content_draft` · `social_caption` · `ad_copy` · `content_repurpose` · `content_calendar`
+
+**Knowledge & Research**
+`research` · `deep_research` · `knowledge_graph` · `data_intelligence` · `architecture_advisor`
+
+**Monitoring & Observability**
+`sentry_read` · `sentry_manage` · `bug_hunter` · `rmm_read` · `rmm_manage`
+
+**Mesh Agent System**
+`agent_registry` · `agent_manage` · `remote_log` · `patch_dispatch` · `cross_agent_context`
+
+**Feeds**
+`reddit_read` · `reddit_schedule`
+
+**Meta**
+`skill_discovery`
+
+Write actions (email send, calendar write, file edits, git push, shell commands, etc.) require `confirm` by default. Set `BRAIN_AUTONOMY=true` to skip all confirmations.
+
+---
+
+## Task Board
+
+The task board is the brain's persistent work queue. Tasks are created automatically by skills (Sentry triage, bug hunter, skill discovery) or manually via Slack/CLI/API.
+
+### Approval levels
+
+| Level | Behavior |
+|-------|----------|
+| 1 | Auto-starts immediately (no confirmation) |
+| 2 | Queued; owner receives DM approval request |
+| 3 | Blocked until explicit CLI/Slack `confirm` |
+
+### Dependency chaining
+
+Tasks support `blocked_by` — a list of task IDs that must reach `done` before this task can start. The dispatcher auto-unblocks dependent tasks when a dependency completes.
+
+### Milestone logging
+
+Every confirmed write action (email, git commit, file edit, shell command, deploy, DNS change, etc.) is logged to the `ai_milestones` table and posted to `#sentinel-milestones` in Slack.
+
+---
+
+## Sentinel Mesh Agent System
+
+Remote servers running the Sentinel Agent daemon connect to the brain over a HMAC-SHA256 signed WebSocket. The brain receives continuous telemetry and can dispatch code patches.
+
+See `sentinel-agent/README.md` for installation instructions.
+
+### How it works
+
+```
+Remote server (Sentinel Agent daemon)
+       │
+       │  wss://your-domain.com/ws/agent/{id}
+       │  HMAC-SHA256 signed, 60s replay window
+       ▼
+Brain WS Gateway (/ws/agent/{id})
+       ├── Writes inbound messages to Redis stream (sentinel:agents:stream)
+       ├── Celery: agent-stream-consumer (1 min) → parses + stores in DB
+       ├── Celery: agent-heartbeat-monitor (2 min) → alerts on offline agents
+       └── Skills: AgentRegistry, AgentManage, RemoteLog, PatchDispatch
+```
+
+### Provisioning an agent
+
+```bash
+# Via Slack
+list mesh agents
+
+# Via CLI
+python3 brain.py chat "provision new agent app_name=my-app env=staging"
+# → returns AGENT_ID and AGENT_TOKEN (shown once)
+```
+
+### Patch workflow
+
+1. Brain detects an issue (Sentry triage, bug hunter, or user request)
+2. Brain dispatches patch to agent via Redis (`sentinel:agent:cmd:{id}`)
+3. Agent snapshots current state, applies diff, runs tests
+4. **Production agents:** Slack approval required before patch is dispatched
+5. Result (success/failure + logs) reported back over WebSocket
+
+### Redis keys
+
+| Key | Purpose |
+|-----|---------|
+| `sentinel:agents:stream` | Inbound telemetry stream (all agents) |
+| `sentinel:agent:cmd:{id}` | Outbound command queue (per agent) |
+| `sentinel:agent:patch_approval:{id}` | Pending patch approval state |
+
+---
+
+## RMM — MeshCentral Integration
+
+MeshCentral is deployed as a container and provides remote monitoring and management of all servers. The brain integrates with it via REST API and WebSocket event stream.
+
+### Access
+
+- **Console:** `https://your-domain.com/rmm/`
+- **Agent connections:** direct via `/agent.ashx` and `/meshrelay.ashx` (bypasses Nginx buffering)
+
+### Celery background tasks
+
+| Task | Schedule | What it does |
+|------|----------|-------------|
+| `rmm-device-poll` | Every 60s | Check device online/offline status, alert Slack on change |
+| `rmm-full-sync` | Every 5 min | Full inventory sync (hostname, OS, IP, agent version) |
+| `rmm-incident-check` | Every 2 min | Threshold breach detection (CPU/mem/disk/offline) |
+
+### Slack channels
+
+- Production issues → `#rmm-production`
+- Dev/staging issues → `#rmm-dev-staging`
+
+### Device groups
+
+- Sentinel Infrastructure
+- Production
+- Dev-Staging
+
+---
+
+## Reddit News-Feed
+
+The brain can fetch, summarize, and schedule Reddit digests.
+
+### Slack commands
+
+```
+get top posts from r/python
+summarize r/devops today
+schedule daily digest from r/programming at 9am
+```
+
+### Configuration
+
+```bash
+REDDIT_USER_AGENT=sentinel:1.0 (by u/youruser)
+REDDIT_SUBREDDITS=programming,python,devops
+SLACK_REDDIT_CHANNEL=sentinel-reddit
+```
+
+### Scheduled digests
+
+The `reddit-digest-dispatch` Celery job runs hourly and fires any scheduled digests that are due. Create a schedule via Slack:
+
+```
+schedule weekly reddit digest from r/MachineLearning every Monday at 8am
+```
+
+---
+
+## Sentry Auto-Triage
+
+The brain automatically ingests, investigates, and attempts to fix Sentry errors on a schedule. No manual triage required.
+
+### Pipeline
+
+1. **Ingest** (4x daily: 00:00, 06:00, 12:00, 18:00 UTC) — Fetch top 10 errors by frequency from the past 6 hours
+2. **Task creation** — One board task per error (approval_level=1, auto-starts)
+3. **Investigation** — Fetch full Sentry event (stack trace, breadcrumbs, source context); LLM produces `fix_plan` JSON
+4. **Fix** — Creates `sentinel/sentry-{issue_id}` branch, patches files, commits, pushes, opens PR
+5. **Report** — Posts root cause + PR link + files changed to `#sentinel-alerts`
+6. **Resolve** — Marks issue resolved in Sentry if fix is complete
+
+The owner only needs to review and merge the GitHub PR.
+
+### Inbound webhooks
+
+Sentry can also push issues in real time:
+
+```
+POST https://your-domain.com/api/v1/sentry/webhook
+```
+
+Configure in Sentry: **Settings → Integrations → Webhooks → Add → your URL**.
+
+### Severity → action mapping
+
+| Level | Approval | Action |
+|-------|----------|--------|
+| fatal | BREAKING | Always requires confirmation |
+| critical / error | CRITICAL | Requires Slack approval |
+| warning | STANDARD | Task created, auto-queued |
+| info / debug | — | Logged only |
 
 ---
 
 ## Cost Tracking & Rate Limiting
 
-Every LLM call is metered in real time. A runaway Slack loop cannot burn unbounded API credits.
+Every LLM call is metered in real time.
 
 ### How it works
 
 ```
 Incoming message
   │
-  ▼ RateLimiter.check(session_id)        Redis INCR + TTL — no LLM cost
+  ▼ RateLimiter.check(session_id)      Redis INCR + TTL
   │  → over limit: return ⏱️ reply immediately
   │
-  ▼ [hooks, memory, intent, skill...]
-  │
-  ▼ CostTracker.check_budget(model)      Redis GET — < 1ms
-  │  → over ceiling: return ⚠️ reply, no API call made
+  ▼ CostTracker.check_budget(model)    Redis GET
+  │  → over ceiling: return ⚠️ reply, no API call
   │
   ▼ Anthropic API call
   │
   ▼ CostTracker.record(model, in, out)
        atomic Redis pipeline:
          INCRBYFLOAT brain:cost:daily:{date}:total
-         INCRBY      brain:cost:daily:{date}:model:{model}:tokens_in/out
-         EXPIRE      all keys 48hr (auto-cleanup, no cron needed)
-       → checks thresholds → Slack alert (sync WebClient, safe in thread pool)
-       → updates Prometheus gauges (brain_cost_usd_daily, brain_cost_ceiling_usd)
-```
-
-### Configuration (`.env`)
-
-```bash
-DAILY_COST_CEILING_USD=10.0          # hard ceiling; 0 = disabled
-BUDGET_ALERT_THRESHOLDS=0.5,0.8,1.0  # Slack alerts at 50%, 80%, 100%
-SLACK_ALERT_CHANNEL=brain-alerts
-SONNET_DAILY_TOKEN_BUDGET=0          # 0 = no token limit
-HAIKU_DAILY_TOKEN_BUDGET=0
-RATE_LIMIT_PER_MINUTE=20
-RATE_LIMIT_PER_HOUR=200
+         INCRBY      brain:cost:daily:{date}:model:{model}:tokens_*
+       → threshold check → Slack alert
+       → Prometheus gauges updated
 ```
 
 ### Pricing
@@ -713,244 +892,171 @@ RATE_LIMIT_PER_HOUR=200
 
 Update `PRICING` in `app/brain/cost_tracker.py` when Anthropic changes rates.
 
-### Behavior at limits
-
-| Condition | Reply returned | API call made? |
-|-----------|---------------|----------------|
-| Session > `RATE_LIMIT_PER_MINUTE` | `⏱️ Too many requests — N in the last minute (limit: 20).` | No |
-| Session > `RATE_LIMIT_PER_HOUR` | `⏱️ Too many requests — N in the last hour (limit: 200).` | No |
-| Daily cost ≥ ceiling | `⚠️ Daily API budget reached. Back at midnight UTC.` | No |
-| Model tokens ≥ budget | Same ⚠️ reply | No |
-
-### Slack budget alerts
-
-Sent to `SLACK_ALERT_CHANNEL`. Each threshold fires at most once per day.
-
-```
-💰 Brain API spend at 50% of daily ceiling
-  Spent:     $5.0000 of $10.00
-  Remaining: $5.0000
-  Ceiling resets at midnight UTC. Check GET /api/v1/costs for breakdown.
-```
-
-At 100% the header escalates to `🚨 DAILY COST CEILING HIT — LLM calls are now BLOCKED`.
-
 ---
 
 ## Memory System
 
-Three tiers work together automatically. No configuration is required.
+Three tiers work together automatically:
 
 | Tier | Storage | Contents | Lifetime |
 |------|---------|----------|----------|
-| **Hot** | Redis `brain:session:*` | Last 20 turns of the current session | 4 hours (TTL) |
-| **Warm** | Postgres `session_summaries` | Haiku-generated summary, written every 10 turns | Permanent |
+| **Hot** | Redis `brain:session:*` | Last 20 turns | 4 hours TTL |
+| **Warm** | Postgres `session_summaries` | Haiku-generated summary, every 10 turns | Permanent |
 | **Cold** | Qdrant `brain_memories` | Semantic embeddings of high-signal turns (>200 chars) + rated ≥ 8 | Permanent |
+| **Graph** | Neo4j | Entity relationships, knowledge links | Permanent |
 
-On each request the dispatcher fetches all three tiers in parallel and prepends warm + cold context to the LLM prompt before calling the API.
+All four tiers are fetched in parallel on each request and prepended to the LLM prompt.
+
+---
+
+## Cross-Interface Memory
+
+All three interfaces (Slack, CLI, REST) default to the shared `brain` primary session. Memory and context persist across interfaces — a conversation started in Slack continues seamlessly in the CLI.
+
+- **Slack:** per-user session (`slack:{user_id}`), cross-posts to primary
+- **CLI:** always joins `brain` primary session; `--session NAME` for private
+- **REST:** empty/default `session_id` maps to `brain` primary
+
+To use a private session from the CLI:
+
+```bash
+python3 brain.py --session private-work
+```
+
+---
+
+## Autonomy Mode
+
+When `BRAIN_AUTONOMY=true`, all pending write actions execute immediately without asking for `confirm`. The LLM prompt includes a `[FULL AUTONOMY MODE]` instruction.
+
+```bash
+# Enable
+echo "BRAIN_AUTONOMY=true" >> .env
+docker compose up -d brain
+
+# Disable
+# Set BRAIN_AUTONOMY=false and restart
+```
+
+Approval levels still apply to task board tasks — `approval_level=2` tasks DM the owner even in autonomy mode.
 
 ---
 
 ## Task Queue — Celery + Flower
 
-Three containers handle all background work:
+Three task workers handle all background work:
 
-| Container | What it does |
-|-----------|-------------|
-| `ai-celery-worker` | Executes tasks from the `evals` and `celery` queues (2 concurrent workers) |
-| `ai-celery-beat` | Fires scheduled tasks based on the cron defined in `app/worker/celery_app.py` |
-| `ai-flower` | Web UI for monitoring tasks in real time |
+| Container | Queues | Concurrency |
+|-----------|--------|-------------|
+| `celery-worker` | evals, celery, tasks_general | 3 |
+| `celery-worker-workspace` | tasks_workspace | 1 (serialized git ops) |
+| `celery-beat` | — (scheduler only) | — |
 
-### Scheduled jobs
+### Scheduled jobs (15 total)
 
 | Task | Schedule | What it does |
 |------|----------|-------------|
-| `run_weekly_agent_evals` | Sunday 09:00 UTC | Runs all agent eval test cases, posts Slack scorecard |
-| `run_nightly_integration_evals` | 02:00 UTC daily | Read-only checks of Gmail, Calendar, GitHub, n8n, Home Assistant |
-
-Both tasks retry up to 2 times on failure. The beat schedule file is persisted in the `celery-beat-data` Docker volume — missed runs are recovered after restarts.
+| `weekly-agent-evals` | Sun 09:00 UTC | Agent quality scorecard → Slack |
+| `nightly-integration-evals` | Daily 02:00 UTC | Read-only integration health checks → Slack |
+| `health-check` | Every 30 min | Brain/Redis/Postgres health → Slack on failure |
+| `scan-pending-tasks` | Every 1 min | Dispatch pending board tasks to workers |
+| `aggregate-error-metrics` | Hourly | Aggregate error buffer metrics |
+| `sentry-error-triage` | 4x daily (0,6,12,18 UTC) | Fetch top Sentry errors, investigate + PR |
+| `autonomous-bug-hunt` | Every 6h at :30 | Cluster errors, LLM root-cause, create fix tasks |
+| `poll-sentinel-prs` | Every 15 min | Poll GitHub for sentinel/* PRs, trigger review |
+| `rmm-device-poll` | Every 60s | Device online/offline status → Slack on change |
+| `rmm-full-sync` | Every 5 min | Full RMM inventory sync |
+| `rmm-incident-check` | Every 2 min | CPU/mem/disk/offline threshold detection |
+| `reddit-digest-dispatch` | Hourly at :00 | Fire due Reddit digest schedules |
+| `agent-heartbeat-monitor` | Every 2 min | Detect offline mesh agents, alert Slack |
+| `agent-stream-consumer` | Every 1 min | Process inbound mesh agent telemetry stream |
+| `agent-heartbeat-purge` | Daily 03:00 UTC | Purge old heartbeat rows |
 
 ### Celery broker layout
 
 | Redis DB | Purpose |
 |----------|---------|
-| DB 0 | App hot memory (`brain:session:*`, `brain:cost:*`, `brain:rate:*`) |
+| DB 0 | App hot memory (`brain:session:*`, `brain:cost:*`, `brain:rate:*`, agent streams) |
 | DB 1 | Celery broker (task queue) |
-| DB 2 | Celery result backend (task results, 24hr TTL) |
+| DB 2 | Celery result backend (24hr TTL) |
 
-### CLI commands
+### Manually trigger a scheduled job
 
 ```bash
-# Trigger a task right now (no need to wait for the schedule)
 docker compose exec celery-worker \
   celery -A app.worker.celery_app call app.worker.tasks.run_weekly_agent_evals
 
 docker compose exec celery-worker \
-  celery -A app.worker.celery_app call app.worker.tasks.run_nightly_integration_evals
-
-# Inspect running workers and what they're doing
-docker compose exec celery-worker \
   celery -A app.worker.celery_app inspect active
-
-# See all scheduled beat jobs and their next run time
-docker compose exec celery-beat \
-  celery -A app.worker.celery_app inspect scheduled
-
-# Check queue depth
-docker compose exec celery-worker \
-  celery -A app.worker.celery_app inspect reserved
 ```
 
 ---
 
 ## Observability
 
-Four telemetry points fire on every request: **request received → skill dispatched → LLM called → response delivered**. Three independent layers consume those events.
-
-### Layer 1 — Structured logging (Loguru)
-
-Two sinks start automatically:
-
-| Sink | Format | Where |
-|------|--------|-------|
-| stdout | Colorized, human-readable | `docker compose logs brain` |
-| File | Newline-delimited JSON, rotated midnight, 7-day retention, gzip | `LOG_DIR/brain.json` |
+### Structured logging (Loguru)
 
 Every request emits four log lines:
 
 ```
-REQUEST  | session=abc123 | src=slack | msg=What do I have tomorrow?...
-SKILL    | calendar_read  | ctx=True | 12ms
+REQUEST  | session=abc | src=slack | msg=What do I have tomorrow?...
+SKILL    | calendar_read | ctx=True | 12ms
 LLM      | model=claude-sonnet-4-6 | in=1240 | out=312 | 1840ms
-COST     | model=claude-sonnet-4-6 | call=$0.000018 | day=$0.0234
-RESPONSE | session=abc123 | intent=calendar_read | agent=default | 1852ms
+RESPONSE | session=abc | intent=calendar_read | agent=default | 1852ms
 ```
 
-Set `LOG_LEVEL=DEBUG` to see the full hook chain, memory tier hits, and intent classifier output.
+Logs ship to Loki via Promtail for querying in Grafana.
 
-### Layer 2 — Real-time event stream (WebSocket)
+### Real-time event stream (WebSocket)
 
 ```bash
-# Watch live events with wscat
-npm install -g wscat
 wscat -c wss://your-domain.com/api/v1/observe/stream
-
-# Python client
-python3 -c "
-import asyncio, websockets, json
-async def watch():
-    async with websockets.connect('ws://localhost:8000/api/v1/observe/stream') as ws:
-        async for msg in ws:
-            e = json.loads(msg)
-            if e.get('event') != 'heartbeat':
-                print(e)
-asyncio.run(watch())
-"
 ```
 
-Events emitted per request:
+Events per request: `request_received` → `skill_dispatched` → `llm_called` → `response_delivered`
 
-```jsonc
-{"event":"request_received","session_id":"abc","source":"slack","message_preview":"What do I..."}
-{"event":"skill_dispatched","session_id":"abc","intent":"calendar_read","skill":"calendar_read","has_context":true,"latency_ms":12}
-{"event":"llm_called","model":"claude-sonnet-4-6","agent":"default","input_tokens":1240,"output_tokens":312,"latency_ms":1840}
-{"event":"response_delivered","session_id":"abc","intent":"calendar_read","agent":"default","latency_ms":1852,"reply_length":890,"success":true}
-```
+### Prometheus metrics
 
-In-memory aggregate metrics:
+**Brain metrics** (scraped from `/metrics`):
 
-```bash
-curl https://your-domain.com/api/v1/observe/metrics
-# → uptime, total requests, error rate, p50/p95/p99 latency, intent/agent/model breakdowns, token totals
+| Metric | Type | Description |
+|--------|------|-------------|
+| `brain_requests_total` | Counter | Total requests (`intent`, `agent`, `success`) |
+| `brain_response_latency_seconds` | Histogram | End-to-end latency |
+| `brain_llm_tokens_total` | Counter | Tokens consumed (`model`, `direction`) |
+| `brain_llm_latency_seconds` | Histogram | LLM API round-trip |
+| `brain_skill_duration_seconds` | Histogram | Per-skill execution time |
+| `brain_cost_usd_daily` | Gauge | Today's LLM spend |
+| `brain_cost_ceiling_usd` | Gauge | Configured daily ceiling |
+| `brain_budget_exceeded_total` | Counter | Calls blocked by budget |
+| `brain_rate_limited_total` | Counter | Requests blocked by rate limiter |
 
-curl https://your-domain.com/api/v1/observe/events?limit=20
-# → last N raw events
-```
+**Infrastructure metrics** from exporters: `redis_memory_used_bytes`, `redis_connected_clients`, `celery_tasks_total{state}`, `celery_queue_length`, `pg_stat_activity_count`, container CPU/mem from cAdvisor, host CPU/mem/disk from node-exporter.
 
-### Layer 3 — Prometheus + Grafana metrics
-
-See the [Dashboards](#dashboards) section for how to navigate the Grafana UI.
-
-**Custom brain metrics** (exposed at `/metrics`, scraped every 15s):
-
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `brain_requests_total` | Counter | `intent`, `agent`, `success` | Total chat requests processed |
-| `brain_response_latency_seconds` | Histogram | `intent`, `agent` | End-to-end response latency |
-| `brain_llm_tokens_total` | Counter | `model`, `direction` | LLM tokens consumed |
-| `brain_llm_latency_seconds` | Histogram | `model` | LLM API round-trip time |
-| `brain_skill_duration_seconds` | Histogram | `skill` | Skill execution duration |
-| `brain_cost_usd_daily` | Gauge | — | Total LLM cost today (USD) |
-| `brain_cost_ceiling_usd` | Gauge | — | Configured daily ceiling (USD) |
-| `brain_budget_exceeded_total` | Counter | — | Calls blocked by budget ceiling |
-| `brain_rate_limited_total` | Counter | `window` | Requests blocked by rate limiter |
-
-**Infrastructure metrics** (from exporters):
-
-| Source | Key metrics |
-|--------|-------------|
-| `redis-exporter` | `redis_memory_used_bytes`, `redis_connected_clients`, `redis_keyspace_hits_total` |
-| `celery-exporter` | `celery_tasks_total{state}`, `celery_queue_length`, `celery_workers_online` |
-
-### Layer 4 — Sentry error tracking
+### Sentry error tracking
 
 ```bash
 SENTRY_DSN=https://your-key@sentry.io/your-project-id
 ```
 
-Sentry captures skill failures, exhausted LLM retries, and any unhandled exception. `WebSocketDisconnect` and `CancelledError` are filtered out as noise. Errors are tagged with `intent`, `agent`, and `session_id`.
-
-Get a free DSN at [sentry.io](https://sentry.io) — the free tier covers well over a personal brain's error volume.
+Captures skill failures, LLM errors, and unhandled exceptions. Tagged with `intent`, `agent`, `session_id`. `WebSocketDisconnect` and `CancelledError` are filtered as noise.
 
 ---
 
 ## Eval System
 
-Automated quality checks run on two schedules via Celery Beat.
-
 ### Schedules
 
 | Job | When | What happens |
 |-----|------|-------------|
-| Agent quality evals | Sunday 09:00 UTC | 3 test cases × 6 agents, Haiku as judge, Slack scorecard posted |
-| Integration reliability | 02:00 UTC nightly | Read-only API checks of Gmail, Calendar, GitHub, n8n, Home Assistant |
+| Agent quality evals | Sunday 09:00 UTC | 3 test cases × 6 agents, Haiku as judge, Slack scorecard |
+| Integration reliability | 02:00 UTC nightly | Read-only checks of Gmail, Calendar, GitHub, n8n, Home Assistant |
 
-### Agents evaluated
-
-Engineer · Writer · Researcher · Strategist · Marketing · Default
-
-### Slack scorecard format
-
-```
-🧠 Weekly Brain Eval Report — 2026-03-01
-
-✅  *Engineer    *  8.4/10  (+0.2 vs last week)  [3/3 passed]
-✅  *Marketing   *  7.9/10  (baseline)            [3/3 passed]
-✅  *Researcher  *  8.1/10  (+0.5 vs last week)   [3/3 passed]
-✅  *Strategist  *  7.6/10  (-0.1 vs last week)   [3/3 passed]
-✅  *Writer      *  8.0/10  (+0.3 vs last week)   [3/3 passed]
-
-*Integration uptime (7d rolling):*
-  Gmail: ✅ 100%  ·  Calendar: ✅ 100%  ·  GitHub: ✅ 98.6%  ·  n8n: ✅ 100%  ·  HA: ⚠️ 85.7%
-```
-
-### Run evals manually
+### Run manually
 
 ```bash
-# All agent evals
 python3 evals/run_evals.py
-
-# One agent
 python3 evals/run_evals.py --agent engineer
-
-# Single test case
-python3 evals/run_evals.py --agent writer --test test_02_rewrite_for_clarity
-
-# Nightly integration checks
-python3 evals/run_evals.py --nightly
-
-# Post results to Slack immediately
-python3 evals/run_evals.py --slack
 python3 evals/run_evals.py --nightly --slack
 ```
 
@@ -961,91 +1067,71 @@ Create `evals/agents/<agent>/test_XX_name.json`:
 ```json
 {
   "input": "The prompt sent to the agent",
-  "criteria": [
-    "what the response must include",
-    "another measurable criterion"
-  ],
+  "criteria": ["what the response must include"],
   "judge_prompt": "Context telling the Haiku judge what a good answer looks like.",
   "threshold": 7
 }
-```
-
-`threshold` is the minimum score (0–10) to pass. Default is 7.
-
-### Postgres tables
-
-```sql
--- Per-test results with run_id grouping for trend tracking
-SELECT agent_name, AVG(score), COUNT(*) FILTER (WHERE passed) AS passed
-FROM eval_results
-WHERE created_at > NOW() - INTERVAL '30 days'
-GROUP BY agent_name;
-
--- 7-day integration uptime
-SELECT integration,
-       ROUND(COUNT(*) FILTER (WHERE passed)::numeric / COUNT(*) * 100, 1) AS uptime_pct
-FROM integration_eval_results
-WHERE checked_at > NOW() - INTERVAL '7 days'
-GROUP BY integration;
 ```
 
 ---
 
 ## Security
 
-The `SecurityHook` runs before every message and blocks common prompt injection patterns:
+The `SecurityHook` runs before every message and blocks:
 
-- `[INST]` / `<<SYS>>` / `<|im_start|>` injection tokens
+- Injection tokens: `[INST]`, `<<SYS>>`, `<|im_start|>`
 - "ignore previous instructions" and similar phrases
 - DAN / jailbreak phrases
-- System prompt exfiltration attempts ("show me your system prompt")
+- System prompt exfiltration attempts
 - Identity confusion ("you are now", "pretend to be")
 
-Blocked messages return a safe reply and are logged with the matched pattern. The pattern list lives in `app/security/patterns.py`.
+Pattern list: `app/security/patterns.py`
+
+**Repository safety:**
+- `.env` and secrets files are blocked from commits by `repo.py`
+- `_scan_secrets()` aborts push if secrets patterns are detected
+- Protected branch `main` — all changes via PR
+
+**Mesh Agent security:**
+- HMAC-SHA256 signed messages with 60s replay window
+- Agent tokens stored as SHA-256 hash (never plaintext)
+- Production patches require Slack approval
 
 ---
 
 ## Google OAuth Setup
 
-Run once on the server to generate a refresh token:
-
 ```bash
 python3 scripts/google_auth.py
 ```
 
-Follow the browser prompt. Paste the resulting refresh token into `.env` as `GOOGLE_REFRESH_TOKEN`.
+Follow the browser prompt. Paste the refresh token into `.env` as `GOOGLE_REFRESH_TOKEN`. For additional accounts, use the same script and set `GOOGLE_ACCOUNT_2_REFRESH_TOKEN`, etc.
 
 ---
 
 ## Updating
 
 ```bash
-# Pull latest code
 git pull
-
-# Rebuild everything that changed
-docker compose build --no-cache brain celery-worker celery-beat flower
+docker compose build --no-cache brain celery-worker celery-worker-workspace celery-beat
 docker compose up -d
-
-# Or rebuild just the brain
-docker compose build --no-cache brain && docker compose up -d brain
 ```
 
-Database schema changes (`app/db/schema.sql`) run automatically on startup — all `CREATE TABLE` statements use `IF NOT EXISTS` so no data is ever lost.
+Database schema changes in `app/db/schema.sql` run automatically on startup — all `CREATE TABLE` statements use `IF NOT EXISTS`.
 
 ---
 
 ## CI/CD — GitOps Loop
 
 The brain can edit its own code, open a PR, and deploy automatically after CI passes.
-Full setup instructions: **[CICD.md](./CICD.md)**
+Full setup: **[CICD.md](./CICD.md)**
 
 Quick summary:
 1. Add `DEPLOY_WEBHOOK_SECRET` to GitHub repo secrets and to `.env`
 2. `docker compose up -d deploy-agent && docker compose restart nginx`
 3. Push to `main` → CI runs → image pushed to GHCR → webhook fires → brain restarts
-4. Make the GHCR package **Public** after the first image push (GitHub → Packages → sentinel → settings)
-5. Set branch protection so all changes (including AI edits) go through PRs
+4. Make the GHCR package **Public** after the first image push
+5. Set branch protection so all changes go through PRs
 
 ---
 
@@ -1055,54 +1141,52 @@ Quick summary:
 ```bash
 docker compose logs brain
 ```
-Usually a missing `.env` value or Postgres not yet healthy. Confirm `ANTHROPIC_API_KEY` is set and non-empty.
+Usually a missing `.env` value or Postgres not yet healthy.
 
 **Slack bot not responding**
-- Verify `SLACK_APP_TOKEN` starts with `xapp-` (Socket Mode token, not a webhook URL)
-- Check `docker compose logs brain | grep -i slack`
+- Verify `SLACK_APP_TOKEN` starts with `xapp-` (Socket Mode, not webhook)
+- Check: `docker compose logs brain | grep -i slack`
 
 **Gmail / Calendar returning "not configured"**
 - Confirm `GOOGLE_REFRESH_TOKEN` is in `.env`
-- Re-run `python3 scripts/google_auth.py` if the token has expired
+- Re-run `python3 scripts/google_auth.py` if expired
 
-**Qdrant embeddings are zero vectors (semantic search not working)**
-- Add `OPENAI_API_KEY` to `.env` — the system falls back to zero vectors when it's missing, which makes semantic search return random results
+**Qdrant embeddings are zero vectors**
+- Add `OPENAI_API_KEY` to `.env`
 
-**Grafana shows "No data" on all panels**
-- Check Prometheus targets: open `http://localhost:9090/targets` via SSH tunnel — all four targets should be `UP`
-- If `brain` target is `DOWN`: `docker compose logs brain | grep metrics`
-- If `redis` target is `DOWN`: `docker compose logs redis-exporter`
+**Grafana shows "No data"**
+- SSH tunnel to Prometheus: `ssh -L 9090:localhost:9090 user@server`
+- Check targets at `http://localhost:9090/targets` — all should be `UP`
 
-**Grafana login not working**
-- Confirm `GRAFANA_USER` and `GRAFANA_PASSWORD` are set in `.env`
-- Restart Grafana: `docker compose restart grafana`
+**Mesh agent not connecting**
+- Verify `AGENT_ID` and `AGENT_TOKEN` are correct
+- Check system clock sync (`timedatectl`) — max 60s drift
+- Verify firewall allows 443 outbound from agent server
 
-**Flower shows no workers**
-- Workers need 10–15s to connect after startup
-- Check: `docker compose logs celery-worker | grep -i "ready"`
-- Verify broker connection: `docker compose logs celery-worker | grep -i "redis"`
+**MeshCentral agents not registering**
+- Check `extra_hosts` in docker-compose.yml points to correct nginx IP
+- Verify `/agent.ashx` and `/meshrelay.ashx` nginx locations exist
+- Agents connect directly (not via `/rmm/`), check nginx logs
+
+**Celery tasks not running on schedule**
+- `docker compose ps celery-beat` — must be running
+- `docker compose logs celery-beat`
+- `docker compose exec celery-beat celery -A app.worker.celery_app inspect scheduled`
 
 **Budget ceiling hit — brain is blocked**
-- Check current spend: `curl https://your-domain.com/api/v1/costs`
-- To raise the ceiling immediately (no restart needed):
-  - Edit `.env`: increase `DAILY_COST_CEILING_USD`
-  - The ceiling is read on every call — takes effect instantly
-- Or manually clear the daily counter in Redis:
+- `curl https://your-domain.com/api/v1/costs`
+- Raise `DAILY_COST_CEILING_USD` in `.env` (takes effect instantly, no restart)
+- Or clear the Redis counter manually:
   ```bash
   docker compose exec redis redis-cli -a "$REDIS_PASSWORD" \
     DEL "brain:cost:daily:$(date +%Y-%m-%d):total"
   ```
 
-**Redis connection refused**
-- Check `REDIS_PASSWORD` matches between `.env` and the Redis container healthcheck
-- `docker compose ps` — confirm `ai-redis` shows `healthy`
+**Flower shows no workers**
+- Workers need 10–15s after startup to connect
+- `docker compose logs celery-worker | grep -i "ready"`
 
-**Reset a specific session**
+**Reset a session**
 ```bash
 curl -X DELETE https://your-domain.com/api/v1/chat/your-session-id
 ```
-
-**Celery tasks not running on schedule**
-- Verify `ai-celery-beat` is running: `docker compose ps celery-beat`
-- Check beat logs: `docker compose logs celery-beat`
-- Verify the schedule file exists: `docker compose exec celery-beat ls /app/celerybeat-data/`
