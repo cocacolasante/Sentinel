@@ -51,6 +51,18 @@ class RedditRateLimitError(RedditClientError):
 class RedditClient:
     USER_AGENT: str = settings.reddit_user_agent
 
+    def is_accessible(self) -> bool:
+        """Quick sync check: returns True if Reddit JSON API is reachable from this IP."""
+        try:
+            with httpx.Client(timeout=8.0, follow_redirects=True) as client:
+                resp = client.get(
+                    f"{_BASE}/r/announcements/top.json?limit=1",
+                    headers={"User-Agent": self.USER_AGENT},
+                )
+            return resp.status_code == 200
+        except Exception:
+            return False
+
     async def fetch_top_posts(
         self, subreddit: str, limit: int = 10, time_filter: str = "day"
     ) -> list[dict]:
@@ -82,6 +94,14 @@ class RedditClient:
                 f"r/{subreddit} not found — check spelling or it may have been banned."
             )
         if resp.status_code == 403:
+            # Distinguish: IP-blocked (HTML body) vs private/quarantined (JSON body)
+            content_type = resp.headers.get("content-type", "")
+            if "html" in content_type or resp.text.strip().startswith("<"):
+                raise SubredditPrivateError(
+                    f"r/{subreddit}: Reddit is blocking requests from this server IP. "
+                    "OAuth credentials (REDDIT_CLIENT_ID/SECRET) are required for server deployments. "
+                    "The skill works from home/non-datacenter IPs without OAuth."
+                )
             raise SubredditPrivateError(
                 f"r/{subreddit} is private or quarantined."
             )
