@@ -56,6 +56,7 @@ _DESTRUCTIVE_RE = re.compile(
       | git\s+push\s+.*--force                               # force push
       | git\s+reset\s+--hard                                 # hard reset
       | git\s+clean\s+-[^-]*f                                # force clean
+      | git\s+merge\b                                        # merge (must go via PR, not direct)
       | docker\s+(rm|rmi|stop|kill)\b                        # docker destructive
       | systemctl\s+(stop|disable|mask)\b                    # stop services
       | chmod\s+777\b                                        # world-writable
@@ -90,6 +91,19 @@ _ENV_WRITE_RE = re.compile(
     \s*[\"']?(?:.*[/\\])?\.env(?:\.[a-z]+)?[\"']?
     """,
     re.IGNORECASE | re.VERBOSE,
+)
+
+# ── Protected branch guardrail ────────────────────────────────────────────────
+# Sentinel must NEVER push directly to main or master — all changes must go
+# through the PR workflow so the owner can review before anything hits production.
+# Checking out main/master then pushing, or running git merge, all constitute
+# bypassing the PR gate and are unconditionally blocked.
+_PROTECTED_BRANCH_RE = re.compile(
+    # git push [remote] main  /  git push origin main  /  git push HEAD:main
+    r"git\s+push\b[^|&;]*\b(?:main|master)\b"
+    # git checkout main / git checkout master (switching to protected branch)
+    r"|git\s+checkout\s+(?:main|master)\b",
+    re.IGNORECASE,
 )
 
 # ── Protected path guardrail ───────────────────────────────────────────────────
@@ -242,6 +256,23 @@ class ServerShellSkill(BaseSkill):
                     "[Blocked — /root/sentinel, /sentinel-project, and /sentinel are "
                     "protected paths that must never be accessed, modified, or deleted. "
                     "Use /root/sentinel-workspace for all file and shell operations.]"
+                ),
+                skill_name=self.name,
+            )
+
+        # Protected branch block — never push to main/master or check it out for modification.
+        # ALL changes must be committed to a feature branch and submitted as a PR.
+        # GitHub branch protection AND this code-level block both enforce this rule.
+        if _PROTECTED_BRANCH_RE.search(command):
+            return SkillResult(
+                context_data=(
+                    "[Blocked — pushing directly to main/master or checking out a protected branch "
+                    "is forbidden. Follow the mandatory PR workflow:\n"
+                    "  1. Stay on your feature branch (feat/<name> or fix/<name>)\n"
+                    "  2. git push origin <branch-name>  (NOT origin main)\n"
+                    "  3. Open a PR via github_write or the GitHub API targeting base=main\n"
+                    "  4. Report the PR URL to the owner — changes go live only after their approval.\n"
+                    "NEVER run: git checkout main, git push origin main, or git merge to main.]"
                 ),
                 skill_name=self.name,
             )

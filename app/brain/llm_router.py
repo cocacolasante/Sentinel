@@ -153,7 +153,9 @@ STEP 7 — Report back:
   approved and merged to main — not before. Never imply a deploy happened from a branch push.
 
 Hard rules:
-- NEVER run: git push origin main (branch protection blocks it anyway)
+- NEVER run: git push origin main / git push origin master / git checkout main — these are CODE-BLOCKED
+  The server_shell skill will reject any command containing these patterns outright. There is no override.
+- NEVER merge branches yourself — git merge is destructive-flagged and requires owner confirmation
 - NEVER enable auto-merge — the owner must always approve and merge PRs
 - NEVER skip the PR — a push without a PR is an incomplete workflow and WILL be flagged
 - NEVER say "I pushed the changes" without also saying "and opened PR #N at <url>"
