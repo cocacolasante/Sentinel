@@ -2,11 +2,13 @@
 Sentinel Mesh Agent Gateway
 
 REST endpoints (prefix /api/v1):
-  POST /agents/provision          — generate agent_id + HMAC secret
-  GET  /agents/                   — list agents
-  GET  /agents/{id}/health        — latest heartbeat
-  GET  /agents/{id}/patches       — patch history
-  POST /agents/{id}/revoke        — revoke agent
+  POST /agents/provision                    — generate agent_id + HMAC secret
+  GET  /agents/                             — list agents
+  GET  /agents/{id}/health                  — latest heartbeat
+  GET  /agents/{id}/patches                 — patch history
+  POST /agents/{id}/revoke                  — revoke agent
+  POST /agents/{id}/command                 — send CHAT_COMMAND to agent
+  GET  /agents/{id}/responses/{corr_id}     — poll for CHAT_RESPONSE
 
 WebSocket endpoint (no prefix):
   WS   /ws/agent/{agent_id}       — agent long-lived connection
@@ -20,6 +22,7 @@ import hmac
 import json
 import secrets
 import time
+import uuid
 from typing import Optional
 
 import redis.asyncio as aioredis
@@ -79,6 +82,12 @@ class ProvisionRequest(BaseModel):
     hostname: Optional[str] = None
     ip_address: Optional[str] = None
     os_name: Optional[str] = None
+
+
+class AgentCommandRequest(BaseModel):
+    command: str                  # read_logs | process_status | disk_usage | shell | restart_app
+    args: dict = {}
+    timeout_secs: int = 30
 
 
 # ── REST endpoints ─────────────────────────────────────────────────────────────
@@ -205,6 +214,86 @@ async def revoke_agent(agent_id: str):
     return {"status": "revoked", "agent_id": agent_id}
 
 
+@router.post("/{agent_id}/command")
+async def send_agent_command(agent_id: str, req: AgentCommandRequest):
+    """Send a CHAT_COMMAND to a connected agent and return a correlation_id for polling."""
+    agent = await asyncio.to_thread(
+        postgres.execute_one,
+        "SELECT app_name, hmac_secret, sentinel_env, is_connected FROM mesh_agents WHERE agent_id = %s AND is_revoked = FALSE",
+        (agent_id,),
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if not agent["is_connected"]:
+        raise HTTPException(status_code=503, detail="Agent is offline")
+
+    # Production restart requires pre-approval flag
+    if req.command == "restart_app" and agent["sentinel_env"] == "production":
+        if not req.args.get("approved"):
+            raise HTTPException(
+                status_code=403,
+                detail="Production restart requires args.approved=true (set via Grafana confirm dialog)",
+            )
+
+    correlation_id = str(uuid.uuid4())
+    ts = time.time()
+    payload = {
+        "correlation_id": correlation_id,
+        "command": req.command,
+        "args": req.args,
+        "issued_by": "grafana",
+        "issued_at": ts,
+    }
+    canonical = f"{ts}:CHAT_COMMAND:{json.dumps(payload, sort_keys=True, separators=(',', ':'))}"
+    sig = hmac.new(
+        agent["hmac_secret"].encode(),
+        canonical.encode(),
+        "sha256",
+    ).hexdigest()
+    cmd_msg = json.dumps({"type": "CHAT_COMMAND", "payload": payload, "ts": ts, "sig": sig})
+
+    redis = _get_redis()
+    try:
+        await redis.rpush(f"sentinel:agent:cmd:{agent_id}", cmd_msg)
+        await redis.expire(f"sentinel:agent:cmd:{agent_id}", 3600)
+        await redis.set(
+            f"sentinel:agent:chat_pending:{agent_id}:{correlation_id}",
+            "pending",
+            ex=req.timeout_secs + 10,
+        )
+    finally:
+        await redis.aclose()
+
+    # Audit + DB record (non-blocking)
+    asyncio.create_task(_audit(agent_id, "chat_command_sent", "outbound", {"type": "CHAT_COMMAND", **payload}, True))
+    asyncio.create_task(_insert_chat_command(agent_id, correlation_id, req.command, req.args, "grafana"))
+
+    logger.info("CHAT_COMMAND dispatched | agent={} cmd={} corr={}", agent_id, req.command, correlation_id)
+    return {"correlation_id": correlation_id, "status": "dispatched", "timeout_secs": req.timeout_secs}
+
+
+@router.get("/{agent_id}/responses/{correlation_id}")
+async def get_agent_response(agent_id: str, correlation_id: str):
+    """Poll for a CHAT_RESPONSE from an agent. Returns status: ready|pending|expired."""
+    resp_key = f"sentinel:agent:chat_response:{agent_id}:{correlation_id}"
+    pend_key = f"sentinel:agent:chat_pending:{agent_id}:{correlation_id}"
+
+    redis = _get_redis()
+    try:
+        raw = await redis.get(resp_key)
+        if raw:
+            data = json.loads(raw)
+            await redis.delete(resp_key)  # read-once
+            return {"status": "ready", "response": data}
+        pending = await redis.get(pend_key)
+        if pending:
+            return {"status": "pending"}
+    finally:
+        await redis.aclose()
+
+    raise HTTPException(status_code=404, detail="expired")
+
+
 # ── WebSocket endpoint ─────────────────────────────────────────────────────────
 
 @ws_router.websocket("/ws/agent/{agent_id}")
@@ -248,6 +337,17 @@ async def agent_ws_endpoint(websocket: WebSocket, agent_id: str):
                 if not sig_valid:
                     logger.warning("Agent {} HMAC validation failed", agent_id)
                     continue
+
+                # Fast-path: store CHAT_RESPONSE directly in Redis (avoids 60s Celery lag)
+                if msg.get("type") == "CHAT_RESPONSE":
+                    inner = msg.get("payload", {})
+                    corr_id = inner.get("correlation_id", "")
+                    if corr_id:
+                        resp_key = f"sentinel:agent:chat_response:{agent_id}:{corr_id}"
+                        pend_key = f"sentinel:agent:chat_pending:{agent_id}:{corr_id}"
+                        await redis.set(resp_key, json.dumps(inner), ex=300)
+                        await redis.delete(pend_key)
+                        asyncio.create_task(_update_chat_command_row(agent_id, corr_id, inner))
 
                 stream_entry = json.dumps({
                     "agent_id": agent_id,
@@ -322,3 +422,40 @@ async def _audit(
         )
     except Exception as exc:
         logger.debug("Audit log write failed (non-fatal): {}", exc)
+
+
+async def _insert_chat_command(agent_id: str, correlation_id: str, command: str, args: dict, issued_by: str):
+    """Insert initial row into mesh_chat_commands (non-fatal)."""
+    try:
+        await asyncio.to_thread(
+            postgres.execute,
+            """
+            INSERT INTO mesh_chat_commands (agent_id, correlation_id, command, args, issued_by)
+            VALUES (%s, %s::uuid, %s, %s, %s)
+            ON CONFLICT (correlation_id) DO NOTHING
+            """,
+            (agent_id, correlation_id, command, json.dumps(args), issued_by),
+        )
+    except Exception as exc:
+        logger.debug("mesh_chat_commands insert failed (non-fatal): {}", exc)
+
+
+async def _update_chat_command_row(agent_id: str, correlation_id: str, payload: dict):
+    """Update mesh_chat_commands with response data (non-fatal)."""
+    try:
+        await asyncio.to_thread(
+            postgres.execute,
+            """
+            UPDATE mesh_chat_commands
+            SET success = %s, elapsed_ms = %s, error = %s, responded_at = NOW()
+            WHERE correlation_id = %s::uuid
+            """,
+            (
+                payload.get("success"),
+                payload.get("elapsed_ms"),
+                payload.get("error"),
+                correlation_id,
+            ),
+        )
+    except Exception as exc:
+        logger.debug("mesh_chat_commands update failed (non-fatal): {}", exc)

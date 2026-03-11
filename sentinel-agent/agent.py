@@ -44,9 +44,13 @@ async def main() -> None:
     patch_executor = PatchExecutor(settings, process_monitor)
     patch_executor.set_relay(relay)
 
+    from core.chat_handler import ChatCommandHandler
+    chat_handler = ChatCommandHandler(relay, settings, process_monitor)
+
     # Register inbound handlers
     relay.register_handler("REGISTER_ACK", _handle_register_ack)
     relay.register_handler("PATCH_INSTRUCTION", patch_executor.handle_patch_instruction)
+    relay.register_handler("CHAT_COMMAND", chat_handler.handle)
 
     # On connect: send REGISTER with server fingerprint + file list
     async def _on_connect():

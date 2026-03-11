@@ -149,6 +149,8 @@ def _route_stream_message(msg: dict, conn, redis):
             )
         elif msg_type == "RESOURCE_ALERT":
             _handle_resource_alert(agent_id, msg, payload)
+        elif msg_type == "CHAT_RESPONSE":
+            _handle_chat_response(agent_id, payload, redis)
 
 
 def _handle_register(cur, agent_id: str, msg: dict, redis):
@@ -259,6 +261,20 @@ def _handle_patch_result(cur, agent_id: str, payload: dict):
         post_alert_sync(msg, settings.slack_agents_channel)
     except Exception as e:
         logger.warning("Slack patch result notification failed: {}", e)
+
+
+def _handle_chat_response(agent_id: str, payload: dict, redis):
+    """Store CHAT_RESPONSE in Redis (idempotent — fast-path in _recv_loop may have already written it)."""
+    corr_id = payload.get("correlation_id")
+    if not corr_id:
+        logger.warning("CHAT_RESPONSE from {} missing correlation_id", agent_id)
+        return
+    resp_key = f"sentinel:agent:chat_response:{agent_id}:{corr_id}"
+    pend_key = f"sentinel:agent:chat_pending:{agent_id}:{corr_id}"
+    if not redis.exists(resp_key):
+        redis.set(resp_key, json.dumps(payload), ex=300)
+        redis.delete(pend_key)
+    logger.info("CHAT_RESPONSE | agent={} corr={} success={}", agent_id, corr_id, payload.get("success"))
 
 
 def _handle_resource_alert(agent_id: str, msg: dict, payload: dict):
