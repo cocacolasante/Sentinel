@@ -1279,6 +1279,88 @@ async def _deploy_brain(reason: str) -> dict:
     return {"success": True, "steps": steps}
 
 
+async def _upsert_sentry_github_issue(
+    issue_params: dict,
+    fix_plan: dict,
+    repo: str,
+) -> tuple[str, str]:
+    """
+    Create or update a GitHub issue for a non-auto-fixable Sentry error.
+
+    Returns (action, github_url) where action is "created" or "updated".
+    """
+    from app.integrations.github import GitHubClient
+
+    gh = GitHubClient()
+    if not gh.is_configured():
+        return ("skipped", "")
+
+    issue_id = issue_params.get("issue_id", "")
+    title = issue_params.get("title", "Unknown error")
+    level = issue_params.get("level", "error")
+    project = issue_params.get("project", "")
+    permalink = issue_params.get("permalink", "")
+    count = issue_params.get("count", 0)
+    root_cause = fix_plan.get("root_cause", "Unknown")
+    summary = fix_plan.get("summary", "")
+
+    # ── Search for an existing open issue referencing this Sentry issue ID ────
+    existing_number: int | None = None
+    existing_url: str = ""
+    if issue_id:
+        try:
+            results = await gh.search_issues(
+                f'repo:{repo} is:issue is:open "{issue_id}" in:body'
+            )
+            if results:
+                existing_number = results[0]["number"]
+                existing_url = results[0]["url"]
+        except Exception as exc:
+            logger.warning("GitHub issue search failed: %s", exc)
+
+    if existing_number:
+        # ── Update: add a comment with latest occurrence details ───────────────
+        comment_body = (
+            f"### New occurrence — Sentry {level.upper()}\n\n"
+            f"**Count:** {count}x | **Project:** {project}\n"
+            + (f"**Sentry:** {permalink}\n" if permalink else "")
+            + f"\n**Root cause:** {root_cause}\n"
+            + (f"\n_{summary}_" if summary else "")
+        )
+        try:
+            comment = await gh.add_issue_comment(repo, existing_number, comment_body)
+            return ("updated", existing_url)
+        except Exception as exc:
+            logger.warning("Could not comment on GitHub issue #%s: %s", existing_number, exc)
+            return ("skipped", "")
+    else:
+        # ── Create a new issue ─────────────────────────────────────────────────
+        badge = "🔴" if level in ("fatal", "critical") else "🟠" if level == "error" else "🟡"
+        issue_body = (
+            f"## {badge} Sentry {level.upper()} — {project}\n\n"
+            f"**Title:** {title}\n"
+            f"**Count:** {count}x\n"
+            + (f"**Sentry link:** {permalink}\n" if permalink else "")
+            + f"\n---\n\n"
+            f"### Root cause\n{root_cause}\n\n"
+            + (f"### Analysis\n_{summary}_\n\n" if summary else "")
+            + f"---\n"
+            f"*Sentinel could not auto-fix this issue. Manual investigation required.*\n"
+            f"<!-- sentry-issue-id: {issue_id} -->"
+        )
+        try:
+            created = await gh.create_issue(
+                repo=repo,
+                title=f"[Sentry] {title[:100]}",
+                body=issue_body,
+                labels=["bug", "sentry"],
+            )
+            return ("created", created.get("url", ""))
+        except Exception as exc:
+            logger.warning("Could not create GitHub issue for Sentry %s: %s", issue_id, exc)
+            return ("skipped", "")
+
+
 async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
     """
     1. Mark task in_progress + post "starting" Slack message.
@@ -1286,8 +1368,9 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
     3. Ask LLM (claude-haiku) for a structured fix plan as JSON.
     4. If fixable: create a sentinel/sentry-* branch, apply patches, commit, push → PR.
     5. Resolve in Sentry if patch fully addresses the root cause.
-    6. Post Slack summary (root cause + fix status + PR link).
-    7. Mark task done / failed.
+    6. If not auto-fixable: create (or update) a GitHub issue instead of a manual task.
+    7. Post Slack summary (root cause + fix status + PR/GitHub issue link).
+    8. Mark task done / failed.
     """
     from app.config import get_settings
     from app.integrations.slack_notifier import post_alert, post_alert_sync
@@ -1658,10 +1741,29 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
         except Exception as exc:
             logger.warning("Could not resolve Sentry issue %s: %s", issue_id, exc)
 
-    # ── 6. Slack summary ──────────────────────────────────────────────────────
+    # ── 6. GitHub issue for non-auto-fixable errors ───────────────────────────
+    gh_action: str = ""
+    gh_url: str = ""
+    _is_not_fixable = (
+        not fix_plan.get("fixable")
+        and not fix_plan.get("resolve_in_sentry")
+    )
+    if _is_not_fixable and settings.github_default_repo:
+        try:
+            gh_action, gh_url = await _upsert_sentry_github_issue(
+                issue_params, fix_plan, settings.github_default_repo
+            )
+            logger.info(
+                "GitHub issue %s for Sentry %s — %s",
+                gh_action, issue_id, gh_url,
+            )
+        except Exception as exc:
+            logger.warning("Could not upsert GitHub issue for Sentry %s: %s", issue_id, exc)
+
+    # ── 7. Slack summary ──────────────────────────────────────────────────────
     try:
         if patches_applied and not patch_errors and pr_url:
-            status_line = f"✅ *Fix pushed — PR opened for your review*"
+            status_line = "✅ *Fix pushed — PR opened for your review*"
         elif patches_applied and not patch_errors:
             status_line = f"✅ *Fix pushed* — {len(patches_applied)} file(s) patched"
         elif patches_applied and patch_errors:
@@ -1670,6 +1772,10 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
             status_line = f"❌ *Fix failed* — {patch_errors[0][:120]}"
         elif not fix_plan.get("fixable") and fix_plan.get("resolve_in_sentry"):
             status_line = "✅ *Fix already deployed* — resolving in Sentry"
+        elif gh_action == "created":
+            status_line = f"🐛 *Not auto-fixable — GitHub issue opened*"
+        elif gh_action == "updated":
+            status_line = f"🐛 *Not auto-fixable — existing GitHub issue updated*"
         else:
             status_line = "🔍 *Investigated* — not auto-fixable (environmental or complex)"
 
@@ -1686,6 +1792,8 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
             lines.append(f"*Files changed:* {', '.join(f'`{f}`' for f in patches_applied)}")
         if pr_url:
             lines.append(f"*PR:* {pr_url}")
+        if gh_url:
+            lines.append(f"*GitHub issue:* {gh_url}")
         if patch_errors:
             lines.append(f"*Patch errors:* {patch_errors[0][:120]}")
         if fix_plan.get("summary"):
@@ -1695,7 +1803,7 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
     except Exception as exc:
         logger.warning("Could not post Sentry fix Slack alert: %s", exc)
 
-    # ── 7. Mark task done ─────────────────────────────────────────────────────
+    # ── 8. Mark task done ─────────────────────────────────────────────────────
     final_status = "done" if not patch_errors or patches_applied else "failed"
     error_text = "; ".join(patch_errors[:3]) if patch_errors and not patches_applied else None
     _mark_task(task_id, final_status, error_text)
@@ -1705,5 +1813,7 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
         "fixable": fix_plan.get("fixable"),
         "patches_applied": patches_applied,
         "patch_errors": patch_errors,
+        "github_action": gh_action,
+        "github_url": gh_url,
         "status": final_status,
     }

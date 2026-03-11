@@ -140,6 +140,31 @@ class GitHubClient:
             "state": data.get("state"),
         }
 
+    async def search_issues(self, query: str) -> list[dict]:
+        """Search issues/PRs using the GitHub search API."""
+        data = await self._get("/search/issues", params={"q": query, "per_page": 10})
+        items = data.get("items", []) if isinstance(data, dict) else []
+        return [
+            {
+                "number": i.get("number"),
+                "title": i.get("title"),
+                "state": i.get("state"),
+                "url": i.get("html_url"),
+                "body": (i.get("body") or "")[:500],
+            }
+            for i in items
+        ]
+
+    async def add_issue_comment(self, repo: str, issue_number: int, body: str) -> dict:
+        """Add a comment to an existing issue."""
+        if not repo:
+            repo = settings.github_default_repo
+        data = await self._post(
+            f"/repos/{repo}/issues/{issue_number}/comments",
+            json={"body": body},
+        )
+        return {"id": data.get("id"), "url": data.get("html_url")}
+
     async def trigger_workflow(
         self, repo: str, workflow_id: str, ref: str = "main", inputs: dict | None = None
     ) -> dict:

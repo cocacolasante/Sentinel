@@ -10,7 +10,7 @@ ingest_and_triage_top_errors — runs 4x daily at 12am/6am/12pm/6pm UTC.
 
 Each investigate_and_fix task posts its own Slack updates:
   - On start: "🧠 Investigating…"
-  - On completion: "✅ Fix pushed — PR opened" or "🔍 Root cause identified (not auto-fixable)"
+  - On completion: "✅ Fix pushed — PR opened" or "🐛 GitHub issue created/updated (not auto-fixable)"
 """
 
 from __future__ import annotations
