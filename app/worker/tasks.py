@@ -817,7 +817,25 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
         "- Limit research to at most 4 rounds — then start implementing\n"
         "- Once you understand the codebase, make changes immediately\n"
         "- Never ask questions — decide autonomously\n"
-        "- No markdown in your response — pure JSON only"
+        "- No markdown in your response — pure JSON only\n\n"
+        "Remote Server Access (SSH):\n"
+        "- SSH key is at /root/.ssh/id_ed25519 (may or may not be authorized on target server)\n"
+        "- To run a command on a remote server (if SSH key is trusted): "
+        'ssh -i /root/.ssh/id_ed25519 -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@{HOST} "{CMD}"\n'
+        "- Do NOT test SSH connectivity first — just attempt the task; if SSH fails use the Python helper below\n\n"
+        "Installing Sentinel Mesh Agent on a remote server:\n"
+        "- PREFERRED: use the Python helper (uses IONOS deployment keys, works on all IONOS servers):\n"
+        "  python3 -c \"\n"
+        "import asyncio, sys\n"
+        "sys.path.insert(0,'/app')\n"
+        "from app.integrations.agent_installer import install_agents_on_server\n"
+        "from app.integrations.ionos import IONOSClient\n"
+        "result = asyncio.run(install_agents_on_server(IONOSClient(), 'HOST_IP', 'app-name', 'production', username='root'))\n"
+        "print(result)\n"
+        "\"\n"
+        "- Replace HOST_IP with the actual IP, 'app-name' with a short identifier, env with staging or production\n"
+        "- Success: result shows sentinel_agent status=='installed'; failure: status=='failed' with error detail\n"
+        "- If the helper reports success, the agent is installed — declare done\n"
     )
 
     messages: list[dict] = [
@@ -827,6 +845,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     results: list[str] = []
     all_passed = True
     lm_said_done = False
+    lm_said_failed = False  # True only if LLM explicitly said {"done": true, "failed": true}
     workspace_lock_held = False
     max_rounds = 20
     round_num = 0
@@ -903,6 +922,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
             results.append(f"{icon} *Summary:* {summary}")
             if action.get("failed"):
                 all_passed = False
+                lm_said_failed = True
             break
 
         cmd = (action.get("command") or "").strip()
@@ -1054,23 +1074,32 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     except Exception as pr_exc:
         logger.warning("Task #%s PR creation failed: %s", task_id, pr_exc)
 
-    # Only mark done if LLM explicitly said done AND all commands passed.
-    # If we exhausted max_rounds without the LLM saying done, mark failed.
-    if not lm_said_done and all_passed:
+    # Determine final status:
+    # - If LLM explicitly said done without "failed", trust its verdict (probe/test
+    #   command failures like SSH connectivity checks should not override LLM's judgment).
+    # - If LLM said done with "failed: true", it's failed.
+    # - If max rounds exhausted without LLM saying done, it's failed.
+    if lm_said_done and not lm_said_failed:
+        final_passed = True
+    elif not lm_said_done and all_passed:
+        # Exhausted rounds without LLM declaring done
         all_passed = False
         results.append(f"❌ *Agent exhausted {max_rounds} rounds without explicitly completing the task*")
+        final_passed = False
+    else:
+        final_passed = all_passed
 
-    _mark_task(task_id, "done" if all_passed else "failed")
+    _mark_task(task_id, "done" if final_passed else "failed")
 
     try:
         from app.integrations.milestone_logger import log_milestone
         import asyncio as _asyncio
         _asyncio.create_task(log_milestone(
-            action="task_complete" if all_passed else "task_failed",
+            action="task_complete" if final_passed else "task_failed",
             intent="task_execute",
             params={"title": title},
             session_id=session_id or f"task-{task_id}",
-            detail={"task_id": task_id, "title": title, "rounds": round_num + 1, "passed": all_passed},
+            detail={"task_id": task_id, "title": title, "rounds": round_num + 1, "passed": final_passed},
             agent="celery",
         ))
     except Exception:
@@ -1081,21 +1110,21 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
 
     if channel and thread_ts:
         header = (
-            f"✅ *Task #{task_id} — {title}* — complete" if all_passed else f"❌ *Task #{task_id} — {title}* — failed"
+            f"✅ *Task #{task_id} — {title}* — complete" if final_passed else f"❌ *Task #{task_id} — {title}* — failed"
         )
         post_thread_reply_sync(f"{header}\n{divider}\n{report_body}", channel, thread_ts)
-    elif not all_passed:
+    elif not final_passed:
         _dm_task_failure(task_id, title, report_body)
 
     # Report to sentinel-tasks channel thread
     try:
         from app.integrations.task_notifier import notify_report_sync
 
-        notify_report_sync(task_id, title, all_passed, report_body, pr_url)
+        notify_report_sync(task_id, title, final_passed, report_body, pr_url)
     except Exception as _nte:
         logger.debug("sentinel-tasks report failed: %s", _nte)
 
-    return {"task_id": task_id, "passed": all_passed, "rounds": round_num + 1}
+    return {"task_id": task_id, "passed": final_passed, "rounds": round_num + 1}
 
 
 async def _scan_pending_tasks() -> dict:

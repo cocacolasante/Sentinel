@@ -34,7 +34,8 @@ fi
 
 # Write environment file
 mkdir -p "$ENV_DIR"
-chmod 700 "$ENV_DIR"
+chmod 750 "$ENV_DIR"
+chown root:"$SERVICE_USER" "$ENV_DIR"
 
 cat > "$ENV_DIR/env" <<EOF
 # Sentinel Agent Configuration
@@ -52,8 +53,8 @@ SENTINEL_ENV=${SENTINEL_ENV:-staging}
 HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-30}
 EOF
 
-chmod 600 "$ENV_DIR/env"
-chown root:root "$ENV_DIR/env"
+chmod 640 "$ENV_DIR/env"
+chown root:"$SERVICE_USER" "$ENV_DIR/env"
 echo "Wrote config to $ENV_DIR/env"
 
 # Install systemd service
