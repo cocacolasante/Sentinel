@@ -23,7 +23,7 @@ class Handler(BaseHTTPRequestHandler):
         image = payload.get("image", "ghcr.io/cocacolasante/sentinel:latest")
         sha = payload.get("sha", "?")
         log.info("Deploy: image=%s sha=%s", image, sha)
-        subprocess.Popen([SCRIPT, image], stdout=open("/tmp/deploy.log", "a"), stderr=subprocess.STDOUT)
+        subprocess.Popen([SCRIPT, image, sha], stdout=open("/tmp/deploy.log", "a"), stderr=subprocess.STDOUT)
         self._respond(202, {"status": "deploy started", "sha": sha})
 
     def _respond(self, code, body):

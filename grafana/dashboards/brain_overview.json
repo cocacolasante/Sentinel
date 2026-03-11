@@ -9,7 +9,7 @@
     "to": "now"
   },
   "schemaVersion": 39,
-  "version": 12,
+  "version": 13,
   "tags": [
     "brain",
     "meshcentral",
@@ -49,10 +49,10 @@
       "title": "Brain Health",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 20
+        "y": 20,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -60,10 +60,10 @@
       "type": "stat",
       "title": "Requests / sec",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 21
+        "y": 21,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -71,7 +71,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))",
+          "expr": "sum(rate(brain_requests_total[1m]))",
           "legendFormat": "req/s",
           "refId": "A",
           "interval": "5s"
@@ -116,10 +116,10 @@
       "type": "stat",
       "title": "p95 Latency",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 6,
-        "y": 21
+        "y": 21,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -127,7 +127,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{job=\"brain\"}[1m]))) * 1000",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(brain_response_latency_seconds_bucket[5m]))) * 1000",
           "legendFormat": "p95 ms",
           "refId": "A",
           "interval": "5s"
@@ -172,10 +172,10 @@
       "type": "stat",
       "title": "Error Rate %",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 12,
-        "y": 21
+        "y": 21,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -183,7 +183,7 @@
       },
       "targets": [
         {
-          "expr": "100 * sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m])) / (sum(rate(http_requests_total{job=\"brain\"}[1m])) > 0 or vector(0))",
+          "expr": "100 * sum(rate(brain_requests_total{success=\"false\"}[1m])) / (sum(rate(brain_requests_total[1m])) > 0 or vector(0))",
           "legendFormat": "error %",
           "refId": "A",
           "interval": "5s"
@@ -228,10 +228,10 @@
       "type": "stat",
       "title": "Active Sessions",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 18,
-        "y": 21
+        "y": 21,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -287,13 +287,13 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"brain\"}[1m]))",
+          "expr": "sum(rate(brain_requests_total[1m]))",
           "legendFormat": "total req/s",
           "refId": "A",
           "interval": "5s"
         },
         {
-          "expr": "sum(rate(http_requests_total{job=\"brain\",status=~\"5..\"}[1m]))",
+          "expr": "sum(rate(brain_requests_total{success=\"false\"}[1m]))",
           "legendFormat": "errors/s",
           "refId": "B",
           "interval": "5s"
@@ -520,10 +520,10 @@
       "type": "timeseries",
       "title": "Requests by Agent",
       "gridPos": {
-        "h": 6,
-        "w": 12,
         "x": 0,
-        "y": 20
+        "y": 25,
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -556,10 +556,10 @@
       "type": "timeseries",
       "title": "Daily Cost Accumulation",
       "gridPos": {
-        "h": 6,
-        "w": 12,
         "x": 12,
-        "y": 20
+        "y": 25,
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -616,10 +616,10 @@
     {
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 29
+        "y": 44,
+        "w": 24,
+        "h": 1
       },
       "id": 9000,
       "title": "Task Board",
@@ -649,10 +649,10 @@
         }
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 0,
-        "y": 30
+        "y": 45,
+        "w": 6,
+        "h": 3
       },
       "id": 9001,
       "options": {
@@ -703,10 +703,10 @@
         }
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 6,
-        "y": 30
+        "y": 45,
+        "w": 6,
+        "h": 3
       },
       "id": 9002,
       "options": {
@@ -757,10 +757,10 @@
         }
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 12,
-        "y": 30
+        "y": 45,
+        "w": 6,
+        "h": 3
       },
       "id": 9003,
       "options": {
@@ -811,10 +811,10 @@
         }
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 18,
-        "y": 30
+        "y": 45,
+        "w": 6,
+        "h": 3
       },
       "id": 9004,
       "options": {
@@ -843,10 +843,10 @@
     },
     {
       "gridPos": {
-        "h": 20,
-        "w": 24,
         "x": 0,
-        "y": 33
+        "y": 48,
+        "w": 24,
+        "h": 20
       },
       "id": 9010,
       "options": {
@@ -861,10 +861,10 @@
       "title": "AI Activity Monitor",
       "type": "text",
       "gridPos": {
-        "h": 14,
-        "w": 24,
         "x": 0,
-        "y": 53
+        "y": 68,
+        "w": 24,
+        "h": 14
       },
       "options": {
         "content": "<div style=\"font-family:monospace;background:#0d1117;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">\ud83e\udd16 AI Activity \u2014 Live</span>\n  <div style=\"display:flex;gap:8px;align-items:center\">\n    <span id=\"act-dot\" style=\"font-size:14px;color:#374151\" title=\"Idle\">\u25cf</span>\n    <span id=\"act-time\" style=\"color:#4b5563;font-size:10px\"></span>\n    <button onclick=\"loadActivity()\" style=\"background:#1f2937;color:#9ca3af;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n  </div>\n</div>\n<div id=\"act-body\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar ACT_BASE='[[brain_url]]';\nfunction actAgo(iso){\n  var d=new Date(iso),now=new Date(),s=Math.floor((now-d)/1000);\n  if(s<60) return s+'s ago';\n  if(s<3600) return Math.floor(s/60)+'m ago';\n  if(s<86400) return Math.floor(s/3600)+'h ago';\n  return Math.floor(s/86400)+'d ago';\n}\nfunction loadActivity(){\n  fetch(ACT_BASE+'/api/v1/board/activity',{cache:'no-store'})\n    .then(function(r){return r.json();})\n    .then(function(data){\n      var dot=document.getElementById('act-dot');\n      var body=document.getElementById('act-body');\n      document.getElementById('act-time').textContent=new Date().toLocaleTimeString();\n      var html='';\n      if(data.in_progress&&data.in_progress.length){\n        dot.style.color='#fbbf24';dot.title='Active';\n        html+='<div style=\"margin-bottom:10px\">';\n        html+='<div style=\"color:#fbbf24;font-size:10px;font-weight:bold;margin-bottom:6px;letter-spacing:0.05em\">\u26a1 IN PROGRESS</div>';\n        data.in_progress.forEach(function(t){\n          html+='<div style=\"background:#1a1a2e;border:1px solid #2a2a4a;border-left:3px solid #fbbf24;padding:8px;margin-bottom:6px;border-radius:4px\">';\n          html+='<div style=\"display:flex;justify-content:space-between;align-items:center\">';\n          html+='<span style=\"color:#e2e8f0;font-size:12px;font-weight:bold\">#'+t.id+' '+(t.title||'')+'</span>';\n          html+='<span style=\"color:#4b5563;font-size:10px\">'+actAgo(t.updated_at)+'</span>';\n          html+='</div>';\n          if(t.description){var desc=(t.description||'').substring(0,140);html+='<div style=\"color:#9ca3af;font-size:10px;margin-top:4px\">'+desc+(desc.length>=140?'\u2026':'')+'</div>';}\n          html+='</div>';\n        });\n        html+='</div>';\n      } else {\n        dot.style.color='#374151';dot.title='Idle';\n        html+='<div style=\"color:#4b5563;font-size:12px;padding:8px;text-align:center;border:1px dashed #1f2937;border-radius:4px;margin-bottom:10px\">\ud83d\udca4 No active tasks \u2014 idle</div>';\n      }\n      if(data.recent_milestones&&data.recent_milestones.length){\n        html+='<div style=\"margin-bottom:8px\">';\n        html+='<div style=\"color:#6b7280;font-size:10px;font-weight:bold;margin-bottom:4px;letter-spacing:0.05em\">RECENT STEPS</div>';\n        var milColors={shell:['#1a3a2a','#4caf50'],code:['#1a2a3a','#42a5f5'],write:['#2a1a3a','#ce93d8'],email:['#3a2a1a','#ffa726'],task:['#1a2a1a','#86efac']};\n        data.recent_milestones.forEach(function(m){\n          var action=m.action||'';\n          var key=Object.keys(milColors).find(function(k){return action.startsWith(k);})||'';\n          var col=key?milColors[key]:['#222','#9ca3af'];\n          html+='<div style=\"display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #111\">';\n          html+='<span style=\"background:'+col[0]+';color:'+col[1]+';font-size:9px;padding:1px 5px;border-radius:2px;white-space:nowrap;min-width:60px;text-align:center\">'+action+'</span>';\n          html+='<span style=\"color:#d1d5db;font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+(m.summary||m.intent||'')+'</span>';\n          html+='<span style=\"color:#4b5563;font-size:9px;white-space:nowrap\">'+actAgo(m.triggered_at)+'</span>';\n          html+='</div>';\n        });\n        html+='</div>';\n      }\n      if(data.pending_next&&data.pending_next.length){\n        html+='<div>';\n        html+='<div style=\"color:#6b7280;font-size:10px;font-weight:bold;margin-bottom:4px;letter-spacing:0.05em\">NEXT IN QUEUE</div>';\n        data.pending_next.forEach(function(t){\n          html+='<div style=\"display:flex;align-items:center;gap:6px;padding:3px 0\">';\n          html+='<span style=\"color:#6b7280;font-size:10px\">#'+t.id+'</span>';\n          html+='<span style=\"color:#9ca3af;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+(t.title||'')+'</span>';\n          html+='<span style=\"color:#fb923c;font-size:9px\">P'+(t.priority_num||3)+'</span>';\n          html+='</div>';\n        });\n        html+='</div>';\n      }\n      body.innerHTML=html||'<div style=\"color:#4b5563;font-size:11px\">No data</div>';\n    })\n    .catch(function(e){document.getElementById('act-body').innerHTML='<div style=\"color:#f87171;font-size:11px\">Error: '+e.message+'</div>';});\n}\nloadActivity();\nsetInterval(loadActivity,5000);\n</script>",
@@ -877,10 +877,10 @@
       "title": "Recent Milestones & Updates",
       "type": "text",
       "gridPos": {
-        "h": 10,
-        "w": 24,
         "x": 0,
-        "y": 67
+        "y": 82,
+        "w": 24,
+        "h": 10
       },
       "options": {
         "mode": "html",
@@ -894,10 +894,10 @@
       "title": "Errors (Sentry)",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 77
+        "y": 92,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -905,10 +905,10 @@
       "type": "stat",
       "title": "Unresolved Issues",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 78
+        "y": 93,
+        "w": 4,
+        "h": 4
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -958,10 +958,10 @@
       "type": "timeseries",
       "title": "HTTP Error Rate (5xx / min)",
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 6,
-        "y": 78
+        "x": 0,
+        "y": 97,
+        "w": 18,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -969,14 +969,14 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) * 60",
-          "legendFormat": "5xx errors/min",
+          "expr": "sum(rate(brain_requests_total{success=\"false\"}[5m])) * 60",
+          "legendFormat": "brain errors/min",
           "refId": "A",
           "interval": "5s"
         },
         {
-          "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) * 60",
-          "legendFormat": "4xx errors/min",
+          "expr": "sum(rate(brain_rate_limited_total[5m])) * 60",
+          "legendFormat": "rate-limited/min",
           "refId": "B",
           "interval": "5s"
         }
@@ -1017,10 +1017,10 @@
       "type": "table",
       "title": "Top Errors by Frequency",
       "gridPos": {
-        "h": 8,
-        "w": 6,
         "x": 18,
-        "y": 78
+        "y": 97,
+        "w": 6,
+        "h": 8
       },
       "datasource": {
         "type": "grafana-sentry-datasource",
@@ -1053,10 +1053,10 @@
       "title": "Infrastructure",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 86
+        "y": 115,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -1064,10 +1064,10 @@
       "type": "timeseries",
       "title": "CPU % per Container",
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 87
+        "y": 116,
+        "w": 12,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1075,7 +1075,7 @@
       },
       "targets": [
         {
-          "expr": "sum by(name) (rate(container_cpu_usage_seconds_total{name=~\"(ai|brain)-.+\",container!=\"\"}[1m])) * 100",
+          "expr": "sum by(name) (rate(container_cpu_usage_seconds_total{name=~\"ai-.+\",container!=\"\"}[1m])) * 100",
           "legendFormat": "{{name}}",
           "refId": "A",
           "interval": "5s"
@@ -1098,10 +1098,10 @@
       "type": "timeseries",
       "title": "Memory MB per Container",
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 12,
-        "y": 87
+        "y": 116,
+        "w": 12,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1109,7 +1109,7 @@
       },
       "targets": [
         {
-          "expr": "sum by(name) (container_memory_usage_bytes{name=~\"(ai|brain)-.+\",container!=\"\"}) / 1024 / 1024",
+          "expr": "sum by(name) (container_memory_usage_bytes{name=~\"ai-.+\",container!=\"\"}) / 1024 / 1024",
           "legendFormat": "{{name}}",
           "refId": "A",
           "interval": "5s"
@@ -1131,10 +1131,10 @@
       "type": "stat",
       "title": "Disk Free",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 95
+        "y": 124,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -1188,10 +1188,10 @@
       "type": "stat",
       "title": "Redis Memory",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 6,
-        "y": 95
+        "y": 124,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -1245,10 +1245,10 @@
       "type": "stat",
       "title": "PostgreSQL Connections",
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 12,
-        "y": 95
+        "y": 124,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -1303,9 +1303,9 @@
       "title": "Redis Hit Rate",
       "gridPos": {
         "x": 18,
-        "y": 95,
-        "h": 4,
-        "w": 6
+        "y": 124,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -1368,9 +1368,9 @@
       "title": "Network I/O \u2014 Inbound (KB/s)",
       "gridPos": {
         "x": 0,
-        "y": 99,
-        "h": 6,
-        "w": 12
+        "y": 128,
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -1404,7 +1404,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by(name) (rate(container_network_receive_bytes_total{name=~\"(ai|brain)-.+\"}[1m])) / 1024",
+          "expr": "sum by(name) (rate(container_network_receive_bytes_total{name=~\"ai-.+\"}[1m])) / 1024",
           "legendFormat": "{{name}}",
           "interval": "5s"
         }
@@ -1416,9 +1416,9 @@
       "title": "Network I/O \u2014 Outbound (KB/s)",
       "gridPos": {
         "x": 12,
-        "y": 99,
-        "h": 6,
-        "w": 12
+        "y": 128,
+        "w": 12,
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -1452,7 +1452,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by(name) (rate(container_network_transmit_bytes_total{name=~\"(ai|brain)-.+\"}[1m])) / 1024",
+          "expr": "sum by(name) (rate(container_network_transmit_bytes_total{name=~\"ai-.+\"}[1m])) / 1024",
           "legendFormat": "{{name}}",
           "interval": "5s"
         }
@@ -1463,10 +1463,10 @@
       "title": "Host Memory Usage",
       "type": "timeseries",
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 105
+        "y": 134,
+        "w": 12,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1513,10 +1513,10 @@
       "title": "Disk I/O (KB/s)",
       "type": "timeseries",
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 12,
-        "y": 105
+        "y": 134,
+        "w": 12,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1562,12 +1562,12 @@
       "id": 9112,
       "type": "stat",
       "title": "Docker Container Status",
-      "description": "Uptime of each container. Green = stable (>1h), yellow = recently restarted (<1h), orange = just started (<5m), gray = no data (down).",
+      "description": "Uptime per container (all 24 services). Green=stable >1h, yellow=restarted <1h, orange=just started <5m, gray=down.",
       "gridPos": {
-        "h": 8,
-        "w": 24,
         "x": 0,
-        "y": 113
+        "y": 142,
+        "w": 24,
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1575,7 +1575,7 @@
       },
       "targets": [
         {
-          "expr": "label_replace(time() - container_start_time_seconds{name=~\"(ai|brain)-.+\"}, \"service\", \"$1\", \"name\", \"(?:ai|brain)-(.+)\")",
+          "expr": "label_replace(time() - container_start_time_seconds{name=~\"ai-.+\"}, \"service\", \"$1\", \"name\", \"ai-(.+)\")",
           "legendFormat": "{{service}}",
           "refId": "A",
           "instant": true,
@@ -1630,10 +1630,10 @@
       "title": "Live Logs",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 121
+        "y": 160,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -1641,10 +1641,10 @@
       "type": "logs",
       "title": "All Sentinel Services \u2014 Live",
       "gridPos": {
-        "h": 10,
-        "w": 24,
         "x": 0,
-        "y": 122
+        "y": 161,
+        "w": 24,
+        "h": 10
       },
       "datasource": {
         "type": "loki",
@@ -1673,10 +1673,10 @@
       "type": "logs",
       "title": "Errors & Warnings",
       "gridPos": {
-        "h": 9,
-        "w": 12,
         "x": 0,
-        "y": 132
+        "y": 171,
+        "w": 8,
+        "h": 9
       },
       "datasource": {
         "type": "loki",
@@ -1703,10 +1703,10 @@
       "type": "logs",
       "title": "Celery Worker Logs",
       "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 132
+        "x": 8,
+        "y": 171,
+        "w": 8,
+        "h": 9
       },
       "datasource": {
         "type": "loki",
@@ -1734,10 +1734,10 @@
       "title": "Approval Controls",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 141
+        "y": 189,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -1745,10 +1745,10 @@
       "type": "text",
       "title": "Write Approval Level",
       "gridPos": {
-        "h": 7,
-        "w": 10,
         "x": 0,
-        "y": 142
+        "y": 190,
+        "w": 10,
+        "h": 7
       },
       "options": {
         "mode": "html",
@@ -1760,10 +1760,10 @@
       "type": "text",
       "title": "Pending Approvals",
       "gridPos": {
-        "h": 7,
-        "w": 14,
         "x": 10,
-        "y": 142
+        "y": 190,
+        "w": 14,
+        "h": 7
       },
       "options": {
         "mode": "html",
@@ -1797,7 +1797,7 @@
       },
       "options": {
         "mode": "html",
-        "content": "<div style=\"font-family:monospace;background:#0d1117;padding:10px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:6px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-shrink:0\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">Slack Channel Reader</span>\n  <div style=\"display:flex;gap:6px;align-items:center\">\n    <span id=\"slk-time\" style=\"color:#4b5563;font-size:10px\"></span>\n    <button onclick=\"loadSlack()\" style=\"background:#1f2937;color:#9ca3af;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px\">&#x27F3;</button>\n  </div>\n</div>\n<div style=\"display:flex;gap:4px;flex-wrap:wrap;flex-shrink:0\" id=\"slk-tabs\">\n  <button onclick=\"setChannel('sentinel-alerts')\"   id=\"tab-sentinel-alerts\"       class=\"slk-tab\" style=\"background:#1e1a2e;color:#a78bfa;border:1px solid #4c1d95;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x26A1; alerts</button>\n  <button onclick=\"setChannel('sentinel-evals')\"    id=\"tab-sentinel-evals\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x2705; evals</button>\n  <button onclick=\"setChannel('sentinel-milestones')\" id=\"tab-sentinel-milestones\" class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F3C6; milestones</button>\n  <button onclick=\"setChannel('rmm-production')\"    id=\"tab-rmm-production\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F4E1; rmm-prod</button>\n  <button onclick=\"setChannel('rmm-dev-staging')\"   id=\"tab-rmm-dev-staging\"       class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F527; rmm-dev</button>\n</div>\n<div id=\"slk-status\" style=\"font-size:10px;color:#6b7280;flex-shrink:0\"></div>\n<div id=\"slk-body\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px\"></div>\n</div>\n\n<script>\nvar SLK_BASE='[[brain_url]]';\nvar SLK_CH='sentinel-alerts';\nvar SLK_TIMER=null;\n\nfunction esc2(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\n\nfunction setChannel(ch){\n  SLK_CH=ch;\n  document.querySelectorAll('.slk-tab').forEach(function(b){\n    b.style.background='#1f2937';b.style.color='#6b7280';b.style.borderColor='#374151';\n  });\n  var active=document.getElementById('tab-'+ch);\n  if(active){active.style.background='#1e1a2e';active.style.color='#a78bfa';active.style.borderColor='#4c1d95';}\n  loadSlack();\n}\n\nasync function loadSlack(){\n  var body=document.getElementById('slk-body');\n  var status=document.getElementById('slk-status');\n  status.textContent='Loading #'+SLK_CH+'\\u2026';\n  body.innerHTML='';\n  try{\n    var r=await fetch(SLK_BASE+'/api/v1/integrations/slack/messages?channel='+encodeURIComponent(SLK_CH)+'&limit=25');\n    if(!r.ok){\n      var err=await r.json().catch(function(){return {detail:r.statusText};});\n      status.textContent='Error: '+(err.detail||r.statusText);\n      return;\n    }\n    var msgs=await r.json();\n    document.getElementById('slk-time').textContent=new Date().toLocaleTimeString();\n    status.textContent='';\n    msgs.forEach(function(msg){\n      var div=document.createElement('div');\n      div.style.cssText='padding:3px 4px;border-bottom:1px solid #161b22;font-size:11px;color:#d1d5db;white-space:pre-wrap;word-break:break-word';\n      var user='<span style=\"color:'+(msg.bot?'#6b7280':'#a78bfa')+';font-weight:bold\">'+esc2(msg.user)+'</span>';\n      var text=esc2(msg.text);\n      text=text.replace(/(critical|error|exception|traceback)/gi,'<span style=\"color:#f87171;font-weight:bold\">$1</span>');\n      text=text.replace(/(warning|warn)/gi,'<span style=\"color:#fb923c\">$1</span>');\n      text=text.replace(/(success|ok|all.green|healthy)/gi,'<span style=\"color:#86efac\">$1</span>');\n      div.innerHTML=user+': '+text;\n      body.appendChild(div);\n    });\n    if(!body.children.length){\n      var e=document.createElement('div');\n      e.style.cssText='color:#6b7280;font-size:11px;padding:8px';\n      e.textContent='No messages (bot may not be in #'+SLK_CH+')';\n      body.appendChild(e);\n    }\n  }catch(err){\n    status.textContent='Error: '+err.message;\n  }\n}\n\nfunction startSlkRefresh(){\n  if(SLK_TIMER)clearInterval(SLK_TIMER);\n  SLK_TIMER=setInterval(loadSlack,60000);\n}\n\nloadSlack();\nstartSlkRefresh();\n</script>"
+        "content": "<div style=\"font-family:monospace;background:#0d1117;padding:10px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:6px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-shrink:0\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">Slack Channel Reader</span>\n  <div style=\"display:flex;gap:6px;align-items:center\">\n    <span id=\"slk-time\" style=\"color:#4b5563;font-size:10px\"></span>\n    <button onclick=\"loadSlack()\" style=\"background:#1f2937;color:#9ca3af;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px\">&#x27F3;</button>\n  </div>\n</div>\n<div style=\"display:flex;gap:4px;flex-wrap:wrap;flex-shrink:0\" id=\"slk-tabs\">\n  <button onclick=\"setChannel('sentinel-alerts')\"   id=\"tab-sentinel-alerts\"       class=\"slk-tab\" style=\"background:#1e1a2e;color:#a78bfa;border:1px solid #4c1d95;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x26A1; alerts</button>\n  <button onclick=\"setChannel('sentinel-evals')\"    id=\"tab-sentinel-evals\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x2705; evals</button>\n  <button onclick=\"setChannel('sentinel-milestones')\" id=\"tab-sentinel-milestones\" class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F3C6; milestones</button>\n  <button onclick=\"setChannel('rmm-production')\"    id=\"tab-rmm-production\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F4E1; rmm-prod</button>\n  <button onclick=\"setChannel('sentinel-agents')\"   id=\"tab-sentinel-agents\"       class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F916; agents</button>\n  <button onclick=\"setChannel('sentinel-reddit')\"    id=\"tab-sentinel-reddit\"        class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F4F0; reddit</button>\n  <button onclick=\"setChannel('rmm-dev-staging')\"   id=\"tab-rmm-dev-staging\"       class=\"slk-tab\" style=\"background:#1f2937;color:#6b7280;border:1px solid #374151;padding:3px 8px;border-radius:12px;cursor:pointer;font-size:11px\">&#x1F527; rmm-dev</button>\n</div>\n<div id=\"slk-status\" style=\"font-size:10px;color:#6b7280;flex-shrink:0\"></div>\n<div id=\"slk-body\" style=\"flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px\"></div>\n</div>\n\n<script>\nvar SLK_BASE='[[brain_url]]';\nvar SLK_CH='sentinel-alerts';\nvar SLK_TIMER=null;\n\nfunction esc2(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\n\nfunction setChannel(ch){\n  SLK_CH=ch;\n  document.querySelectorAll('.slk-tab').forEach(function(b){\n    b.style.background='#1f2937';b.style.color='#6b7280';b.style.borderColor='#374151';\n  });\n  var active=document.getElementById('tab-'+ch);\n  if(active){active.style.background='#1e1a2e';active.style.color='#a78bfa';active.style.borderColor='#4c1d95';}\n  loadSlack();\n}\n\nasync function loadSlack(){\n  var body=document.getElementById('slk-body');\n  var status=document.getElementById('slk-status');\n  status.textContent='Loading #'+SLK_CH+'\\u2026';\n  body.innerHTML='';\n  try{\n    var r=await fetch(SLK_BASE+'/api/v1/integrations/slack/messages?channel='+encodeURIComponent(SLK_CH)+'&limit=25');\n    if(!r.ok){\n      var err=await r.json().catch(function(){return {detail:r.statusText};});\n      status.textContent='Error: '+(err.detail||r.statusText);\n      return;\n    }\n    var msgs=await r.json();\n    document.getElementById('slk-time').textContent=new Date().toLocaleTimeString();\n    status.textContent='';\n    msgs.forEach(function(msg){\n      var div=document.createElement('div');\n      div.style.cssText='padding:3px 4px;border-bottom:1px solid #161b22;font-size:11px;color:#d1d5db;white-space:pre-wrap;word-break:break-word';\n      var user='<span style=\"color:'+(msg.bot?'#6b7280':'#a78bfa')+';font-weight:bold\">'+esc2(msg.user)+'</span>';\n      var text=esc2(msg.text);\n      text=text.replace(/(critical|error|exception|traceback)/gi,'<span style=\"color:#f87171;font-weight:bold\">$1</span>');\n      text=text.replace(/(warning|warn)/gi,'<span style=\"color:#fb923c\">$1</span>');\n      text=text.replace(/(success|ok|all.green|healthy)/gi,'<span style=\"color:#86efac\">$1</span>');\n      div.innerHTML=user+': '+text;\n      body.appendChild(div);\n    });\n    if(!body.children.length){\n      var e=document.createElement('div');\n      e.style.cssText='color:#6b7280;font-size:11px;padding:8px';\n      e.textContent='No messages (bot may not be in #'+SLK_CH+')';\n      body.appendChild(e);\n    }\n  }catch(err){\n    status.textContent='Error: '+err.message;\n  }\n}\n\nfunction startSlkRefresh(){\n  if(SLK_TIMER)clearInterval(SLK_TIMER);\n  SLK_TIMER=setInterval(loadSlack,60000);\n}\n\nloadSlack();\nstartSlkRefresh();\n</script>"
       }
     },
     {
@@ -1806,10 +1806,10 @@
       "title": "RMM Infrastructure",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 151
+        "y": 197,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -1821,10 +1821,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 0,
-        "y": 152
+        "y": 198,
+        "w": 6,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -1876,10 +1876,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 6,
-        "y": 152
+        "y": 198,
+        "w": 6,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -1934,10 +1934,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 12,
-        "y": 152
+        "y": 198,
+        "w": 6,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -1996,10 +1996,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
         "x": 18,
-        "y": 152
+        "y": 198,
+        "w": 6,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2058,10 +2058,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 12,
-        "w": 14,
         "x": 0,
-        "y": 155
+        "y": 201,
+        "w": 14,
+        "h": 12
       },
       "fieldConfig": {
         "defaults": {
@@ -2194,10 +2194,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 12,
-        "w": 10,
         "x": 14,
-        "y": 155
+        "y": 201,
+        "w": 10,
+        "h": 12
       },
       "fieldConfig": {
         "defaults": {
@@ -2242,10 +2242,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
         "x": 0,
-        "y": 167
+        "y": 213,
+        "w": 24,
+        "h": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -2357,10 +2357,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 8,
-        "w": 24,
         "x": 0,
-        "y": 176
+        "y": 222,
+        "w": 24,
+        "h": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -2409,10 +2409,10 @@
       "type": "text",
       "title": "Deployed Version",
       "gridPos": {
-        "h": 3,
-        "w": 24,
         "x": 0,
-        "y": 25
+        "y": 31,
+        "w": 24,
+        "h": 3
       },
       "options": {
         "mode": "html",
@@ -2425,10 +2425,10 @@
       "title": "Sentinel Mesh Agents",
       "collapsed": false,
       "gridPos": {
-        "h": 1,
-        "w": 24,
         "x": 0,
-        "y": 184
+        "y": 230,
+        "w": 24,
+        "h": 1
       }
     },
     {
@@ -2440,10 +2440,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 0,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2495,10 +2495,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 4,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2553,10 +2553,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 8,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2615,10 +2615,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 12,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2670,10 +2670,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 16,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2728,10 +2728,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 3,
-        "w": 4,
         "x": 20,
-        "y": 185
+        "y": 231,
+        "w": 4,
+        "h": 3
       },
       "fieldConfig": {
         "defaults": {
@@ -2786,10 +2786,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 10,
-        "w": 14,
         "x": 0,
-        "y": 188
+        "y": 234,
+        "w": 14,
+        "h": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -2958,10 +2958,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 10,
-        "w": 10,
         "x": 14,
-        "y": 188
+        "y": 234,
+        "w": 10,
+        "h": 10
       },
       "fieldConfig": {
         "defaults": {
@@ -3074,10 +3074,10 @@
       "type": "text",
       "title": "Fleet Live Status",
       "gridPos": {
-        "h": 16,
-        "w": 14,
         "x": 0,
-        "y": 198
+        "y": 244,
+        "w": 14,
+        "h": 16
       },
       "options": {
         "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">\u2b21 Mesh Agent Fleet</span>\n  <div style=\"display:flex;gap:6px;align-items:center\">\n    <select id=\"ma-env-filter\" onchange=\"loadAgents()\" style=\"background:#1f2937;color:#9ca3af;border:1px solid #374151;padding:3px 6px;border-radius:4px;font-size:11px\">\n      <option value=\"\">All Envs</option>\n      <option value=\"staging\">Staging</option>\n      <option value=\"production\">Production</option>\n    </select>\n    <span id=\"ma-updated\" style=\"color:#4b5563;font-size:10px\"></span>\n    <button onclick=\"loadAgents()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n  </div>\n</div>\n<div id=\"ma-fleet-stats\" style=\"display:flex;gap:12px;padding:6px 0;border-bottom:1px solid #1f2937\"></div>\n<div id=\"ma-table\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar MA_BASE='[[brain_url]]';\nfunction bar(val,color){\n  if(val==null)return '<span style=\"color:#4b5563\">n/a</span>';\n  var pct=Math.min(100,Math.round(val));\n  var c=pct>90?'#f87171':pct>75?'#fb923c':'#86efac';\n  if(color)c=color;\n  return '<div style=\"display:inline-flex;align-items:center;gap:4px\">'\n    +'<div style=\"width:48px;height:8px;background:#1f2937;border-radius:2px;overflow:hidden\">'\n    +'<div style=\"width:'+pct+'%;height:100%;background:'+c+'\"></div></div>'\n    +'<span style=\"font-size:10px;color:'+c+'\">'+pct+'%</span></div>';\n}\nfunction loadAgents(){\n  var env=document.getElementById('ma-env-filter').value;\n  var url=MA_BASE+'/api/v1/agents/?'+(env?'env='+env:'');\n  fetch(url).then(function(r){return r.json();}).then(function(data){\n    var agents=data.agents||[];\n    var online=agents.filter(function(a){return a.is_connected;}).length;\n    var offline=agents.length-online;\n    var fst=document.getElementById('ma-fleet-stats');\n    fst.innerHTML='<span style=\"color:#9ca3af;font-size:11px\">Total: <b style=\"color:#93c5fd\">'+agents.length+'</b></span>'\n      +'<span style=\"color:#9ca3af;font-size:11px\">Online: <b style=\"color:#86efac\">'+online+'</b></span>'\n      +'<span style=\"color:#9ca3af;font-size:11px\">Offline: <b style=\"color:' +(offline>0?'#f87171':'#6b7280')+'\">'+offline+'</b></span>';\n    if(!agents.length){\n      document.getElementById('ma-table').innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:12px\">No agents registered.</div>';\n      return;\n    }\n    var rows=agents.map(function(a){\n      var dot=a.is_connected?'<span style=\"color:#86efac\">\u25cf</span>':'<span style=\"color:#f87171\">\u25cf</span>';\n      var env_badge='<span style=\"background:'+(a.sentinel_env==='production'?'#3b1515':'#1c2a1c')\n        +';color:'+(a.sentinel_env==='production'?'#f87171':'#86efac')\n        +';padding:1px 5px;border-radius:3px;font-size:10px\">'+a.sentinel_env+'</span>';\n      var sha=a.git_sha?('<span style=\"color:#6b7280;font-size:10px\">'+a.git_sha.slice(0,10)+'</span>'):'<span style=\"color:#374151\">\u2014</span>';\n      var seen=a.last_seen?a.last_seen.replace('T',' ').slice(0,16):'never';\n      return '<tr style=\"border-top:1px solid #1f2937\">'\n        +'<td style=\"padding:5px 8px\">'+dot+' <span style=\"color:#e5e7eb\">'+a.app_name+'</span></td>'\n        +'<td style=\"padding:5px 8px;color:#9ca3af;font-size:11px\">'+(a.hostname||'\u2014')+'</td>'\n        +'<td style=\"padding:5px 8px\">'+env_badge+'</td>'\n        +'<td style=\"padding:5px 8px\">'+sha+'</td>'\n        +'<td style=\"padding:5px 8px;color:#6b7280;font-size:10px\">'+seen+'</td>'\n        +'</tr>';\n    }).join('');\n    document.getElementById('ma-table').innerHTML='<table style=\"width:100%;border-collapse:collapse;font-size:12px\">'\n      +'<thead><tr style=\"color:#6b7280;font-size:10px;text-transform:uppercase\">'\n      +'<th style=\"padding:4px 8px;text-align:left\">App</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Host</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Env</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">SHA</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Last Seen</th>'\n      +'</tr></thead><tbody>'+rows+'</tbody></table>';\n    document.getElementById('ma-updated').textContent='updated '+new Date().toLocaleTimeString();\n  }).catch(function(e){\n    document.getElementById('ma-table').innerHTML='<div style=\"color:#f87171;font-size:11px\">Error: '+e+'</div>';\n  });\n}\nloadAgents();\nsetInterval(loadAgents,15000);\n</script>",
@@ -3089,10 +3089,10 @@
       "type": "text",
       "title": "Latest Heartbeats",
       "gridPos": {
-        "h": 16,
-        "w": 10,
         "x": 14,
-        "y": 198
+        "y": 244,
+        "w": 10,
+        "h": 16
       },
       "options": {
         "content": "<div style=\"font-family:monospace;background:#111827;padding:12px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px\">\n<div style=\"display:flex;justify-content:space-between;align-items:center\">\n  <span style=\"color:#a78bfa;font-size:13px;font-weight:bold\">\ud83d\udc93 Latest Heartbeats</span>\n  <button onclick=\"loadHB()\" style=\"background:#374151;color:#9ca3af;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px\">\u27f3</button>\n</div>\n<div id=\"hb-table\" style=\"flex:1;overflow-y:auto\"></div>\n</div>\n<script>\nvar HB_BASE='[[brain_url]]';\nfunction hbBar(val,warn,crit){\n  if(val==null)return '<span style=\"color:#4b5563\">n/a</span>';\n  var pct=Math.min(100,Math.round(val));\n  var c=pct>=crit?'#f87171':pct>=warn?'#fb923c':'#86efac';\n  return '<div style=\"display:inline-flex;align-items:center;gap:4px\">'\n    +'<div style=\"width:44px;height:7px;background:#1f2937;border-radius:2px;overflow:hidden\">'\n    +'<div style=\"width:'+pct+'%;height:100%;background:'+c+'\"></div></div>'\n    +'<span style=\"font-size:10px;color:'+c+'\">'+pct+'%</span></div>';\n}\nfunction loadHB(){\n  fetch(HB_BASE+'/api/v1/agents/').then(function(r){return r.json();}).then(function(data){\n    var agents=(data.agents||[]).filter(function(a){return a.is_connected;});\n    if(!agents.length){\n      document.getElementById('hb-table').innerHTML='<div style=\"color:#6b7280;font-size:12px;padding:12px\">No connected agents.</div>';\n      return;\n    }\n    return Promise.all(agents.map(function(a){\n      return fetch(HB_BASE+'/api/v1/agents/'+a.agent_id+'/health')\n        .then(function(r){return r.json();})\n        .then(function(h){return {agent:a,hb:h.latest_heartbeat};});\n    }));\n  }).then(function(results){\n    if(!results)return;\n    var rows=results.map(function(r){\n      var a=r.agent; var hb=r.hb||{};\n      var proc=hb.process_up===true?'<span style=\"color:#86efac\">\u25b2 up</span>'\n               :hb.process_up===false?'<span style=\"color:#f87171\">\u25bc down</span>'\n               :'<span style=\"color:#6b7280\">?</span>';\n      var http=hb.http_status?'<span style=\"color:'+(hb.http_status<400?'#86efac':'#f87171')+'\">'+hb.http_status+'</span>'\n               :'<span style=\"color:#6b7280\">\u2014</span>';\n      var lat=hb.http_latency_ms!=null?'<span style=\"color:#9ca3af;font-size:10px\">'+Math.round(hb.http_latency_ms)+'ms</span>':'';\n      return '<tr style=\"border-top:1px solid #1f2937\">'\n        +'<td style=\"padding:5px 8px;color:#e5e7eb\">'+a.app_name+'</td>'\n        +'<td style=\"padding:5px 8px\">'+proc+'</td>'\n        +'<td style=\"padding:5px 8px\">'+hbBar(hb.cpu_pct,75,90)+'</td>'\n        +'<td style=\"padding:5px 8px\">'+hbBar(hb.mem_pct,80,90)+'</td>'\n        +'<td style=\"padding:5px 8px\">'+hbBar(hb.disk_pct,80,90)+'</td>'\n        +'<td style=\"padding:5px 8px\">'+http+' '+lat+'</td>'\n        +'</tr>';\n    }).join('');\n    document.getElementById('hb-table').innerHTML='<table style=\"width:100%;border-collapse:collapse;font-size:12px\">'\n      +'<thead><tr style=\"color:#6b7280;font-size:10px;text-transform:uppercase\">'\n      +'<th style=\"padding:4px 8px;text-align:left\">Agent</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Process</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">CPU</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Mem</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">Disk</th>'\n      +'<th style=\"padding:4px 8px;text-align:left\">HTTP</th>'\n      +'</tr></thead><tbody>'+rows+'</tbody></table>';\n  }).catch(function(e){\n    document.getElementById('hb-table').innerHTML='<div style=\"color:#f87171;font-size:11px\">'+e+'</div>';\n  });\n}\nloadHB();\nsetInterval(loadHB,15000);\n</script>",
@@ -3108,10 +3108,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 214
+        "y": 260,
+        "w": 12,
+        "h": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -3155,10 +3155,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 12,
-        "y": 214
+        "y": 260,
+        "w": 12,
+        "h": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -3202,10 +3202,10 @@
         "uid": "postgres"
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
         "x": 0,
-        "y": 222
+        "y": 268,
+        "w": 24,
+        "h": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -3331,6 +3331,1085 @@
           "rawSql": "SELECT\n  TO_CHAR(l.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,\n  a.app_name,\n  l.direction,\n  l.message_type,\n  l.sig_valid,\n  ROUND(l.ts_drift_ms::numeric, 1) AS ts_drift_ms\nFROM mesh_audit_log l\nLEFT JOIN mesh_agents a ON a.agent_id = l.agent_id\nORDER BY l.created_at DESC\nLIMIT 50",
           "refId": "A",
           "interval": "15s"
+        }
+      ]
+    },
+    {
+      "id": 300,
+      "type": "row",
+      "title": "Celery Queues & Workers",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 301,
+      "type": "timeseries",
+      "title": "Celery Queue Depths",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "celery_queue_length{queue_name=\"evals\"}",
+          "legendFormat": "evals",
+          "refId": "A",
+          "interval": "15s"
+        },
+        {
+          "expr": "celery_queue_length{queue_name=\"celery\"}",
+          "legendFormat": "celery",
+          "refId": "B",
+          "interval": "15s"
+        },
+        {
+          "expr": "celery_queue_length{queue_name=\"tasks_general\"}",
+          "legendFormat": "tasks_general",
+          "refId": "C",
+          "interval": "15s"
+        },
+        {
+          "expr": "celery_queue_length{queue_name=\"tasks_workspace\"}",
+          "legendFormat": "tasks_workspace",
+          "refId": "D",
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 8
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 302,
+      "type": "timeseries",
+      "title": "Celery Task Rate (tasks/min by state)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 35,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "sum by(state) (rate(celery_tasks_total[1m])) * 60",
+          "legendFormat": "{{state}}",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 8
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 303,
+      "type": "stat",
+      "title": "Workers Online",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 6,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "celery_workers_online",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 304,
+      "type": "stat",
+      "title": "Tasks Succeeded (1h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 41,
+        "w": 6,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(celery_tasks_total{state=\"SUCCESS\"}[1h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 305,
+      "type": "stat",
+      "title": "Tasks Failed (1h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 41,
+        "w": 6,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(celery_tasks_total{state=\"FAILURE\"}[1h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 306,
+      "type": "stat",
+      "title": "Tasks Retried (1h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 41,
+        "w": 6,
+        "h": 3
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(celery_tasks_total{state=\"RETRY\"}[1h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 401,
+      "type": "stat",
+      "title": "Sentry Triage Tasks (24h)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 93,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE source='sentry-triage' AND created_at > NOW() - INTERVAL '24 hours'",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#a78bfa",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#a78bfa",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 402,
+      "type": "stat",
+      "title": "Auto-Fixed Issues (24h)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 93,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM sentry_issues WHERE status='resolved' AND updated_at > NOW() - INTERVAL '24 hours'",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#86efac",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#86efac",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 403,
+      "type": "stat",
+      "title": "Open Sentry Issues",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 93,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM sentry_issues WHERE status NOT IN ('resolved','ignored')",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#fde68a",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#fde68a",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 404,
+      "type": "stat",
+      "title": "Critical Sentry Issues",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 19,
+        "y": 93,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM sentry_issues WHERE level IN ('critical','fatal') AND status NOT IN ('resolved','ignored')",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#f87171",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#f87171",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 405,
+      "type": "table",
+      "title": "Recent Sentry Issues",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 105,
+        "w": 24,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "filterable": true
+          }
+        }
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "created_at",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT TO_CHAR(created_at,'YYYY-MM-DD HH24:MI') AS created_at, level, title, project, count, status FROM sentry_issues ORDER BY created_at DESC LIMIT 30",
+          "refId": "A",
+          "interval": "30s"
+        }
+      ]
+    },
+    {
+      "id": 510,
+      "type": "stat",
+      "title": "Neo4j Bolt Latency",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 150,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "rate(neo4j_bolt_accumulated_processing_time_total[1m]) * 1000",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 511,
+      "type": "stat",
+      "title": "Neo4j Open Connections",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 150,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "neo4j_bolt_connections_opened_total - neo4j_bolt_connections_closed_total",
+          "legendFormat": "",
+          "refId": "A",
+          "interval": "10s"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 512,
+      "type": "timeseries",
+      "title": "Neo4j Transactions / min",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 150,
+        "w": 12,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "rate(neo4j_transaction_started_total[1m]) * 60",
+          "legendFormat": "started/min",
+          "refId": "A",
+          "interval": "15s"
+        },
+        {
+          "expr": "rate(neo4j_transaction_committed_total[1m]) * 60",
+          "legendFormat": "committed/min",
+          "refId": "B",
+          "interval": "15s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 8
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 520,
+      "type": "logs",
+      "title": "Neo4j Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 154,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\",container_name=\"ai-neo4j\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 521,
+      "type": "logs",
+      "title": "Qdrant / Vector DB Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 154,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\",container_name=\"ai-qdrant\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 601,
+      "type": "logs",
+      "title": "Mesh Agent Gateway Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 171,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\"} |= \"agent\" |~ \"gateway|mesh_agent|ws/agent\"",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 602,
+      "type": "logs",
+      "title": "Reddit / RMM Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 180,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\"} |~ \"reddit|rmm|meshcentral\" | json",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 1200,
+      "type": "row",
+      "title": "Reddit Feed Activity",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 277,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 1201,
+      "type": "stat",
+      "title": "Active Reddit Schedules",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 278,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE source='reddit-schedule' AND status NOT IN ('done','cancelled')",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#fb923c",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#fb923c",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 1202,
+      "type": "stat",
+      "title": "Digests Sent (7d)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 278,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM ai_milestones WHERE action LIKE 'reddit%' AND triggered_at > NOW() - INTERVAL '7 days'",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#86efac",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#86efac",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 1203,
+      "type": "stat",
+      "title": "Reddit Tasks Today",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 278,
+        "w": 8,
+        "h": 3
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE source='reddit-triage' AND created_at > NOW() - INTERVAL '24 hours'",
+          "refId": "A",
+          "interval": "15s"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixedColor": "#a78bfa",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#a78bfa",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 1210,
+      "type": "logs",
+      "title": "Reddit Skill Logs (Live)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 281,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "expr": "{job=\"docker\",container_name=\"ai-brain\"} |~ \"(?i)reddit\"",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 1211,
+      "type": "table",
+      "title": "Reddit Milestones (last 20)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 281,
+        "w": 12,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "filterable": true
+          }
+        }
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "triggered_at",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "postgres"
+          },
+          "format": "table",
+          "rawSql": "SELECT TO_CHAR(triggered_at,'YYYY-MM-DD HH24:MI') AS triggered_at, action, intent, summary, agent FROM ai_milestones WHERE action LIKE 'reddit%' OR intent LIKE 'reddit%' ORDER BY triggered_at DESC LIMIT 20",
+          "refId": "A",
+          "interval": "60s"
         }
       ]
     }
