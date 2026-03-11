@@ -22,6 +22,7 @@ Intents:
   knowledge_graph  — query or update the personal knowledge graph (projects, repos, servers, clients, ideas)
   rmm_read         — list managed servers, check device status/health, show RMM events or incidents
   rmm_manage       — run commands on remote servers, restart services/containers, install or upgrade agents, reboot servers
+  agent_exec       — execute a local command ON a remote Sentinel Mesh Agent (shell, logs, files, process, disk, restart)
   slack_read       — read messages from a Slack channel, search Slack, list channels, fetch DMs
   reddit_read      — fetch and AI-summarize top posts from a subreddit; post digest to sentinel-reddit
   reddit_schedule  — manage recurring Reddit digest schedules (add, list, remove, pause, resume)
@@ -133,6 +134,18 @@ Intent-specific param examples:
   remote_log_analysis: {{"agent_id": "", "error_event": {{"stack_trace": "", "context_lines": [], "file_paths": []}}}}
   patch_dispatch: {{"agent_id": "", "diff_text": "", "triggered_by": "manual" | "log_error" | "sentry", "files_changed": []}}
   cross_agent_query: {{"query": "search term", "namespace_filter": "all" | "<agent_id>" | "<app_name>"}}
+  agent_exec:     Execute a command ON a remote agent's server. Use when [AGENT CONTEXT] is present OR user says "on agent X" / "on the remote server".
+                  {{"agent_id": "<from AGENT CONTEXT or user>", "command": "shell" | "read_logs" | "process_status" | "disk_usage" | "restart_app" | "read_file" | "list_files" | "write_file" | "env_info", "args": {{
+                    "cmd": "shell command to run",
+                    "lines": 100,
+                    "path": "/path/to/file",
+                    "content": "file content for write_file",
+                    "append": false,
+                    "recursive": false,
+                    "pattern": "*.py",
+                    "force": false,
+                    "approved": false
+                  }}}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}

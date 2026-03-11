@@ -85,9 +85,19 @@ class ProvisionRequest(BaseModel):
 
 
 class AgentCommandRequest(BaseModel):
-    command: str                  # read_logs | process_status | disk_usage | shell | restart_app
+    command: str                  # shell | read_logs | process_status | disk_usage | restart_app | read_file | list_files | write_file | env_info
     args: dict = {}
     timeout_secs: int = 30
+
+
+class AgentChatRequest(BaseModel):
+    message: str
+    session_id: str = ""          # defaults to "agent:{agent_id}"
+
+
+class AgentTaskRequest(BaseModel):
+    description: str              # natural language task description
+    autonomous: bool = True       # if False, requires step-by-step confirmation
 
 
 # ── REST endpoints ─────────────────────────────────────────────────────────────
@@ -292,6 +302,101 @@ async def get_agent_response(agent_id: str, correlation_id: str):
         await redis.aclose()
 
     raise HTTPException(status_code=404, detail="expired")
+
+
+@router.post("/{agent_id}/chat")
+async def agent_chat(agent_id: str, req: AgentChatRequest):
+    """
+    Chat with a mesh agent using the full Brain Dispatcher pipeline.
+
+    The agent's live context (heartbeat metrics, patches, env) is injected
+    into the session automatically so every Brain skill has full awareness
+    of the remote agent. Responses use all 50+ registered skills, including
+    AgentExecSkill which relays commands back to the agent's server as needed.
+    """
+    from app.brain.dispatcher import Dispatcher
+
+    agent = await asyncio.to_thread(
+        postgres.execute_one,
+        "SELECT app_name, hostname, sentinel_env, git_sha, is_connected, "
+        "       last_seen, last_heartbeat, agent_version "
+        "FROM mesh_agents WHERE agent_id = %s AND is_revoked = FALSE",
+        (agent_id,),
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Build rich context block prepended to every message
+    hb = agent.get("last_heartbeat") or {}
+    if isinstance(hb, str):
+        try:
+            import json as _json
+            hb = _json.loads(hb)
+        except Exception:
+            hb = {}
+
+    status = "ONLINE" if agent["is_connected"] else "OFFLINE"
+    last_seen = str(agent.get("last_seen", "unknown"))
+    context_block = (
+        f"[AGENT CONTEXT]\n"
+        f"agent_id: {agent_id}\n"
+        f"app_name: {agent['app_name']} | env: {agent['sentinel_env']} | status: {status}\n"
+        f"hostname: {agent.get('hostname', 'unknown')} | git_sha: {agent.get('git_sha', 'unknown')}\n"
+        f"version: {agent.get('agent_version', 'unknown')} | last_seen: {last_seen}\n"
+        f"process_up: {hb.get('process_up', 'unknown')} | "
+        f"cpu: {hb.get('cpu_pct', '?')}% | mem: {hb.get('mem_pct', '?')}% | disk: {hb.get('disk_pct', '?')}%\n"
+        f"http_status: {hb.get('http_status', 'unknown')}\n"
+        f"[/AGENT CONTEXT]\n\n"
+        f"{req.message}"
+    )
+
+    session_id = req.session_id.strip() or f"agent:{agent_id}"
+
+    dispatch = Dispatcher()
+    try:
+        result = await dispatch.process(context_block, session_id)
+    except Exception as exc:
+        logger.error("Agent chat dispatch failed agent={}: {}", agent_id, exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "reply": result.reply,
+        "intent": result.intent,
+        "agent": result.agent,
+        "session_id": result.session_id,
+        "agent_id": agent_id,
+        "app_name": agent["app_name"],
+    }
+
+
+@router.post("/{agent_id}/task")
+async def agent_task(agent_id: str, req: AgentTaskRequest):
+    """
+    Dispatch an autonomous multi-step task to be handled by the Brain.
+
+    Brain uses its full skill set + AgentExecSkill to complete the task
+    without requiring step-by-step user interaction. Task progress is
+    reported to Slack and can be polled via the task board.
+    """
+    agent = await asyncio.to_thread(
+        postgres.execute_one,
+        "SELECT app_name, sentinel_env FROM mesh_agents WHERE agent_id = %s AND is_revoked = FALSE",
+        (agent_id,),
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    from app.worker.agent_tasks import run_agent_task
+    task_data = run_agent_task.delay(agent_id, agent["app_name"], agent["sentinel_env"], req.description)
+
+    logger.info("Autonomous task queued | agent={} app={}", agent_id, agent["app_name"])
+    return {
+        "status": "queued",
+        "celery_task_id": task_data.id,
+        "agent_id": agent_id,
+        "app_name": agent["app_name"],
+        "description": req.description,
+    }
 
 
 # ── WebSocket endpoint ─────────────────────────────────────────────────────────

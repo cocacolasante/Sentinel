@@ -295,6 +295,88 @@ def _handle_resource_alert(agent_id: str, msg: dict, payload: dict):
         logger.warning("Slack resource alert failed: {}", e)
 
 
+# ── Task: autonomous agent task execution ─────────────────────────────────────
+
+@shared_task(name="app.worker.agent_tasks.run_agent_task", bind=True, max_retries=0)
+def run_agent_task(self, agent_id: str, app_name: str, sentinel_env: str, description: str):
+    """
+    Execute an autonomous multi-step task on behalf of a mesh agent.
+
+    Routes the task through the full Brain Dispatcher (all skills available)
+    with agent context injected. Brain handles planning + execution including
+    remote commands via AgentExecSkill. Reports progress to Slack.
+    """
+    import asyncio
+    from app.brain.dispatcher import Dispatcher
+
+    redis = _get_redis_sync()
+    task_key = f"sentinel:agent:task:{agent_id}:{self.request.id}"
+    redis.set(task_key, json.dumps({"status": "running", "description": description}), ex=3600)
+    redis.close()
+
+    # Notify Slack
+    try:
+        post_alert_sync(
+            f"🤖 *Autonomous Task Started*\n"
+            f"app=`{app_name}` | env={sentinel_env}\n"
+            f"task_id=`{self.request.id}`\n"
+            f"```{description[:500]}```",
+            settings.slack_agents_channel,
+        )
+    except Exception:
+        pass
+
+    # Build the full autonomous task prompt with agent context
+    autonomous_prompt = (
+        f"[AGENT CONTEXT]\n"
+        f"agent_id: {agent_id}\n"
+        f"app_name: {app_name} | env: {sentinel_env}\n"
+        f"[/AGENT CONTEXT]\n\n"
+        f"[AUTONOMOUS TASK — complete fully without pausing for confirmation]\n"
+        f"{description}\n"
+        f"[/AUTONOMOUS TASK]\n\n"
+        f"Work through this task step by step using all available skills. "
+        f"For operations that need to run on the remote agent server, use agent_exec. "
+        f"For code changes, use repo_write and repo_commit. "
+        f"Complete the full task and report what was done."
+    )
+
+    session_id = f"agent:{agent_id}:task:{self.request.id}"
+
+    async def _run():
+        dispatch = Dispatcher()
+        return await dispatch.process(autonomous_prompt, session_id)
+
+    try:
+        result = asyncio.run(_run())
+        reply = result.reply
+        status = "completed"
+    except Exception as exc:
+        reply = f"Task failed: {exc}"
+        status = "failed"
+        logger.error("Autonomous task failed agent={}: {}", agent_id, exc)
+
+    # Update Redis status
+    redis = _get_redis_sync()
+    redis.set(task_key, json.dumps({"status": status, "description": description, "result": reply[:500]}), ex=3600)
+    redis.close()
+
+    # Final Slack report
+    icon = "✅" if status == "completed" else "❌"
+    try:
+        post_alert_sync(
+            f"{icon} *Autonomous Task {status.title()}* | `{app_name}`\n"
+            f"task_id=`{self.request.id}`\n"
+            f"```{reply[:800]}```",
+            settings.slack_agents_channel,
+        )
+    except Exception:
+        pass
+
+    logger.info("Autonomous task {} | agent={} status={}", self.request.id, agent_id, status)
+    return {"status": status, "reply": reply}
+
+
 # ── Task: heartbeat purge ──────────────────────────────────────────────────────
 
 @shared_task(name="app.worker.agent_tasks.purge_old_heartbeats")

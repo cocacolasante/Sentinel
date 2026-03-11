@@ -179,11 +179,13 @@ def _build_skill_registry():
     from app.skills.remote_log_skill import RemoteLogSkill
     from app.skills.patch_dispatch_skill import PatchDispatchSkill
     from app.skills.cross_agent_context import CrossAgentContextSkill
+    from app.skills.agent_exec_skill import AgentExecSkill
     reg.register(AgentRegistrySkill())
     reg.register(AgentManageSkill())
     reg.register(RemoteLogSkill())
     reg.register(PatchDispatchSkill())
     reg.register(CrossAgentContextSkill())
+    reg.register(AgentExecSkill())
 
     # ── Auto-register dynamically-discovered skills ──────────────────────────
     # Any skill module written by the self-teaching pipeline that is not already
