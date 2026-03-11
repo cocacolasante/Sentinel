@@ -95,10 +95,6 @@ frontend_worker:
       min_period: 100ms
       max_period: 10s
       max_retries: 10
-    keepalive_params:
-      keepalive_time: 10s
-      keepalive_timeout: 3s
-      permit_without_stream: true
 query_range:
   parallelise_shardable_queries: false
   cache_results: true
@@ -114,20 +110,3 @@ table_manager:
   retention_period: 0s
 query_scheduler:
   max_outstanding_requests_per_tenant: 100
-query_frontend:
-  grpc_client_config:
-    grpc_compression: gzip
-    max_recv_msg_size: 104857600
-    max_send_msg_size: 104857600
-    rate_limit: 0
-    rate_limit_burst: 0
-    backoff_config:
-      min_period: 100ms
-      max_period: 10s
-      max_retries: 10
-    tls_enabled: false
-    tls_insecure_skip_verify: false
-    keepalive_config:
-      client_interval: 30s
-      client_timeout: 10s
-      num_streams: 100
