@@ -37,6 +37,7 @@ celery_app = Celery(
         "app.worker.reddit_tasks",
         "app.worker.agent_tasks",
         "app.worker.self_heal",
+        "app.worker.github_tasks",
     ],
 )
 
@@ -168,6 +169,12 @@ celery_app.conf.beat_schedule = {
     "agent-heartbeat-purge": {
         "task": "app.worker.agent_tasks.purge_old_heartbeats",
         "schedule": crontab(hour=3, minute=0),
+        "options": {"queue": "celery"},
+    },
+    # Every 30 min — fetch open GitHub issues for monitored repos, create triage tasks
+    "github-issue-poll": {
+        "task": "app.worker.github_tasks.ingest_and_triage_github_issues",
+        "schedule": crontab(minute="*/30"),
         "options": {"queue": "celery"},
     },
 }

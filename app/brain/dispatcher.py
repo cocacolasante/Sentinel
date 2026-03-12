@@ -70,7 +70,7 @@ def _build_skill_registry():
     from app.skills.chat_skill import ChatSkill
     from app.skills.gmail_skill import GmailReadSkill, GmailSendSkill
     from app.skills.calendar_skill import CalendarReadSkill, CalendarWriteSkill
-    from app.skills.github_skill import GitHubReadSkill, GitHubWriteSkill
+    from app.skills.github_skill import GitHubReadSkill, GitHubWriteSkill, GitHubMonitorSkill
     from app.skills.smart_home_skill import SmartHomeSkill
     from app.skills.n8n_skill import N8nSkill
     from app.skills.research_skill import ResearchSkill
@@ -115,6 +115,7 @@ def _build_skill_registry():
     # GitHub
     reg.register(GitHubReadSkill())
     reg.register(GitHubWriteSkill())
+    reg.register(GitHubMonitorSkill())
     # Smart home
     reg.register(SmartHomeSkill())
     # n8n
@@ -524,6 +525,20 @@ class Dispatcher:
                 agent=agent.name if agent else "default",
             )
         except Exception as exc:
+            # Anthropic 400 (e.g. credit balance exhausted) — return a friendly message, don't 502
+            exc_str = str(exc)
+            if "400" in exc_str and ("credit" in exc_str.lower() or "invalid_request_error" in exc_str.lower()):
+                logger.warning("Anthropic API rejected LLM call (session={}): {}", session_id, exc)
+                return DispatchResult(
+                    reply=(
+                        "⚠️ I'm temporarily unavailable — the Anthropic API rejected the request "
+                        "(credit balance or request error). Please check your API key / billing at "
+                        "console.anthropic.com."
+                    ),
+                    intent=intent,
+                    session_id=session_id,
+                    agent=agent.name if agent else "default",
+                )
             _capture_error(
                 exc, context={"intent": intent, "agent": agent.name if agent else "default", "session_id": session_id}
             )

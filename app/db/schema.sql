@@ -367,3 +367,43 @@ CREATE TABLE IF NOT EXISTS mesh_chat_commands (
     responded_at    TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_mesh_chat_agent ON mesh_chat_commands (agent_id, created_at DESC);
+
+-- ── GitHub Issue Monitor tables ────────────────────────────────────────────────
+
+-- GitHub repo monitors — which repos Brain/agents are watching
+CREATE TABLE IF NOT EXISTS github_repo_monitors (
+    id              BIGSERIAL   PRIMARY KEY,
+    repo            TEXT        NOT NULL UNIQUE,   -- "owner/repo"
+    label           TEXT,
+    enabled         BOOLEAN     NOT NULL DEFAULT TRUE,
+    agent_id        UUID        REFERENCES mesh_agents(agent_id) ON DELETE SET NULL,
+    issue_filter    TEXT        NOT NULL DEFAULT 'is:open is:issue',
+    poll_labels     TEXT,                           -- comma-sep label filter
+    last_polled_at  TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_github_monitors_agent   ON github_repo_monitors (agent_id);
+CREATE INDEX IF NOT EXISTS idx_github_monitors_enabled ON github_repo_monitors (enabled);
+
+-- Tracked GitHub issues
+CREATE TABLE IF NOT EXISTS github_issues (
+    id              BIGSERIAL   PRIMARY KEY,
+    repo            TEXT        NOT NULL,
+    issue_number    INTEGER     NOT NULL,
+    issue_id        TEXT        NOT NULL,
+    title           TEXT,
+    state           TEXT        NOT NULL DEFAULT 'open',
+    labels          TEXT,
+    body_excerpt    TEXT,
+    task_id         BIGINT      REFERENCES tasks(id) ON DELETE SET NULL,
+    triage_status   TEXT        NOT NULL DEFAULT 'pending'
+                                CHECK (triage_status IN ('pending','investigating','patched','commented','skipped','failed')),
+    pr_url          TEXT,
+    received_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(repo, issue_number)
+);
+CREATE INDEX IF NOT EXISTS idx_github_issues_repo    ON github_issues (repo, received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_github_issues_status  ON github_issues (triage_status, received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_github_issues_task    ON github_issues (task_id);

@@ -213,6 +213,10 @@ class Settings(BaseSettings):
     slack_rmm_prod_channel: str = "rmm-production"
     slack_rmm_dev_channel: str = "rmm-dev-staging"
 
+    # ── GitHub Issue Monitor ─────────────────────────────────────
+    slack_github_channel: str = "sentinel-github"
+    github_issue_poll_limit: int = 20   # max issues per repo per poll
+
     # ── Reddit news feed ────────────────────────────────────────
     slack_reddit_channel: str = "sentinel-reddit"
     reddit_user_agent: str = "sentinel-ai-brain/1.0 (by /u/sentinel_ai)"
