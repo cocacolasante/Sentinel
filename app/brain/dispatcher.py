@@ -23,12 +23,15 @@ from dataclasses import dataclass
 
 from loguru import logger
 
+from fastapi import HTTPException
+
 from app.brain.cost_tracker import BudgetExceeded
 from app.brain.intent import IntentClassifier
 from app.brain.llm_router import LLMRouter
 from app.brain.rate_limiter import RateLimitExceeded, rate_limiter
 from app.config import get_settings
 from app.observability.event_bus import event_bus
+import anthropic
 
 settings = get_settings()
 

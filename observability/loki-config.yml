@@ -10,8 +10,10 @@ server:
   grpc_server_min_time_between_pings: 10s
   grpc_server_ping_without_stream_allowed: true
   grpc_server_max_concurrent_streams: 200
-  http_server_read_timeout: 30s
-  http_server_write_timeout: 30s
+  http_server_read_timeout: 60s
+  http_server_write_timeout: 60s
+  grpc_server_max_recv_msg_size: 104857600
+  grpc_server_max_send_msg_size: 104857600
 common:
   path_prefix: /loki
   storage:
@@ -40,11 +42,11 @@ schema_config:
       prefix: index_
       period: 24h
   - from: 2026-03-05
-    store: boltdb-shipper
+    store: tsdb
     object_store: filesystem
-    schema: v11
+    schema: v13
     index:
-      prefix: index_
+      prefix: tsdb_index_
       period: 24h
   - from: 2026-03-12
     store: tsdb
@@ -102,14 +104,25 @@ frontend_worker:
       min_period: 100ms
       max_period: 10s
       max_retries: 10
+frontend:
+  max_outstanding_requests_per_tenant: 100
+  grpc_client_config:
+    max_recv_msg_size: 104857600
+    max_send_msg_size: 104857600
+    grpc_compression: gzip
+    backoff_on_ratelimits: false
+    backoff_config:
+      min_period: 100ms
+      max_period: 10s
+      max_retries: 10
 query_range:
   parallelise_shardable_queries: false
   cache_results: true
   max_retries: 5
 querier:
   engine:
-    timeout: 5m
-  max_concurrent: 20
+    timeout: 10m
+  max_concurrent: 50
 chunk_store_config:
   max_look_back_period: 0s
 table_manager:

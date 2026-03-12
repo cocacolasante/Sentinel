@@ -22,6 +22,7 @@ from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wai
 from app.brain.cost_tracker import BudgetExceeded, cost_tracker
 from app.config import get_settings
 from app.telos.loader import TelosLoader
+import anthropic
 
 settings = get_settings()
 
