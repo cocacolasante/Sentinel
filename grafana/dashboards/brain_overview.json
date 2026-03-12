@@ -3705,7 +3705,7 @@
             "uid": "postgres"
           },
           "format": "table",
-          "rawSql": "SELECT COUNT(*) AS value FROM sentry_issues WHERE status='resolved' AND updated_at > NOW() - INTERVAL '24 hours'",
+          "rawSql": "SELECT COUNT(*) AS value FROM sentry_issues WHERE status='resolved' AND received_at > NOW() - INTERVAL '24 hours'",
           "refId": "A",
           "interval": "15s"
         }
@@ -3882,7 +3882,7 @@
             "uid": "postgres"
           },
           "format": "table",
-          "rawSql": "SELECT TO_CHAR(created_at,'YYYY-MM-DD HH24:MI') AS created_at, level, title, project, count, status FROM sentry_issues ORDER BY created_at DESC LIMIT 30",
+          "rawSql": "SELECT TO_CHAR(received_at,'YYYY-MM-DD HH24:MI') AS received_at, level, title, project, count, status FROM sentry_issues ORDER BY received_at DESC LIMIT 30",
           "refId": "A",
           "interval": "30s"
         }
@@ -4396,6 +4396,141 @@
           "rawSql": "SELECT TO_CHAR(triggered_at,'YYYY-MM-DD HH24:MI') AS triggered_at, action, intent, detail->>'subreddit' AS subreddit, summary, agent FROM ai_milestones WHERE action='reddit_digest' OR intent LIKE 'reddit%' ORDER BY triggered_at DESC LIMIT 20",
           "refId": "A",
           "interval": "60s"
+        }
+      ]
+    },
+    {
+      "id": 1300,
+      "type": "row",
+      "title": "GitHub Issue Monitor",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 292, "w": 24, "h": 1 }
+    },
+    {
+      "id": 1301,
+      "type": "stat",
+      "title": "Active Repo Monitors",
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "gridPos": { "x": 0, "y": 293, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "postgres" },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM github_repo_monitors WHERE enabled = TRUE",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 1302,
+      "type": "stat",
+      "title": "Open Issues Tracked",
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "gridPos": { "x": 4, "y": 293, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "postgres" },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM github_issues WHERE state = 'open'",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 1303,
+      "type": "stat",
+      "title": "Issues Patched (7d)",
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "gridPos": { "x": 8, "y": 293, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "postgres" },
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM github_issues WHERE triage_status = 'patched' AND updated_at > NOW() - INTERVAL '7 days'",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 1310,
+      "type": "table",
+      "title": "Repo Monitor Assignments",
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "gridPos": { "x": 0, "y": 297, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "custom": { "filterable": true } }
+      },
+      "options": {
+        "sortBy": [{ "displayName": "repo", "desc": false }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "postgres" },
+          "format": "table",
+          "rawSql": "SELECT g.repo, g.label, g.enabled, m.app_name AS agent, m.hostname, TO_CHAR(g.last_polled_at,'MM-DD HH24:MI') AS last_polled FROM github_repo_monitors g LEFT JOIN mesh_agents m ON g.agent_id = m.agent_id ORDER BY g.repo",
+          "refId": "A",
+          "interval": "60s"
+        }
+      ]
+    },
+    {
+      "id": 1311,
+      "type": "table",
+      "title": "Recent GitHub Issue Activity",
+      "datasource": { "type": "postgres", "uid": "postgres" },
+      "gridPos": { "x": 12, "y": 297, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "custom": { "filterable": true } }
+      },
+      "options": {
+        "sortBy": [{ "displayName": "received", "desc": true }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "postgres" },
+          "format": "table",
+          "rawSql": "SELECT TO_CHAR(gi.received_at,'MM-DD HH24:MI') AS received, gi.repo, gi.issue_number, LEFT(gi.title, 60) AS title, gi.triage_status, gi.pr_url FROM github_issues gi ORDER BY gi.received_at DESC LIMIT 20",
+          "refId": "A",
+          "interval": "60s"
+        }
+      ]
+    },
+    {
+      "id": 1320,
+      "type": "logs",
+      "title": "GitHub Triage Logs (Live)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "x": 0, "y": 305, "w": 24, "h": 8 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{job=\"docker\",container_name=\"ai-brain\"} |~ \"(?i)github.triage|github_tasks\"",
+          "refId": "A"
         }
       ]
     }

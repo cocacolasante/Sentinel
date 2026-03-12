@@ -64,9 +64,9 @@ def check_agent_heartbeats():
             stale = cur.fetchall()
 
             if stale:
-                agent_ids = [row[0] for row in stale]
+                agent_ids = [str(row[0]) for row in stale]
                 cur.execute(
-                    "UPDATE mesh_agents SET is_connected = FALSE WHERE agent_id = ANY(%s)",
+                    "UPDATE mesh_agents SET is_connected = FALSE WHERE agent_id = ANY(%s::uuid[])",
                     (agent_ids,),
                 )
                 conn.commit()
