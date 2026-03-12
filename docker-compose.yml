@@ -121,7 +121,7 @@ services:
       # Allows MeshCentral to load certUrl (https://sentinelai.cloud/rmm/)
       # from inside Docker so it embeds the correct Let's Encrypt cert hash
       # in .msh agent packages. Uses nginx container on brain-net.
-      - "sentinelai.cloud:172.18.0.23"
+      - "sentinelai.cloud:172.19.0.100"
     networks:
       - brain-net
 
@@ -179,7 +179,8 @@ services:
       - flower
       - grafana
     networks:
-      - brain-net
+      brain-net:
+        ipv4_address: 172.19.0.100
 
   # ── Certbot (Let's Encrypt SSL — auto-renewal) ────────────────
   certbot:
@@ -473,6 +474,9 @@ services:
 networks:
   brain-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
 
 volumes:
   postgres-data:
