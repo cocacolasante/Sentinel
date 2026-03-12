@@ -146,6 +146,7 @@ from app.router.milestones import router as milestones_router  # noqa: E402
 from app.router.graph import router as graph_router  # noqa: E402
 from app.router.github_webhook import router as github_webhook_router  # noqa: E402
 from app.router.agent_gateway import router as agent_router, ws_router as agent_ws_router  # noqa: E402
+from app.router.reddit import router as reddit_router  # noqa: E402
 from app.services.error_api import router as error_api_router  # noqa: E402
 from app.services.error_middleware import ErrorCollectionMiddleware  # noqa: E402
 from app.router.slack import start_socket_mode  # noqa: E402
@@ -259,6 +260,7 @@ app.include_router(error_api_router, prefix="/api/v1", tags=["errors"])
 app.include_router(github_webhook_router, prefix="/api/v1", tags=["github"])
 app.include_router(agent_router, prefix="/api/v1", tags=["mesh-agents"])
 app.include_router(agent_ws_router, tags=["mesh-agents-ws"])
+app.include_router(reddit_router, prefix="/api/v1", tags=["reddit"])
 app.add_middleware(ErrorCollectionMiddleware)
 
 

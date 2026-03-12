@@ -4169,7 +4169,7 @@
     {
       "id": 1201,
       "type": "stat",
-      "title": "Active Reddit Schedules",
+      "title": "Active Subreddits (30d)",
       "datasource": {
         "type": "postgres",
         "uid": "postgres"
@@ -4187,9 +4187,9 @@
             "uid": "postgres"
           },
           "format": "table",
-          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE source='reddit-schedule' AND status NOT IN ('done','cancelled')",
+          "rawSql": "SELECT COUNT(DISTINCT detail->>'subreddit') AS value FROM ai_milestones WHERE action='reddit_digest' AND triggered_at > NOW() - INTERVAL '30 days'",
           "refId": "A",
-          "interval": "15s"
+          "interval": "60s"
         }
       ],
       "options": {
@@ -4241,7 +4241,7 @@
             "uid": "postgres"
           },
           "format": "table",
-          "rawSql": "SELECT COUNT(*) AS value FROM ai_milestones WHERE action LIKE 'reddit%' AND triggered_at > NOW() - INTERVAL '7 days'",
+          "rawSql": "SELECT COUNT(*) AS value FROM ai_milestones WHERE action='reddit_digest' AND triggered_at > NOW() - INTERVAL '7 days'",
           "refId": "A",
           "interval": "15s"
         }
@@ -4277,7 +4277,7 @@
     {
       "id": 1203,
       "type": "stat",
-      "title": "Reddit Tasks Today",
+      "title": "Digests Today",
       "datasource": {
         "type": "postgres",
         "uid": "postgres"
@@ -4295,7 +4295,7 @@
             "uid": "postgres"
           },
           "format": "table",
-          "rawSql": "SELECT COUNT(*) AS value FROM tasks WHERE source='reddit-triage' AND created_at > NOW() - INTERVAL '24 hours'",
+          "rawSql": "SELECT COUNT(*) AS value FROM ai_milestones WHERE action='reddit_digest' AND triggered_at > NOW() - INTERVAL '24 hours'",
           "refId": "A",
           "interval": "15s"
         }
@@ -4393,7 +4393,7 @@
             "uid": "postgres"
           },
           "format": "table",
-          "rawSql": "SELECT TO_CHAR(triggered_at,'YYYY-MM-DD HH24:MI') AS triggered_at, action, intent, summary, agent FROM ai_milestones WHERE action LIKE 'reddit%' OR intent LIKE 'reddit%' ORDER BY triggered_at DESC LIMIT 20",
+          "rawSql": "SELECT TO_CHAR(triggered_at,'YYYY-MM-DD HH24:MI') AS triggered_at, action, intent, detail->>'subreddit' AS subreddit, summary, agent FROM ai_milestones WHERE action='reddit_digest' OR intent LIKE 'reddit%' ORDER BY triggered_at DESC LIMIT 20",
           "refId": "A",
           "interval": "60s"
         }

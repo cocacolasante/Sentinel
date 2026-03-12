@@ -182,6 +182,28 @@ class GitHubClient:
         r.raise_for_status()
         return {"triggered": True, "repo": repo, "workflow": workflow_id, "ref": ref}
 
+    async def create_pr(
+        self,
+        repo: str,
+        title: str,
+        body: str = "",
+        head: str = "",
+        base: str = "main",
+    ) -> dict:
+        """Create a pull request."""
+        if not repo:
+            repo = settings.github_default_repo
+        data = await self._post(
+            f"/repos/{repo}/pulls",
+            json={"title": title, "body": body, "head": head, "base": base},
+        )
+        return {
+            "number": data.get("number"),
+            "title": data.get("title"),
+            "url": data.get("html_url"),
+            "state": data.get("state"),
+        }
+
     async def list_repos(self, per_page: int = 30) -> list[dict]:
         data = await self._get("/user/repos", params={"per_page": per_page, "sort": "updated"})
         return [
