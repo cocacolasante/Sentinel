@@ -26,6 +26,7 @@ Intents:
   slack_read       — read messages from a Slack channel, search Slack, list channels, fetch DMs
   reddit_read      — fetch and AI-summarize top posts from a subreddit; post digest to sentinel-reddit
   reddit_schedule  — manage recurring Reddit digest schedules (add, list, remove, pause, resume)
+  github_monitor   — add, remove, list, enable, disable, or assign GitHub repo monitors for issue auto-triage
   chat             — general reasoning / writing / coding (no external action)
   arch_advisor     — analyse system architecture and produce an evolution report
   data_intelligence — analyze time series data, detect anomalies, discover patterns across systems
@@ -129,6 +130,9 @@ Intent-specific param examples:
   slack_read:     {{"action": "history" | "search" | "list_channels" | "dm_history", "channel": "sentinel-alerts", "query": "search term", "user": "username", "limit": 20}}
   reddit_read:    {{"subreddit": "python", "limit": 10, "time_filter": "day" | "week" | "month" | "year" | "all", "channel": "sentinel-reddit"}}
   reddit_schedule: {{"action": "add" | "list" | "remove" | "pause" | "resume", "subreddit": "worldnews", "cron": "0 8 * * *", "channel": "sentinel-reddit", "time_filter": "day", "limit": 10, "id": ""}}
+  github_monitor: {{"action": "add" | "remove" | "list" | "assign" | "enable" | "disable",
+                   "repo": "owner/repo", "agent_id": "uuid", "label": "my-app",
+                   "issue_filter": "is:open label:bug", "poll_labels": "bug,enhancement"}}
   agent_registry: {{"action": "list" | "get" | "fleet_summary" | "health", "agent_id": "", "env": "staging" | "production", "connected": true | false}}
   agent_manage:   {{"action": "provision" | "revoke" | "dispatch_patch", "agent_id": "", "app_name": "", "sentinel_env": "staging", "hostname": "", "diff_text": ""}}
   remote_log_analysis: {{"agent_id": "", "error_event": {{"stack_trace": "", "context_lines": [], "file_paths": []}}}}
@@ -269,6 +273,12 @@ Routing guidance:
   - "remove Reddit schedule for r/X", "delete Reddit digest for r/X" → reddit_schedule with action=remove, subreddit=X
   - "pause Reddit digest for r/X" → reddit_schedule with action=pause, subreddit=X
   - "resume Reddit digest for r/X" → reddit_schedule with action=resume, subreddit=X
+  - "start monitoring repo X", "watch repo X", "monitor repo X", "add repo monitor X" → github_monitor action=add, repo=X
+  - "stop monitoring repo X", "unwatch repo X", "remove repo monitor X" → github_monitor action=remove, repo=X
+  - "assign repo X to agent Y" → github_monitor action=assign, repo=X, agent_id=Y
+  - "list monitored repos", "show github monitors", "what repos are monitored", "github monitor list" → github_monitor action=list
+  - "enable monitoring for X", "resume monitoring X" → github_monitor action=enable, repo=X
+  - "disable monitoring for X", "pause monitoring X" → github_monitor action=disable, repo=X
   - "traffic spike Tuesday", "Tuesday pattern", "weekly patterns", "day of week analysis" → data_intelligence with action=patterns, window=7d
   - "add project X", "add repo X", "add node X", "register project X" → knowledge_graph with action=add, label=<type>, name=X
   - "connect X to Y", "link X to Y", "X uses Y", "X runs on Y" → knowledge_graph with action=connect, from=X, to=Y, relationship=<inferred>
@@ -334,6 +344,7 @@ knowledge_graph — personal knowledge graph: add nodes (projects/repos/servers/
 slack_read      — read Slack channel history, search messages, list channels, fetch DMs; channels: sentinel-alerts, sentinel-evals, sentinel-milestones, rmm-production, rmm-dev-staging
 reddit_read     — fetch + AI-summarize top/hot posts from any subreddit; posts digest to sentinel-reddit Slack channel
 reddit_schedule — add, list, remove, pause, or resume recurring Reddit digest schedules (cron-based, stored in Redis)
+github_monitor  — add, remove, list, enable, disable, or assign GitHub repo monitors for issue auto-triage
 agent_registry   — list Sentinel Mesh Agents, fleet health, heartbeat status, connected agents
 agent_manage     — provision new agent, revoke credentials, dispatch manual patch
 remote_log_analysis — analyze error logs from remote agent, generate patch suggestion
