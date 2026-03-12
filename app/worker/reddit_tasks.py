@@ -86,6 +86,25 @@ async def _dispatch_all() -> dict:
         try:
             await _run_digest(schedule)
             dispatched += 1
+            # Log milestone so Grafana can track digest activity
+            try:
+                from app.integrations.milestone_logger import log_milestone
+
+                await log_milestone(
+                    action="reddit_digest",
+                    intent="reddit_read",
+                    params={
+                        "subreddit": schedule.get("subreddit", ""),
+                        "channel": schedule.get("channel", ""),
+                        "cron": schedule.get("cron", ""),
+                        "schedule_id": schedule.get("id", ""),
+                    },
+                    session_id="celery-reddit",
+                    original="",
+                    agent="celery",
+                )
+            except Exception as _ms_exc:
+                logger.debug("Reddit milestone log skipped: %s", _ms_exc)
         except Exception as exc:
             logger.error(
                 "Reddit digest failed for r/%s: %s",

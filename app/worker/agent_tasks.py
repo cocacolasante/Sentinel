@@ -14,7 +14,6 @@ import json
 import time
 from datetime import datetime, timedelta, timezone
 
-import asyncpg
 import redis as sync_redis
 from celery import shared_task
 from loguru import logger

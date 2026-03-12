@@ -50,7 +50,7 @@ async def install_agents_on_server(
     host: str,
     app_name: str,
     sentinel_env: str = "staging",
-    username: str = "ubuntu",
+    username: str = "root",
 ) -> dict:
     """
     Install MeshCentral + Sentinel Mesh Agent on a remote server via SSH.

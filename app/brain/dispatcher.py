@@ -391,12 +391,32 @@ class Dispatcher:
             params["session_id"] = session_id  # lets background skills post back to Slack
             result = await skill.execute(params, message)
         except Exception as exc:
+            import traceback as _tb
+
             _capture_error(exc, context={"intent": intent, "skill": skill.name, "session_id": session_id})
             logger.error("Skill {} failed for intent {}: {}", skill.name, intent, exc)
             result_context = f"[Skill error — {skill.name} failed: {exc}. Inform the user gracefully.]"
             from app.skills.base import SkillResult
 
             result = SkillResult(context_data=result_context, skill_name=skill.name, is_error=True)
+
+            # Autonomously open a GitHub issue + attempt a self-heal patch
+            try:
+                from app.worker.self_heal import auto_heal_skill_error
+
+                auto_heal_skill_error.apply_async(
+                    kwargs={
+                        "skill_name": skill.name,
+                        "error_type": type(exc).__name__,
+                        "error_msg": str(exc)[:500],
+                        "tb": _tb.format_exc()[:4000],
+                        "original_message": message[:500],
+                        "session_id": session_id,
+                    },
+                    queue="tasks_general",
+                )
+            except Exception as _heal_exc:
+                logger.debug("Could not fire self-heal task: {}", _heal_exc)
 
         sk_latency = round((time.monotonic() - sk_t0) * 1000, 1)
         await event_bus.publish(
@@ -598,13 +618,24 @@ class Dispatcher:
         # Autonomy mode — tell the LLM it can act without asking for permission
         if settings.brain_autonomy:
             parts.append(
-                "[FULL AUTONOMY MODE] You have complete permission to execute any operation "
-                "directly — shell commands, git commits, git push, docker restart, file writes, "
-                "code changes, deploys, and all integrations. "
-                "Do NOT ask the user for confirmation. Do NOT say 'reply confirm to proceed'. "
-                "Execute operations immediately and report the results. "
-                "You have full access to all environment variables and configured integrations. "
-                "The live code is at /root/sentinel-workspace inside the container."
+                "[FULL AUTONOMY MODE — operate independently, no check-ins]\n"
+                "You have complete permission to execute ANY operation directly and immediately:\n"
+                "shell commands, git commits, git push, docker restart, file writes, code changes, "
+                "deploys, API calls, and all integrations.\n\n"
+                "RULES:\n"
+                "- NEVER say 'shall I?', 'would you like me to?', 'reply confirm to proceed', "
+                "or any variation that asks for permission. Just do it.\n"
+                "- NEVER ask the user to paste code or files — use server_shell to read them yourself.\n"
+                "- For complex multi-step prompts: decompose into subtasks, execute each one in sequence, "
+                "and post a Slack summary when complete. Do not wait for the user to check in.\n"
+                "- Post progress updates to Slack (sentinel-alerts) for long-running operations "
+                "so the owner stays informed without needing to ask.\n"
+                "- When you encounter an error: try to self-diagnose and fix it, then retry. "
+                "Only report to the user if you genuinely cannot proceed.\n"
+                "- Interpret ambiguous natural language as broadly as needed — infer the skill, "
+                "priority, and parameters yourself. Make reasonable assumptions.\n"
+                "- The live code is at /root/sentinel-workspace. You can read, edit, commit, and deploy it.\n"
+                "- All environment variables and integrations are configured and available."
             )
 
         # Cross-interface context — comes first so the LLM has full picture

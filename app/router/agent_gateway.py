@@ -545,11 +545,31 @@ async def agent_ws_endpoint(websocket: WebSocket, agent_id: str):
                     )
         except WebSocketDisconnect:
             pass
+        except asyncio.CancelledError:
+            pass
         except Exception as exc:
-            logger.error("Agent send error | id={} err={}", agent_id, exc)
+            # Silently drop "send after close" errors — these are expected when the
+            # recv loop exits first and we try to deliver a queued command.
+            err_str = str(exc)
+            if "websocket.send" in err_str or "websocket.close" in err_str or "response already completed" in err_str:
+                pass
+            else:
+                logger.error("Agent send error | id={} err={}", agent_id, exc)
 
     try:
-        await asyncio.gather(_recv_loop(), _send_loop())
+        recv_task = asyncio.create_task(_recv_loop())
+        send_task = asyncio.create_task(_send_loop())
+        # Cancel the sibling as soon as either loop exits (e.g. on disconnect)
+        done, pending = await asyncio.wait(
+            [recv_task, send_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
     finally:
         await redis.aclose()
         await asyncio.to_thread(

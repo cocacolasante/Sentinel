@@ -36,6 +36,7 @@ celery_app = Celery(
         "app.worker.rmm_tasks",
         "app.worker.reddit_tasks",
         "app.worker.agent_tasks",
+        "app.worker.self_heal",
     ],
 )
 
