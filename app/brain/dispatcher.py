@@ -67,7 +67,7 @@ def _build_skill_registry():
     from app.skills.chat_skill import ChatSkill
     from app.skills.gmail_skill import GmailReadSkill, GmailSendSkill
     from app.skills.calendar_skill import CalendarReadSkill, CalendarWriteSkill
-    from app.skills.github_skill import GitHubReadSkill, GitHubWriteSkill, GitHubMonitorSkill
+    from app.skills.github_skill import GitHubReadSkill, GitHubWriteSkill
     from app.skills.smart_home_skill import SmartHomeSkill
     from app.skills.n8n_skill import N8nSkill
     from app.skills.research_skill import ResearchSkill
@@ -112,7 +112,6 @@ def _build_skill_registry():
     # GitHub
     reg.register(GitHubReadSkill())
     reg.register(GitHubWriteSkill())
-    reg.register(GitHubMonitorSkill())
     # Smart home
     reg.register(SmartHomeSkill())
     # n8n
