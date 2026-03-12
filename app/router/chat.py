@@ -12,6 +12,7 @@ from app.brain.dispatcher import Dispatcher
 from app.brain.llm_router import get_telos_loader
 from app.config import get_settings
 from app.memory.redis_client import RedisMemory
+import anthropic
 
 router = APIRouter()
 dispatch = Dispatcher()
@@ -32,7 +33,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     session_id: str
-    intent: str
+    intent: str = ""
     agent: str = "default"
 
 
