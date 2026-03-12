@@ -40,11 +40,11 @@ schema_config:
       prefix: index_
       period: 24h
   - from: 2026-03-05
-    store: boltdb-shipper
+    store: tsdb
     object_store: filesystem
-    schema: v11
+    schema: v13
     index:
-      prefix: index_
+      prefix: tsdb_index_
       period: 24h
 storage_config:
   boltdb_shipper:
