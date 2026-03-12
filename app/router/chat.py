@@ -32,7 +32,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     session_id: str
-    intent: str
+    intent: str = ""
     agent: str = "default"
 
 
