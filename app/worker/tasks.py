@@ -350,7 +350,7 @@ def _touches_workspace(commands: list[str]) -> bool:
     return any("/root/sentinel-workspace" in (c or "") for c in commands)
 
 
-def _mark_task(task_id: int, status: str, error: str | None = None) -> None:
+def _mark_task(task_id: int, status: str, error: str | None = None, output: str | None = None) -> None:
     """Update a task board row status synchronously (safe from Celery).
 
     When status is 'done', also auto-enqueue any tasks whose blocked_by list
@@ -364,8 +364,8 @@ def _mark_task(task_id: int, status: str, error: str | None = None) -> None:
         # Clear celery_task_id on terminal states so tasks can be retried
         if status in ("done", "failed"):
             postgres.execute(
-                "UPDATE tasks SET status=%s, celery_task_id=NULL, updated_at=NOW() WHERE id=%s",
-                (status, task_id),
+                "UPDATE tasks SET status=%s, celery_task_id=NULL, updated_at=NOW(), output=COALESCE(%s, output) WHERE id=%s",
+                (status, (output or None), task_id),
             )
         else:
             postgres.execute(
@@ -459,7 +459,29 @@ def _unblock_dependents(completed_task_id: int) -> None:
                     )
                     continue
 
-            # All blockers done — enqueue if it has commands and approval_level == 1
+            # Inject output from completed blockers into this task's description
+            try:
+                output_rows = postgres.execute(
+                    "SELECT title, output FROM tasks WHERE id = ANY(%s) AND output IS NOT NULL AND output != ''",
+                    (blocker_ids,),
+                )
+                if output_rows:
+                    ctx = "\n\n".join(
+                        f"[Output from '{r['title']}']\n{(r.get('output') or '')[:800]}"
+                        for r in output_rows
+                        if r.get("output")
+                    )
+                    if ctx:
+                        dep_row = postgres.execute_one("SELECT description FROM tasks WHERE id=%s", (dep_id,))
+                        orig = (dep_row or {}).get("description") or ""
+                        postgres.execute(
+                            "UPDATE tasks SET description=%s WHERE id=%s",
+                            (f"[Context from completed prerequisites]\n{ctx}\n\n---\n\n{orig}"[:4000], dep_id),
+                        )
+            except Exception as _e:
+                logger.debug("Could not inject blocker context into task #%s: %s", dep_id, _e)
+
+            # All blockers done — enqueue based on whether task has commands
             raw_cmds = dep.get("commands") or []
             if isinstance(raw_cmds, str):
                 raw_cmds = json.loads(raw_cmds)
@@ -471,9 +493,16 @@ def _unblock_dependents(completed_task_id: int) -> None:
                     (result.id, dep_id),
                 )
                 logger.info("Auto-enqueued task #%s (unblocked by #%s)", dep_id, completed_task_id)
+            elif not raw_cmds and dep.get("approval_level", 2) == 1:
+                result = plan_and_execute_board_task.apply_async(args=[dep_id], queue="tasks_general")
+                postgres.execute(
+                    "UPDATE tasks SET celery_task_id=%s WHERE id=%s",
+                    (result.id, dep_id),
+                )
+                logger.info("Auto-enqueued (LLM) task #%s (unblocked by #%s)", dep_id, completed_task_id)
             else:
                 logger.info(
-                    "Task #%s unblocked by #%s but not auto-queued (no commands or approval_level>1)",
+                    "Task #%s unblocked by #%s but not auto-queued (approval_level>1)",
                     dep_id,
                     completed_task_id,
                 )
@@ -653,7 +682,9 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
         redis.release_workspace_lock(celery_task_id)
 
     # ── 6. Update task status ─────────────────────────────────────────────────
-    _mark_task(task_id, "done" if all_passed else "failed")
+    divider = "─" * 36
+    report_body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
+    _mark_task(task_id, "done" if all_passed else "failed", output=report_body[:2000])
 
     try:
         from app.integrations.milestone_logger import log_milestone
@@ -670,8 +701,6 @@ async def _execute_board_task(celery_task_id: str, task_id: int) -> dict:
         pass
 
     # ── 7. Report back to Slack ───────────────────────────────────────────────
-    divider = "─" * 36
-    report_body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
 
     if channel and thread_ts:
         header = (
@@ -803,8 +832,12 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
         f"You are working on branch: {sentinel_branch}\n\n"
         "Each response must be ONLY a JSON object — one of:\n"
         '  {"command": "<bash command>", "reasoning": "<why>"}\n'
+        '  {"skill": "<name>", "params": {...}, "reasoning": "<why>"}\n'
         '  {"done": true, "summary": "<what was accomplished>"}\n'
         '  {"done": true, "failed": true, "summary": "<why it failed>"}\n\n'
+        f"Skill calls (alternative to shell):\n"
+        f'  Use {{"skill": "<name>", "params": {{...}}, "reasoning": "..."}} to call a Sentinel skill directly.\n'
+        f"Available skills: github_read, github_write, cicd_read, cicd_trigger, rmm_read, task_create, task_read, task_update, sentry_read, deploy\n\n"
         "Rules:\n"
         f"- Use absolute paths starting with {code_root}/\n"
         "- JSON file edits: python3 -c with json.load/json.dump\n"
@@ -875,7 +908,7 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
         try:
             resp = await asyncio.to_thread(
                 client.messages.create,
-                model="claude-haiku-4-5-20251001",
+                model=settings.model_sonnet,
                 max_tokens=2048,
                 system=system_prompt,
                 messages=messages,
@@ -924,6 +957,30 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
                 all_passed = False
                 lm_said_failed = True
             break
+
+        # Skill call branch — runs before shell command branch
+        if "skill" in action and not action.get("done"):
+            skill_name = (action.get("skill") or "").strip()
+            skill_params = action.get("params") or {}
+            try:
+                from app.brain.dispatcher import _build_skill_registry as _bsr
+                _skill = _bsr().get(skill_name)
+                if _skill.__class__.__name__ == "ChatSkill" and skill_name != "chat":
+                    skill_output = f"[Unknown skill: {skill_name}]"
+                elif not _skill.is_available():
+                    skill_output = f"[{skill_name} not configured]"
+                else:
+                    _skill_result = await _skill.execute(skill_params, title)
+                    skill_output = _skill_result.context_data or "[no output]"
+            except Exception as _se:
+                skill_output = f"[Skill error: {_se}]"
+            results.append(f"🔧 *Round {round_num + 1} skill={skill_name}:* {skill_output[:400]}")
+            messages.append({"role": "assistant", "content": raw})
+            messages.append({
+                "role": "user",
+                "content": f"Skill '{skill_name}' result:\n{skill_output[:1500]}\n\nContinue or mark done.",
+            })
+            continue
 
         cmd = (action.get("command") or "").strip()
         if not cmd:
@@ -1089,7 +1146,9 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
     else:
         final_passed = all_passed
 
-    _mark_task(task_id, "done" if final_passed else "failed")
+    divider = "─" * 36
+    report_body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
+    _mark_task(task_id, "done" if final_passed else "failed", output=report_body[:2000])
 
     try:
         from app.integrations.milestone_logger import log_milestone
@@ -1104,9 +1163,6 @@ async def _llm_execute_task(celery_task_id: str, task_id: int) -> dict:
         ))
     except Exception:
         pass
-
-    divider = "─" * 36
-    report_body = f"\n{divider}\n".join(results) if results else "(no steps recorded)"
 
     if channel and thread_ts:
         header = (

@@ -52,6 +52,13 @@ class BaseSkill(ABC):
     # produce a clear "missing: IONOS_TOKEN" message instead of asking the user.
     config_vars: list[str] = []
 
+    # Agentic tool-use opt-in: when True this skill is callable in the LLM agentic loop
+    agentic_tool: bool = False
+    # Override description for the tool schema (defaults to self.description)
+    agentic_description: str = ""
+    # JSON Schema for the tool's input parameters
+    agentic_params: dict = {}
+
     def is_available(self) -> bool:
         """Return True if the skill is properly configured and ready."""
         return True
