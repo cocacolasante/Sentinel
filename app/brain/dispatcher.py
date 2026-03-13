@@ -505,9 +505,27 @@ class Dispatcher:
         )
 
         # 8. Call LLM (agentic loop — stays in "thinking" until all tool calls resolve)
+        # 8a. Context window size check + history compression
+        _history_text = " ".join(t.get("content", "") for t in (history or []) if isinstance(t.get("content"), str))
+        _history_tokens = self.llm._estimate_tokens(_history_text)
+        _augmented_tokens = self.llm._estimate_tokens(augmented)
+        _total_ctx = _history_tokens + _augmented_tokens
+
+        if history and _history_tokens > 3_000 and settings.memory_compression_enabled:
+            history = await self._compress_history(history)
+
+        _extra_kwargs: dict = {}
+        if _total_ctx > 150_000:
+            _extra_kwargs["betas"] = ["context-1m-2025-08-07"]
+            logger.info("LARGE_CTX | tokens_est={} | enabling 1M beta header", _total_ctx)
+
         try:
             reply = await self.llm.route_agentic(
-                augmented, history, agent, tool_executor=self._tool_executor
+                augmented, history, agent,
+                tool_executor=self._tool_executor,
+                intent=intent,
+                confidence=confidence,
+                extra_kwargs=_extra_kwargs or None,
             )
         except BudgetExceeded as exc:
             try:
@@ -618,6 +636,57 @@ class Dispatcher:
             session_id=session_id,
             agent=agent.name if agent else "default",
         )
+
+    # ── Context compression ───────────────────────────────────────────────────
+
+    async def _compress_history(
+        self, history: list[dict], threshold_tokens: int = 3_000
+    ) -> list[dict]:
+        """
+        Compress conversation history using Haiku when token estimate exceeds threshold.
+
+        Keeps the last 2 turns verbatim for immediate coherence.
+        Falls back to trimming to the last 4 turns if compression fails.
+        """
+        combined = " ".join(
+            t.get("content", "") for t in history if isinstance(t.get("content"), str)
+        )
+        if self.llm._estimate_tokens(combined) <= threshold_tokens:
+            return history
+
+        verbatim = history[-2:] if len(history) >= 2 else history
+        older = history[:-2] if len(history) > 2 else []
+
+        if not older:
+            return verbatim
+
+        older_text = "\n".join(
+            f"{t['role'].upper()}: {str(t.get('content', ''))[:500]}" for t in older
+        )
+
+        try:
+            import anthropic as _anthropic
+
+            client = _anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            resp = await asyncio.to_thread(
+                client.messages.create,
+                model=settings.model_haiku,
+                max_tokens=300,
+                system="Summarize this conversation history in 3 sentences. Use third person.",
+                messages=[{"role": "user", "content": older_text}],
+            )
+            summary_text = resp.content[0].text.strip()
+            summary_turn = {
+                "role": "user",
+                "content": f"[Conversation summary — {len(older)} prior turns]:\n{summary_text}",
+            }
+            logger.debug(
+                "HISTORY_COMPRESSED | {} turns → 1 summary + 2 verbatim", len(older)
+            )
+            return [summary_turn] + verbatim
+        except Exception as exc:
+            logger.debug("History compression failed (non-fatal): {}", exc)
+            return history[-4:]
 
     # ── Prompt assembly ───────────────────────────────────────────────────────
 

@@ -140,6 +140,21 @@ class Settings(BaseSettings):
     slack_research_channel: str = "sentinel-research"
     owner_email: str = ""  # Email address to send research reports to
 
+    # ── Model identifiers — override in .env to switch model versions globally ──
+    model_haiku: str = "claude-haiku-4-5-20251001"
+    model_sonnet: str = "claude-sonnet-4-6"
+    model_opus: str = "claude-opus-4-6"
+
+    # ── Confidence routing thresholds ────────────────────────────────────────
+    # Intent confidence below escalate_threshold → bump one tier up automatically.
+    confidence_escalate_threshold: float = 0.30
+    # Intent confidence below review_threshold → flag in logs for monitoring.
+    confidence_review_threshold: float = 0.70
+
+    # ── Context management ───────────────────────────────────────────────────
+    # Compress conversation history exceeding 3K token estimate before dispatch.
+    memory_compression_enabled: bool = True
+
     # ── Cost & rate limiting ────────────────────────────────────
     # Set DAILY_COST_CEILING_USD=0 to disable the ceiling (not recommended).
     daily_cost_ceiling_usd: float = 10.0
@@ -148,6 +163,11 @@ class Settings(BaseSettings):
     # Per-model daily token caps (input + output combined). 0 = unlimited.
     sonnet_daily_token_budget: int = 0
     haiku_daily_token_budget: int = 0
+    opus_daily_token_budget: int = 0
+    # Per-request output token alert threshold.
+    request_output_token_alert: int = 50_000
+    # Per-session estimated cost alert (USD).
+    session_cost_alert_usd: float = 0.50
     # Slack channel for budget alerts (separate from eval reports).
     slack_alert_channel: str = "sentinel-alerts"
     # Slack channel for AI action milestones (every confirmed write action).

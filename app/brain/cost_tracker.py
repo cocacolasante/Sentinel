@@ -27,9 +27,9 @@ from app.config import get_settings
 # ── Published Anthropic pricing (USD per 1M tokens, 2025) ─────────────────────
 # Update these when Anthropic changes rates.
 PRICING: dict[str, dict[str, float]] = {
-    "claude-opus-4-6": {"input": 15.00, "output": 75.00},
+    "claude-opus-4-6": {"input": 5.00, "output": 25.00},
     "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
-    "claude-haiku-4-5-20251001": {"input": 0.25, "output": 1.25},
+    "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
 }
 _FALLBACK_PRICING = {"input": 3.00, "output": 15.00}  # assume Sonnet rate for unknowns
 
