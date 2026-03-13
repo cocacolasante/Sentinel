@@ -178,6 +178,9 @@ def _build_skill_registry():
     # Reddit — news feed digest + schedule management
     reg.register(RedditReadSkill())
     reg.register(RedditScheduleSkill())
+    # SE Workflow Pipeline — 5-phase autonomous SE pipeline for self-work and new projects
+    from app.skills.se_workflow_skill import SEWorkflowSkill
+    reg.register(SEWorkflowSkill())
     # Sentinel Mesh Agent — fleet management, remote log analysis, patch dispatch
     from app.skills.agent_registry_skill import AgentRegistrySkill, AgentManageSkill
     from app.skills.remote_log_skill import RemoteLogSkill

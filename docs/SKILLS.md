@@ -1,6 +1,6 @@
 # Sentinel Skills Reference
 
-> **40 skills** across 10 categories. All triggered via natural language in Slack, the CLI (`brain chat`), or the REST API (`POST /api/v1/chat`).
+> **48 skills** across 11 categories. All triggered via natural language in Slack, the CLI (`brain chat`), or the REST API (`POST /api/v1/chat`).
 
 All skills are triggered via natural language in Slack, the CLI (`brain chat`), or the REST API (`POST /api/v1/chat`). The intent classifier maps your message to the right skill automatically.
 
@@ -649,3 +649,149 @@ When no existing skill covers a request, analyzes the gap and proposes a new ski
 
 | reddit_read | reddit_read | — (public API) |
 | reddit_schedule | reddit_schedule | — |
+
+---
+
+## Software Engineering Workflow
+
+Autonomous 5-phase SE pipeline powered by Claude Opus as an expert subagent at each phase.
+Handles both Sentinel self-improvement work and building new external projects from scratch.
+
+### Three-Path Architecture
+
+| Path | project_type | Output directory | Git repo |
+|---|---|---|---|
+| Sentinel self-work | `sentinel` | `/root/sentinel-workspace/se-tasks/{slug}/` | `/root/sentinel-workspace` |
+| New external project | `project` | `/root/projects/{slug}/` | `/root/projects/{slug}/` |
+
+### Path Routing Logic
+
+| Intent | project_type | task_dir | git_cwd |
+|---|---|---|---|
+| `se_brainstorm` / `se_spec` / `se_plan` / `se_implement` / `se_review` / `se_workflow` | sentinel | `/root/sentinel-workspace/se-tasks/{slug}` | `/root/sentinel-workspace` |
+| `se_new_project` | project | `/root/projects/{slug}` | `/root/projects/{slug}` |
+
+### `se_brainstorm`
+
+Produces `brainstorm.md` (numbered ideas + risks + open questions) and `sprint.md` (3–5 prioritised user stories).
+
+**Trigger phrases:** "brainstorm X", "/brainstorm X", "brainstorm ideas for X"
+
+**Params:** `title`, `description`, `repo` (optional), `slug` (optional), `project_type` (default: sentinel)
+
+---
+
+### `se_spec`
+
+Reads `brainstorm.md` as context and produces `spec.md` covering goals, non-goals, user stories, acceptance criteria, edge cases, data models, and API contracts.
+
+**Trigger phrases:** "/spec-task X", "spec out X", "write a spec for X", "specification for X"
+
+**Params:** `title`, `description`, `slug`, `repo`, `project_type`
+
+---
+
+### `se_plan`
+
+Reads `spec.md` + `brainstorm.md` and produces:
+- `plan.md` — numbered implementation steps with file paths
+- `decisions.md` — ADRs (Decision / Context / Consequences)
+- `implementation-notes.md` — risks, dependencies, test strategy
+- `status.md` — phase tracker
+
+**Trigger phrases:** "/plan-task X", "plan out X", "create a plan for X", "implementation plan for X"
+
+**Params:** `title`, `description`, `slug`, `repo`, `project_type`
+
+---
+
+### `se_implement`
+
+Reads all prior docs and produces:
+- `code/{files}` — all implementation files parsed from `### path/to/file` headers
+- `implementation.md` — prose summary, how to run, manual steps
+
+**Trigger phrases:** "/implement-task X", "implement X", "code up X", "write the code for X"
+
+**Params:** `title`, `description`, `slug`, `repo`, `project_type`
+
+---
+
+### `se_review`
+
+Reads all prior artefacts and produces `audit.md` with a verdict line:
+`VERDICT: APPROVED` | `VERDICT: NEEDS WORK` | `VERDICT: BLOCKED`
+
+**Trigger phrases:** "/review-task X", "audit X", "code review X", "review the implementation of X"
+
+**Params:** `title`, `description`, `slug`, `repo`, `project_type`
+
+---
+
+### `se_workflow` (full pipeline)
+
+Chains all 5 phases in sequence.  Stops on first phase failure and writes error to `status.md`.
+
+**Trigger phrases:** "se workflow X", "full pipeline for X", "run the full se pipeline for X"
+
+**Params:** `title`, `description`, `slug`, `repo`, `project_type`
+
+---
+
+### `se_new_project`
+
+Creates `/root/projects/{slug}/`, writes README, runs `git init`, optionally creates a private GitHub repo (if `GITHUB_TOKEN` set), then runs the full 5-phase pipeline.
+
+**Trigger phrases:** "build me a X", "new project: X", "build a website for X", "new external project X"
+
+**Params:** `title`, `description`, `tech_stack`, `slug`, `repo`
+
+---
+
+### `se_status`
+
+Queries the `se_tasks` database table and returns all SE tasks with their current phase and status.
+
+**Trigger phrases:** "se status", "show my se tasks", "list se workflow tasks", "se pipeline status"
+
+**Params:** _(none)_
+
+---
+
+### Example Conversations
+
+**Sentinel self-improvement:**
+```
+You:      brainstorm adding a rate-limit dashboard to Sentinel
+Sentinel: Phase brainstorm complete — brainstorm.md + sprint.md committed
+          Output: /root/sentinel-workspace/se-tasks/adding-a-rate-limit-dashboard/
+
+You:      spec it out
+Sentinel: Phase spec complete — spec.md committed
+
+You:      full pipeline
+Sentinel: All 5 phases complete. Audit verdict: APPROVED
+```
+
+**New external project:**
+```
+You:      build me a landing page for ClientCo — static HTML, contact form, modern design
+Sentinel: Initialised /root/projects/landing-page-for-clientco/ (git init + README)
+          Running full 5-phase pipeline…
+          All phases complete. Audit: APPROVED — see audit.md for deployment notes.
+```
+
+### Requires
+
+`ANTHROPIC_API_KEY` (Claude Opus subagent calls)
+
+| Intent | Skill class | Config required |
+|---|---|---|
+| se_brainstorm | SEWorkflowSkill | ANTHROPIC_API_KEY |
+| se_spec | SEWorkflowSkill | ANTHROPIC_API_KEY |
+| se_plan | SEWorkflowSkill | ANTHROPIC_API_KEY |
+| se_implement | SEWorkflowSkill | ANTHROPIC_API_KEY |
+| se_review | SEWorkflowSkill | ANTHROPIC_API_KEY |
+| se_workflow | SEWorkflowSkill | ANTHROPIC_API_KEY |
+| se_new_project | SEWorkflowSkill | ANTHROPIC_API_KEY (+ GITHUB_TOKEN optional) |
+| se_status | SEWorkflowSkill | — (DB read only) |
