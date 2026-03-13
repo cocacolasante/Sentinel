@@ -96,12 +96,10 @@ Respond in JSON:
 }}"""
 
         router = LLMRouter()
-        analysis_raw = await router.chat(
-            message=prompt,
-            system="You are an expert software engineer. Return only valid JSON.",
-            session_id=f"remote_log_{agent_id}",
-            agent=None,
-        )
+        # route() is synchronous and builds its own system prompt, so prepend
+        # the role instruction and run in a thread to avoid blocking the event loop.
+        full_prompt = "You are an expert software engineer. Return only valid JSON.\n\n" + prompt
+        analysis_raw = await asyncio.to_thread(router.route, full_prompt, [], None)
 
         try:
             analysis = json.loads(analysis_raw.strip().strip("```json").strip("```"))
