@@ -41,6 +41,21 @@ _CANCEL_WORDS = {"cancel", "no", "stop", "abort", "nevermind", "never mind", "do
 
 PENDING_TTL = 300  # 5 minutes
 
+# ── Compound request detection ────────────────────────────────────────────────
+_COMPOUND_COORD = frozenset({"and then", "after that", "then deploy", "followed by", "once done", "when done"})
+_COMPOUND_EXPLICIT = frozenset({"plan", "coordinate", "orchestrate", "handle everything", "do all", "manage all", "automate"})
+
+
+def _is_compound_request(intent: str, confidence: float, message: str) -> bool:
+    """Return True if the message is a multi-step orchestration request."""
+    lower = message.lower()
+    if any(p in lower for p in _COMPOUND_EXPLICIT):
+        return True
+    if confidence < 0.55 and len(lower.split()) > 12:
+        if any(p in lower for p in _COMPOUND_COORD):
+            return True
+    return False
+
 
 def _capture_error(exc: Exception, context: dict | None = None) -> None:
     """Send exception to Sentry if configured, otherwise log it."""
@@ -193,6 +208,9 @@ def _build_skill_registry():
     reg.register(PatchDispatchSkill())
     reg.register(CrossAgentContextSkill())
     reg.register(AgentExecSkill())
+    # Compound planner — multi-step orchestration
+    from app.skills.compound_planner import CompoundPlannerSkill
+    reg.register(CompoundPlannerSkill())
 
     # ── Auto-register dynamically-discovered skills ──────────────────────────
     # Any skill module written by the self-teaching pipeline that is not already
@@ -205,6 +223,7 @@ def _build_skill_registry():
     _SKIP_MODULES = {
         "base", "registry", "skill_discovery", "chat_skill",
         "__init__", "reminders", "sentry_to_tasks", "command_with_fallback_skill",
+        "compound_planner",
     }
     _registered_intents = set(reg._skills.keys())
 
@@ -294,6 +313,8 @@ class Dispatcher:
         # skills.get() falls back to ChatSkill for unknown names — detect that case
         if skill.__class__.__name__ == "ChatSkill" and tool_name not in ("chat",):
             return f"[Unknown tool: {tool_name}]"
+        if not skill.is_available():
+            return f"[{tool_name} is not configured — check .env for required credentials]"
         try:
             result = await skill.execute(params, "")
             return result.context_data or "[no output]"
@@ -385,6 +406,11 @@ class Dispatcher:
         if SkillGapHandler.should_trigger(intent, confidence, message):
             intent = "skill_discover"
             params = {}
+
+        # 4c. Compound request — fires for multi-step orchestration ONLY if gap handler didn't fire
+        elif intent != "skill_discover" and _is_compound_request(intent, confidence, message):
+            intent = "compound_plan"
+            params = {"session_id": session_id}
 
         # 5. Select agent
         agent = self.agents.select(intent, message)

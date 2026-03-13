@@ -358,6 +358,8 @@ _INTENT_TASK_TYPE: dict[str, str] = {
     "arch_advisor":    "architecture",
     "se_workflow":     "architecture",
     "se_review":       "complex_refactor",
+    # Compound planning — Sonnet-tier
+    "compound_plan":   "planning",
 }
 
 # Intents that must NEVER auto-escalate to Opus (simple lookups only)
@@ -483,6 +485,111 @@ AGENTIC_TOOLS: list[dict] = [
                 "status": {"type": "string", "description": "New status value."},
             },
             "required": ["task_id"],
+        },
+    },
+    {
+        "name": "github_read",
+        "description": "List repos, issues, PRs, or check CI status on GitHub.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list_repos", "list_issues", "list_prs", "ci_status", "get_issue"],
+                    "description": "The GitHub action to perform.",
+                },
+                "repo": {"type": "string", "description": "Repository name (owner/repo or just repo name)."},
+                "issue_number": {"type": "integer", "description": "Issue number (for get_issue)."},
+                "limit": {"type": "integer", "description": "Max items to return (default 10)."},
+            },
+        },
+    },
+    {
+        "name": "github_write",
+        "description": "Create an issue, add a comment, or close an issue on GitHub.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["create_issue", "comment_issue", "close_issue"],
+                    "description": "The GitHub write action to perform.",
+                },
+                "repo": {"type": "string", "description": "Repository name."},
+                "title": {"type": "string", "description": "Issue title (for create_issue)."},
+                "body": {"type": "string", "description": "Issue body or comment text."},
+                "issue_number": {"type": "integer", "description": "Issue number (for comment/close)."},
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "cicd_read",
+        "description": "Check CI/CD pipeline status, recent runs, or workflow details.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list_runs", "get_run", "list_workflows"],
+                    "description": "The CI/CD read action.",
+                },
+                "repo": {"type": "string", "description": "Repository name."},
+                "run_id": {"type": "integer", "description": "Specific run ID (for get_run)."},
+                "limit": {"type": "integer", "description": "Max runs to return."},
+            },
+        },
+    },
+    {
+        "name": "cicd_trigger",
+        "description": "Trigger a CI/CD pipeline or workflow run.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "workflow": {"type": "string", "description": "Workflow name or file to trigger."},
+                "repo": {"type": "string", "description": "Repository name."},
+                "ref": {"type": "string", "description": "Branch or tag to run on (default: main)."},
+                "inputs": {"type": "object", "description": "Workflow input parameters."},
+            },
+            "required": ["workflow"],
+        },
+    },
+    {
+        "name": "rmm_read",
+        "description": "Get device status, health metrics, incidents, or inventory from RMM.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list_devices", "device_status", "incidents", "inventory"],
+                    "description": "The RMM read action.",
+                },
+                "device_id": {"type": "string", "description": "Specific device ID or name."},
+                "limit": {"type": "integer", "description": "Max items to return."},
+            },
+        },
+    },
+    {
+        "name": "deploy",
+        "description": "Trigger a Sentinel brain deployment (rebuild Docker image and restart).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "confirm": {"type": "boolean", "description": "Set to true to confirm the deployment."},
+                "reason": {"type": "string", "description": "Reason for deployment."},
+            },
+        },
+    },
+    {
+        "name": "compound_plan",
+        "description": "Decompose a multi-step request into an ordered task DAG with dependency chains.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "request": {"type": "string", "description": "The multi-step request to decompose into tasks."},
+            },
+            "required": ["request"],
         },
     },
 ]
