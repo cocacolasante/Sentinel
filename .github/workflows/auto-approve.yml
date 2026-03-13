@@ -36,8 +36,11 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
 
       - name: Enable auto-merge (squash)
+        # Use PAT_TOKEN so the resulting squash-merge push is attributed to a real
+        # user account — GITHUB_TOKEN merges are suppressed from triggering downstream
+        # workflow events (push / workflow_run), which would break release-image.yml.
         run: gh pr merge "$PR_NUMBER" --auto --squash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
