@@ -432,7 +432,10 @@ services:
 
   # ── Deploy Agent (webhook receiver — stays up during brain restarts) ──────
   deploy-agent:
-    image: python:3.11-slim
+    build:
+      context: ./deploy
+      dockerfile: Dockerfile
+    image: sentinel-deploy-agent:latest
     container_name: ai-deploy-agent
     restart: unless-stopped
     environment:
@@ -447,7 +450,6 @@ services:
       # Bind-mount host docker + docker-compose binaries (read-only)
       - /usr/bin/docker:/usr/bin/docker:ro
       - /usr/libexec/docker:/usr/libexec/docker:ro
-    command: python /deploy/webhook_server.py
     ports:
       - "127.0.0.1:9000:9000"
     networks:
