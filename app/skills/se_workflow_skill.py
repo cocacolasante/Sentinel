@@ -64,19 +64,25 @@ def _ensure_table() -> None:
 
 
 def _upsert_task(slug: str, **kwargs) -> None:
-    """Insert or update an se_tasks row."""
+    """Insert or update an se_tasks row. Uses parameterized queries to prevent SQL injection."""
     try:
         from app.db import postgres
         _ensure_table()
-        set_clause = ", ".join(f"{k} = '{v}'" for k, v in kwargs.items() if v is not None)
-        if not set_clause:
+        items = [(k, str(v)) for k, v in kwargs.items() if v is not None]
+        if not items:
             return
+        keys = [k for k, _ in items]
+        vals = [v for _, v in items]
+        cols = ", ".join(keys)
+        placeholders = ", ".join(["%s"] * len(vals))
+        set_clause = ", ".join(f"{k} = %s" for k in keys)
         postgres.execute(
             f"""
-            INSERT INTO se_tasks (slug, {', '.join(kwargs.keys())})
-            VALUES ('{slug}', {', '.join(repr(str(v)) for v in kwargs.values())})
+            INSERT INTO se_tasks (slug, {cols})
+            VALUES (%s, {placeholders})
             ON CONFLICT (slug) DO UPDATE SET {set_clause}, updated_at = now()
-            """
+            """,
+            [slug] + vals + vals,
         )
     except Exception:
         pass  # non-fatal

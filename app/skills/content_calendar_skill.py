@@ -72,7 +72,7 @@ _FORMAT_OPTIONS: dict[str, list[str]] = {
 
 class ContentCalendarSkill(BaseSkill):
     name = "content_calendar"
-    description = "Generate a content calendar with topic ideas, formats, and posting schedule for specified platforms"
+    description = "Plan and organize a content calendar: generate a weekly or monthly content plan with topics, formats, channels, and scheduling. Use when Anthony says 'create a content calendar', 'plan my content for [month]', 'what should I post this week', 'build a content schedule', 'plan my social media', or 'give me a content strategy for [topic/period]'. NOT for: actually writing the content (use content_draft or social_caption) or scheduling calendar events (use calendar_write)."
     trigger_intents = ["content_calendar"]
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:

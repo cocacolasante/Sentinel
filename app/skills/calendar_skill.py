@@ -15,8 +15,11 @@ from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 class CalendarReadSkill(BaseSkill):
     name = "calendar_read"
     description = (
-        "Check schedule, events, or availability in Google Calendar. "
-        "Reads ALL configured calendars by default, or a specific one via 'account' param."
+        "Read Google Calendar events: list upcoming events, search by date range, check what's "
+        "scheduled, get event details including attendees and location. Use when Anthony says "
+        "'what's on my calendar', 'any meetings today/this week', 'show my schedule', "
+        "'when is my next meeting', 'am I free on [date]', or 'check calendar for [date]'. "
+        "NOT for: creating calendar events (use calendar_write) or email invites (use gmail_send)."
     )
     trigger_intents = ["calendar_read"]
 
@@ -72,8 +75,11 @@ class CalendarReadSkill(BaseSkill):
 class CalendarWriteSkill(BaseSkill):
     name = "calendar_write"
     description = (
-        "Create, update, reschedule, or cancel a Google Calendar event. "
-        "Use the 'account' param to choose which calendar to write to."
+        "Create or update Google Calendar events: schedule meetings, add reminders, set recurring "
+        "events, add attendees and video links. Use when Anthony says 'schedule a meeting', "
+        "'create calendar event', 'block time on [date]', 'add event for [title] at [time]', "
+        "'set up a call with [person]', or 'remind me about [thing] on [date]'. "
+        "NOT for: reading calendar (use calendar_read) or sending email invites separately."
     )
     trigger_intents = ["calendar_write"]
     requires_confirmation = True

@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 
 class N8nSkill(BaseSkill):
     name = "n8n"
-    description = "Run a specific n8n workflow by name"
+    description = (
+        "Execute n8n automation workflows: trigger a workflow by name or ID, pass input data, get execution results. "
+        "Use when Anthony says 'run workflow', 'trigger n8n', 'execute automation', "
+        "'run the [name] workflow', or 'kick off [workflow]'. "
+        "NOT for: managing/creating workflows (use n8n_manage) or GitHub Actions (use cicd_trigger)."
+    )
     trigger_intents = ["n8n_execute"]
 
     def is_available(self) -> bool:
@@ -29,8 +37,10 @@ class N8nSkill(BaseSkill):
 class N8nManageSkill(BaseSkill):
     name = "n8n_manage"
     description = (
-        "Manage n8n workflows: list all workflows, create a new workflow, "
-        "activate/deactivate a workflow, delete a workflow"
+        "Manage n8n workflows: list all workflows, check status, activate/deactivate, view execution history. "
+        "Use when Anthony says 'list my automations', 'show n8n workflows', 'what automations do I have', "
+        "'activate workflow', or 'check automation status'. "
+        "NOT for: executing/running workflows (use n8n_execute)."
     )
     trigger_intents = ["n8n_manage"]
     requires_confirmation = True

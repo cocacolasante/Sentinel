@@ -25,8 +25,11 @@ _REDIS_SCHEDULES_KEY = "sentinel:reddit:schedules"
 class RedditReadSkill(BaseSkill):
     name = "reddit_read"
     description = (
-        "Fetch top and hot posts from any subreddit, generate an AI news summary, "
-        "and post the digest to the sentinel-reddit Slack channel."
+        "Read and monitor Reddit content: fetch posts from subreddits, search for keywords, "
+        "check hot/new/top content, read comments. Use when Anthony says 'check Reddit', "
+        "'what's on r/[subreddit]', 'search Reddit for [topic]', 'any posts about [keyword]', "
+        "or 'show me top Reddit posts'. NOT for: posting or scheduling Reddit content "
+        "(use reddit_schedule)."
     )
     trigger_intents = ["reddit_read"]
     approval_category = ApprovalCategory.NONE
@@ -181,8 +184,10 @@ class RedditReadSkill(BaseSkill):
 class RedditScheduleSkill(BaseSkill):
     name = "reddit_schedule"
     description = (
-        "Manage recurring Reddit digest schedules: add, list, remove, pause, or resume. "
-        "Digests are delivered to Slack on a cron schedule you define."
+        "Schedule and publish Reddit posts to a subreddit at a specified time. Use when Anthony "
+        "says 'post to Reddit', 'schedule a Reddit post', 'submit to r/[subreddit]', or "
+        "'post [content] to Reddit at [time]'. NOT for: reading Reddit (use reddit_read) or "
+        "general social content (use social_caption)."
     )
     trigger_intents = ["reddit_schedule"]
     approval_category = ApprovalCategory.STANDARD

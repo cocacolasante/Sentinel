@@ -8,7 +8,11 @@ TaskUpdateSkill — update a task's status, priority, or approval level
 
 from __future__ import annotations
 
+import logging
+
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 _PRIORITY_LABEL = {
     1: "🟢 Low (1)",
@@ -54,9 +58,10 @@ def _fmt_task(row: dict) -> str:
 class TaskCreateSkill(BaseSkill):
     name = "task_create"
     description = (
-        "Create a new task with a title, optional description, priority 1–5 "
-        "(1=low, 5=critical), and approval level 1–3 (1=auto-approve, 3=requires sign-off). "
-        "Use this when the user asks to track, create, or add a task."
+        "Create a new task on the task board with title, description, priority, and due date. "
+        "Use when Anthony says 'create task', 'add to my task list', 'make a task for', "
+        "'put this on my board', or 'track this as a task'. "
+        "NOT for: reading existing tasks (use task_read) or updating tasks (use task_update)."
     )
     trigger_intents = ["task_create"]
     approval_category = ApprovalCategory.NONE  # DB insert — no external side-effects
@@ -96,7 +101,8 @@ class TaskCreateSkill(BaseSkill):
         if isinstance(raw_blocked, str):
             try:
                 raw_blocked = _json.loads(raw_blocked)
-            except Exception:
+            except Exception as e:
+                logger.warning("task_create: could not parse blocked_by JSON %r: %s", raw_blocked, e)
                 raw_blocked = []
         blocked_by: list[int] = [int(x) for x in raw_blocked if x]
 
@@ -105,7 +111,8 @@ class TaskCreateSkill(BaseSkill):
         if isinstance(raw_commands, str):
             try:
                 raw_commands = _json.loads(raw_commands)
-            except Exception:
+            except Exception as e:
+                logger.warning("task_create: could not parse commands JSON %r: %s", raw_commands, e)
                 raw_commands = [raw_commands]
         commands: list[str] = [c for c in raw_commands if c and c.strip()]
 
@@ -138,8 +145,8 @@ class TaskCreateSkill(BaseSkill):
                 if ctx:
                     slack_channel = ctx.get("channel")
                     slack_thread_ts = ctx.get("thread_ts")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("task_create: could not fetch Slack context for session %s: %s", session_id, e)
 
         try:
             row = postgres.execute_one(
@@ -186,8 +193,8 @@ class TaskCreateSkill(BaseSkill):
                     description or "", source,
                 )
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("task_create: could not post task-created notification for task #%s: %s", row["id"], e)
 
         queue_note = ""
         celery_id = None
@@ -256,8 +263,10 @@ class TaskCreateSkill(BaseSkill):
 class TaskReadSkill(BaseSkill):
     name = "task_read"
     description = (
-        "List, filter, or view tasks. Filter by status, priority, or ID. "
-        "Use this when the user asks to see, list, show, or check tasks."
+        "Read tasks from the task board: list all tasks, filter by status/priority/tag, or get a specific task. "
+        "Use when Anthony says 'show my tasks', 'what tasks do I have', 'list pending tasks', "
+        "'what's on my board', or 'show task #[ID]'. "
+        "NOT for: creating tasks (use task_create) or updating them (use task_update)."
     )
     trigger_intents = ["task_read"]
     approval_category = ApprovalCategory.NONE
@@ -344,9 +353,11 @@ class TaskReadSkill(BaseSkill):
 class TaskUpdateSkill(BaseSkill):
     name = "task_update"
     description = (
-        "Update a task — change its status (pending/in_progress/done/cancelled), "
-        "priority (1–5), approval level (1–3), title, or description. "
-        "Requires a task ID."
+        "Update an existing task: change status (pending/in_progress/completed), update description, "
+        "set priority, or add notes. "
+        "Use when Anthony says 'mark task done', 'update task [ID]', 'complete this task', "
+        "'move to in-progress', or 'close task #[N]'. "
+        "NOT for: creating new tasks (use task_create) or reading tasks (use task_read)."
     )
     trigger_intents = ["task_update"]
     approval_category = ApprovalCategory.STANDARD

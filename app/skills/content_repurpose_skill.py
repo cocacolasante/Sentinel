@@ -68,7 +68,7 @@ Each slide: title (under 8 words) + 3 bullet points max. Include speaker notes u
 
 class ContentRepurposeSkill(BaseSkill):
     name = "content_repurpose"
-    description = "Repurpose existing content to another format: blog → thread, video script → newsletter, podcast → LinkedIn, etc."
+    description = "Repurpose existing content into new formats: turn a blog post into tweets, convert a podcast transcript into an article, transform a report into LinkedIn posts, adapt long content for short-form. Use when Anthony says 'repurpose this [content]', 'turn this blog into tweets', 'convert this article into', 'adapt this for [platform]', or 'create social posts from this content'. NOT for: writing original content from scratch (use content_draft or social_caption)."
     trigger_intents = ["content_repurpose"]
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:

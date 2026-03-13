@@ -101,7 +101,7 @@ _GOAL_CTAS: dict[str, dict[str, str]] = {
 
 class SocialCaptionSkill(BaseSkill):
     name = "social_caption"
-    description = "Generate platform-specific social media captions for Instagram, LinkedIn, Twitter, TikTok, Facebook"
+    description = "Write social media captions and posts for Instagram, Twitter/X, LinkedIn, TikTok, and Facebook. Use when Anthony says 'write a caption for', 'create a social post about', 'write something for Instagram', 'post to LinkedIn about', 'write a tweet about', or 'create social content for [topic]'. NOT for: long-form content (use content_draft), ad copy (use ad_copy), or scheduling posts (use reddit_schedule for Reddit)."
     trigger_intents = ["social_caption"]
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:

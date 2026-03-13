@@ -7,7 +7,11 @@ SentryManageSkill — resolve, ignore, assign, comment on issues
 
 from __future__ import annotations
 
+import logging
+
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 _LEVEL_BADGE = {
     "fatal": "🔴",
@@ -21,7 +25,13 @@ _LEVEL_BADGE = {
 
 class SentryReadSkill(BaseSkill):
     name = "sentry_read"
-    description = "List and inspect Sentry error issues"
+    description = (
+        "Read Sentry error reports: list unresolved issues, search by error type, get full stack traces, "
+        "check error frequency. Use when Anthony says 'any Sentry errors', 'check error logs', "
+        "'what errors are in Sentry', 'show recent crashes', or 'look up Sentry issue [ID]'. "
+        "NOT for: resolving issues or bulk-triaging (use sentry_manage), "
+        "or auto-fix pipelines (automated via celery)."
+    )
     trigger_intents = ["sentry_read"]
 
     def is_available(self) -> bool:
@@ -104,7 +114,12 @@ class SentryReadSkill(BaseSkill):
 
 class SentryManageSkill(BaseSkill):
     name = "sentry_manage"
-    description = "Resolve, ignore, assign, or comment on Sentry issues"
+    description = (
+        "Manage Sentry issues: resolve errors, ignore recurring noise, assign to team members, update status. "
+        "Use when Anthony says 'resolve Sentry error', 'ignore this error', "
+        "'mark as fixed in Sentry', or 'close Sentry issue [ID]'. "
+        "NOT for: reading/listing errors (use sentry_read)."
+    )
     trigger_intents = ["sentry_manage"]
     approval_category = ApprovalCategory.CRITICAL
 

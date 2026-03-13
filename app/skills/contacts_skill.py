@@ -9,13 +9,16 @@ Intents:
 from __future__ import annotations
 
 import json
+import logging
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 
 class ContactsReadSkill(BaseSkill):
     name = "contacts_read"
-    description = "Search the address book, look up a contact by name or email, list all contacts"
+    description = "Search the address book and look up contacts by name, email, or company. Use when Anthony says 'find contact', 'look up [name]', 'what\\'s [name]\\'s email', 'list contacts', or 'who is [name]'. NOT for: adding/updating contacts (use contacts_write), or searching emails in Gmail."
     trigger_intents = ["contacts_read"]
     approval_category = ApprovalCategory.NONE
 
@@ -29,14 +32,30 @@ class ContactsReadSkill(BaseSkill):
         email = params.get("email", "")
 
         if action == "list" or (not query and not email):
-            contacts = await client.get_all(limit=50)
+            try:
+                contacts = await client.get_all(limit=50)
+            except Exception as exc:
+                logger.exception("ContactsReadSkill get_all: %s", exc)
+                return SkillResult(
+                    context_data=f"[Contacts error listing all contacts: {exc}]",
+                    skill_name=self.name,
+                    is_error=True,
+                )
             return SkillResult(
                 context_data=json.dumps(contacts, indent=2, default=str),
                 skill_name=self.name,
             )
 
         if action == "lookup_email" or email:
-            contact = await client.get_by_email(email)
+            try:
+                contact = await client.get_by_email(email)
+            except Exception as exc:
+                logger.exception("ContactsReadSkill get_by_email email=%s: %s", email, exc)
+                return SkillResult(
+                    context_data=f"[Contacts error looking up email '{email}': {exc}]",
+                    skill_name=self.name,
+                    is_error=True,
+                )
             return SkillResult(
                 context_data=json.dumps(contact, indent=2, default=str)
                 if contact
@@ -45,7 +64,15 @@ class ContactsReadSkill(BaseSkill):
             )
 
         # Default: search by name or general query
-        results = await client.search(query, limit=10)
+        try:
+            results = await client.search(query, limit=10)
+        except Exception as exc:
+            logger.exception("ContactsReadSkill search query=%s: %s", query, exc)
+            return SkillResult(
+                context_data=f"[Contacts error searching for '{query}': {exc}]",
+                skill_name=self.name,
+                is_error=True,
+            )
         if not results:
             return SkillResult(
                 context_data=f"[No contacts found matching '{query}']",
@@ -59,7 +86,7 @@ class ContactsReadSkill(BaseSkill):
 
 class ContactsWriteSkill(BaseSkill):
     name = "contacts_write"
-    description = "Add a new contact, update or delete an existing contact in the address book"
+    description = "Add, update, or delete contacts in the address book. Use when Anthony says 'add contact', 'save [name]\\'s details', 'update [name]\\'s phone', or 'delete contact'. Requires confirmation before executing. NOT for: reading/searching contacts (use contacts_read)."
     trigger_intents = ["contacts_write"]
     requires_confirmation = True
     approval_category = ApprovalCategory.STANDARD

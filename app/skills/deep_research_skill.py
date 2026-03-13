@@ -163,8 +163,11 @@ async def _send_email(topic: str, report: str, to: str) -> bool:
 class DeepResearchSkill(BaseSkill):
     name = "deep_research"
     description = (
-        "Research any topic in depth using Claude Sonnet. Produces a structured "
-        "8-section report and delivers it via Slack (#sentinel-research) and email."
+        "Conduct deep multi-source research: web search, Qdrant vector DB similarity search, "
+        "LLM synthesis, and email delivery of full report. Use when Anthony says 'deep research "
+        "on [topic]', 'research and email me about', 'thorough analysis of [subject]', "
+        "'investigate [topic] in depth', or 'find everything about [topic]'. NOT for: quick web "
+        "lookups (use research), or code analysis (use bug_hunt or arch_advisor)."
     )
     trigger_intents = ["deep_research"]
     approval_category = ApprovalCategory.STANDARD

@@ -18,7 +18,13 @@ settings = get_settings()
 
 class AgentRegistrySkill(BaseSkill):
     name = "agent_registry"
-    description = "List Sentinel Mesh Agents, check fleet health and heartbeat status"
+    description = (
+        "View and manage registered Sentinel Mesh Agents: list all agents, check connection "
+        "status, see which servers are online, view agent details and last heartbeat. Use when "
+        "Anthony says 'list agents', 'which servers are connected', 'show mesh agents', "
+        "'is [server] online', or 'check agent status'. NOT for: executing commands on agents "
+        "(use agent_exec) or dispatching code patches (use patch_dispatch)."
+    )
     trigger_intents = ["agent_registry"]
     approval_category = ApprovalCategory.NONE
 
@@ -143,7 +149,12 @@ class AgentRegistrySkill(BaseSkill):
 
 class AgentManageSkill(BaseSkill):
     name = "agent_manage"
-    description = "Provision new mesh agent, revoke credentials, or dispatch a manual patch"
+    description = (
+        "Manage Sentinel Mesh Agent registrations: register new agents, revoke compromised "
+        "agents, update agent metadata. Use when Anthony says 'register agent', 'add server "
+        "to fleet', 'revoke agent', or 'remove [server] from mesh'. Requires CRITICAL approval. "
+        "NOT for: viewing agents (use agent_registry) or running commands on agents (use agent_exec)."
+    )
     trigger_intents = ["agent_manage"]
     approval_category = ApprovalCategory.CRITICAL
 

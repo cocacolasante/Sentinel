@@ -10,8 +10,11 @@ Intents:
 from __future__ import annotations
 
 import json
+import logging
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 # ── Action classification ─────────────────────────────────────────────────────
 
@@ -204,9 +207,10 @@ def _describe_action(action: str, params: dict) -> str:
 class IONOSCloudSkill(BaseSkill):
     name = "ionos_cloud"
     description = (
-        "Manage IONOS DCD: datacenters, servers, volumes, NICs, LANs, snapshots, "
-        "firewall rules, IP blocks, load balancers, NAT gateways, Kubernetes clusters, "
-        "SSH remote exec, Docker deployments"
+        "Manage IONOS cloud servers: provision new VMs, list servers, start/stop/reboot, "
+        "check status. Use when Anthony says 'provision a server', 'create VM on IONOS', "
+        "'list IONOS servers', 'spin up a new server', 'restart IONOS server', or "
+        "'delete server [name]'. Requires CRITICAL approval. NOT for: DNS management (use ionos_dns)."
     )
     trigger_intents = ["ionos_cloud"]
     requires_confirmation = True
@@ -234,12 +238,20 @@ class IONOSCloudSkill(BaseSkill):
         # ── Read-only: execute immediately ────────────────────────────────────
         if action in _READ_ACTIONS:
             try:
+                import httpx
                 data = await client.execute_action(action, params)
                 return SkillResult(
                     context_data=json.dumps(data, indent=2) if not isinstance(data, str) else data,
                     skill_name=self.name,
                 )
+            except httpx.HTTPStatusError as exc:
+                logger.warning("IONOSCloudSkill: HTTP error for action %s: %s", action, exc)
+                return SkillResult(
+                    context_data=f"[IONOS HTTP error {exc.response.status_code}: {exc}]",
+                    skill_name=self.name,
+                )
             except ValueError as exc:
+                logger.warning("IONOSCloudSkill: invalid action or params for %s: %s", action, exc)
                 return SkillResult(context_data=f"[IONOS error: {exc}]", skill_name=self.name)
 
         # ── Write / destructive: route through confirmation ───────────────────
@@ -270,7 +282,12 @@ class IONOSCloudSkill(BaseSkill):
 
 class IONOSDNSSkill(BaseSkill):
     name = "ionos_dns"
-    description = "Manage IONOS DNS: list zones, create/update/delete DNS records (A, CNAME, MX, TXT, etc.)"
+    description = (
+        "Manage IONOS DNS records: add, update, or delete A/CNAME/TXT/MX records for domains. "
+        "Use when Anthony says 'add DNS record', 'point [subdomain] to [IP]', 'create CNAME for', "
+        "'update DNS for [domain]', or 'delete DNS record'. NOT for: cloud server management "
+        "(use ionos_cloud)."
+    )
     trigger_intents = ["ionos_dns"]
     requires_confirmation = True
     approval_category = ApprovalCategory.CRITICAL

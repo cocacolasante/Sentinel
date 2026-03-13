@@ -166,12 +166,13 @@ async def _run_command(command: str, cwd: str) -> tuple[str, int]:
 class ServerShellSkill(BaseSkill):
     name = "server_shell"
     description = (
-        "Execute shell commands on the server — navigate filesystem, read/write files, "
-        "search code with grep, create directories, run builds (npm, pip, docker), "
-        "inspect processes and logs, scaffold projects, push to GitHub, restart Docker services. "
-        "Actions: read_file, search_code, list_files, inspect_env, docker_restart, docker_compose. "
-        "Pass command= for raw shell. Destructive commands (rm -rf, kill, etc.) require confirmation. "
-        "git push/commit/pull, docker restart, and docker compose all execute immediately."
+        "Execute server operations: read files, run shell commands, list directories, search code, "
+        "restart Docker services, manage git. Use when Anthony says 'run command', 'check the logs', "
+        "'read file [path]', 'restart [service]', 'git status', 'list files in', 'search code for', "
+        "'what's in [directory]', or 'show running containers'. "
+        "Safety guardrails prevent destructive operations. "
+        "NOT for: deploying applications (use deploy_skill), code changes with git workflow "
+        "(use repo_write/repo_commit), or remote server commands (use agent_exec)."
     )
     trigger_intents = ["server_shell"]
     approval_category = ApprovalCategory.NONE  # set dynamically per command
