@@ -170,8 +170,11 @@ def _resolve_workspace() -> Path:
       3. Fall back to REPO_WORKSPACE anyway (will be created on first use).
     """
     local = Path(settings.repo_local_path)
-    if (local / ".git").exists():
-        return local
+    try:
+        if (local / ".git").exists():
+            return local
+    except PermissionError:
+        pass
     if settings.github_brain_repo_url:
         return Path(settings.repo_workspace)
     return Path(settings.repo_workspace)
