@@ -20,9 +20,9 @@ def test_calc_usd_sonnet_per_million():
 
 
 def test_calc_usd_haiku_per_million():
-    # $0.25 input + $1.25 output per 1M tokens
+    # $1.00 input + $5.00 output per 1M tokens
     cost = CostTracker._calc_usd("claude-haiku-4-5-20251001", 1_000_000, 1_000_000)
-    assert cost == pytest.approx(1.50)
+    assert cost == pytest.approx(6.00)
 
 
 def test_calc_usd_unknown_model_uses_fallback():
