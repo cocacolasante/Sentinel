@@ -259,6 +259,25 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
 
+    # ── Phase 3/4 — Infrastructure & Autonomous Loop ───────────
+    sentinel_infra_dry_run: bool = True               # SENTINEL_INFRA_DRY_RUN
+    sentinel_cert_warning_days: int = 30              # SENTINEL_CERT_WARNING_DAYS
+    sentinel_cert_critical_days: int = 14             # SENTINEL_CERT_CRITICAL_DAYS
+    sentinel_max_patches_per_run: int = 20            # SENTINEL_MAX_PATCHES_PER_RUN
+    ubuntu_cve_api_base: str = "https://ubuntu.com/security"
+    sentinel_reflection_lookback_hours: int = 24      # SENTINEL_REFLECTION_LOOKBACK_HOURS
+    sentinel_goal_max_priority_auto: float = 7.0      # SENTINEL_GOAL_MAX_PRIORITY_AUTO
+    sentinel_plan_token_budget: int = 8000            # SENTINEL_PLAN_TOKEN_BUDGET
+    sentinel_max_concurrent_steps: int = 3            # SENTINEL_MAX_CONCURRENT_STEPS
+
+    # ── Phase 5 — Closing the Loop ──────────────────────────────
+    sentinel_autonomy_high_threshold: float = 0.85    # SENTINEL_AUTONOMY_HIGH_THRESHOLD
+    sentinel_autonomy_low_threshold: float = 0.50     # SENTINEL_AUTONOMY_LOW_THRESHOLD
+    sentinel_autonomy_min_sample_size: int = 20       # min executions before gradient adjusts
+    sentinel_skill_evolution_enabled: bool = False    # SENTINEL_SKILL_EVOLUTION_ENABLED
+    sentinel_prompt_ab_min_samples: int = 50          # SENTINEL_PROMPT_AB_MIN_SAMPLES
+    sentinel_prompt_ab_confidence: float = 0.95       # SENTINEL_PROMPT_AB_CONFIDENCE
+
     # ── Memory ─────────────────────────────────────────────────
     openai_embedding_model: str = "text-embedding-3-small"
     qdrant_collection: str = "brain_memories"

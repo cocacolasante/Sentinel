@@ -488,30 +488,44 @@ def test_tasks_fmt_ts_datetime():
 
 from app.config import Settings
 
+_EMPTY_MC_ENV = {
+    "MESHCENTRAL_URL": "",
+    "MESHCENTRAL_INTERNAL_URL": "",
+    "MESHCENTRAL_USER": "",
+    "MESHCENTRAL_PASSWORD": "",
+    "MESHCENTRAL_DOMAIN": "",
+    "MESHCENTRAL_DEFAULT_MESH_ID": "",
+}
+
 
 def test_meshcentral_url_default_empty():
-    s = Settings()
-    assert s.meshcentral_url == ""
+    with patch.dict("os.environ", _EMPTY_MC_ENV):
+        s = Settings(_env_file=None)
+        assert s.meshcentral_url == ""
 
 
 def test_meshcentral_user_default_empty():
-    s = Settings()
-    assert s.meshcentral_user == ""
+    with patch.dict("os.environ", _EMPTY_MC_ENV):
+        s = Settings(_env_file=None)
+        assert s.meshcentral_user == ""
 
 
 def test_meshcentral_password_default_empty():
-    s = Settings()
-    assert s.meshcentral_password == ""
+    with patch.dict("os.environ", _EMPTY_MC_ENV):
+        s = Settings(_env_file=None)
+        assert s.meshcentral_password == ""
 
 
 def test_meshcentral_domain_default_empty():
-    s = Settings()
-    assert s.meshcentral_domain == ""
+    with patch.dict("os.environ", _EMPTY_MC_ENV):
+        s = Settings(_env_file=None)
+        assert s.meshcentral_domain == ""
 
 
 def test_meshcentral_default_mesh_id_empty():
-    s = Settings()
-    assert s.meshcentral_default_mesh_id == ""
+    with patch.dict("os.environ", _EMPTY_MC_ENV):
+        s = Settings(_env_file=None)
+        assert s.meshcentral_default_mesh_id == ""
 
 
 def test_slack_rmm_prod_channel_default():

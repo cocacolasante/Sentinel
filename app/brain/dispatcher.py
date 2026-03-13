@@ -211,6 +211,42 @@ def _build_skill_registry():
     # Compound planner — multi-step orchestration
     from app.skills.compound_planner import CompoundPlannerSkill
     reg.register(CompoundPlannerSkill())
+    # Phase 4 — Infrastructure & Autonomous Loop
+    from app.skills.docker_drift_skill import DockerDriftSkill
+    from app.skills.cert_monitor_skill import CertMonitorSkill
+    from app.skills.patch_audit_skill import PatchAuditSkill
+    from app.skills.dns_audit_skill import DNSAuditSkill
+    from app.skills.backup_verify_skill import BackupVerifySkill
+    from app.skills.infra_snapshot_skill import InfraSnapshotSkill
+    from app.skills.goal_queue_skill import GoalQueueSkill
+    from app.skills.observer_skill import ObserverSkill
+    from app.skills.planner_skill import PlannerSkill
+    from app.skills.executor_skill import ExecutorSkill
+    from app.skills.reflection_skill import ReflectionSkill
+    from app.skills.wake_skill import WakeSkill
+    reg.register(DockerDriftSkill())
+    reg.register(CertMonitorSkill())
+    reg.register(PatchAuditSkill())
+    reg.register(DNSAuditSkill())
+    reg.register(BackupVerifySkill())
+    reg.register(InfraSnapshotSkill())
+    reg.register(GoalQueueSkill())
+    reg.register(ObserverSkill())
+    reg.register(PlannerSkill())
+    reg.register(ExecutorSkill())
+    reg.register(ReflectionSkill())
+    reg.register(WakeSkill())
+    # Phase 5 — Self-Improvement Loop
+    from app.skills.autonomy_gradient_skill import AutonomyGradientSkill
+    from app.skills.proposal_executor_skill import ProposalExecutorSkill
+    from app.skills.prompt_refinement_skill import PromptRefinementSkill
+    from app.skills.skill_evolution_skill import SkillEvolutionSkill
+    from app.skills.self_improvement_dashboard_skill import SelfImprovementDashboardSkill
+    reg.register(AutonomyGradientSkill())
+    reg.register(ProposalExecutorSkill())
+    reg.register(PromptRefinementSkill())
+    reg.register(SkillEvolutionSkill())
+    reg.register(SelfImprovementDashboardSkill())
 
     # ── Auto-register dynamically-discovered skills ──────────────────────────
     # Any skill module written by the self-teaching pipeline that is not already
@@ -224,6 +260,14 @@ def _build_skill_registry():
         "base", "registry", "skill_discovery", "chat_skill",
         "__init__", "reminders", "sentry_to_tasks", "command_with_fallback_skill",
         "compound_planner",
+        # Phase 4
+        "docker_drift_skill", "cert_monitor_skill", "patch_audit_skill",
+        "dns_audit_skill", "backup_verify_skill", "infra_snapshot_skill",
+        "goal_queue_skill", "observer_skill", "planner_skill", "executor_skill",
+        "reflection_skill", "wake_skill",
+        # Phase 5
+        "autonomy_gradient_skill", "proposal_executor_skill", "prompt_refinement_skill",
+        "skill_evolution_skill", "self_improvement_dashboard_skill",
     }
     _registered_intents = set(reg._skills.keys())
 

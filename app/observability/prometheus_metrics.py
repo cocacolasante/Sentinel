@@ -90,3 +90,87 @@ ACTIVE_SESSIONS = Gauge(
     "brain_active_sessions",
     "Number of sessions with activity in the last 4 hours (Redis hot memory)",
 )
+
+# ── Phase 4 — Infrastructure & Autonomous Loop ───────────────────────────────
+DOCKER_DRIFT_ISSUES = Gauge(
+    "sentinel_docker_drift_issues",
+    "Number of active Docker drift issues per server",
+    ["server", "issue_type"],
+)
+
+CERT_DAYS_REMAINING = Gauge(
+    "sentinel_cert_days_remaining",
+    "Days until TLS certificate expiry",
+    ["domain"],
+)
+
+PATCHES_APPLIED_TOTAL = Counter(
+    "sentinel_patches_applied_total",
+    "Total OS packages patched by PatchAuditSkill",
+    ["server"],
+)
+
+DNS_AUDIT_STATUS = Gauge(
+    "sentinel_dns_audit_status",
+    "DNS audit check status (1=pass, 0=fail)",
+    ["domain", "check"],
+)
+
+BACKUP_AGE_HOURS = Gauge(
+    "sentinel_backup_age_hours",
+    "Age of most recent backup in hours",
+    ["server"],
+)
+
+SKILL_EXECUTIONS_TOTAL = Counter(
+    "sentinel_skill_executions_total",
+    "Total skill executions recorded by ObserverSkill",
+    ["skill_name", "status"],
+)
+
+SKILL_DURATION_MS = Histogram(
+    "sentinel_skill_duration_ms",
+    "Skill execution duration in milliseconds",
+    ["skill_name"],
+    buckets=[50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000],
+)
+
+WAKE_DECISIONS_TOTAL = Counter(
+    "sentinel_wake_decisions_total",
+    "Wake loop decisions",
+    ["decision"],
+)
+
+GOAL_QUEUE_DEPTH = Gauge(
+    "sentinel_goal_queue_depth",
+    "Number of pending goals in the queue",
+)
+
+# ── Phase 5 — Self-Improvement Loop ──────────────────────────────────────────
+AUTONOMY_SCORE = Gauge(
+    "sentinel_autonomy_score",
+    "Current autonomy gradient score (0-1)",
+)
+
+PROPOSALS_DISPATCHED = Counter(
+    "sentinel_proposals_dispatched_total",
+    "ReflectionProposals dispatched",
+    ["type"],
+)
+
+PROMPT_AB_WIN_RATE = Gauge(
+    "sentinel_prompt_ab_win_rate",
+    "A/B test treatment win rate",
+    ["skill"],
+)
+
+SKILLS_EVOLVED_TOTAL = Counter(
+    "sentinel_skills_evolved_total",
+    "New skills written by SkillEvolutionSkill",
+)
+
+SELF_IMPROVEMENT_CYCLE = Counter(
+    "sentinel_self_improvement_cycles_total",
+    "Full close-the-loop cycles",
+    ["outcome"],
+)
