@@ -12,7 +12,9 @@ log "=== Deploy triggered: $IMAGE sha=${SHA:-latest} ==="
 # ── 1. Sync codebase to the exact commit that was built ───────────────────────
 log "Syncing repo at $REPO_DIR"
 cd "$REPO_DIR"
-git fetch origin main 2>&1 | tee -a /tmp/deploy.log
+# Use HTTPS + token — container has no SSH key and origin remote is SSH-based
+HTTPS_ORIGIN="https://x-access-token:${GITHUB_TOKEN}@github.com/cocacolasante/Sentinel.git"
+git fetch "$HTTPS_ORIGIN" main:main 2>&1 | tee -a /tmp/deploy.log
 if [ -n "$SHA" ]; then
   git reset --hard "$SHA" 2>&1 | tee -a /tmp/deploy.log
   log "Repo pinned to sha=$SHA"
