@@ -72,12 +72,12 @@ class PatchGeneratorSkill(BaseSkill):
                 continue
             seen_files.add(rel_path)
             full_path = root / rel_path
-            if full_path.exists():
-                try:
+            try:
+                if full_path.exists():
                     content = full_path.read_text(errors="replace")[:3000]
                     source_context += f"\n--- File: {rel_path} ---\n{content}\n"
-                except Exception as exc:
-                    logger.debug("Could not read %s: %s", rel_path, exc)
+            except Exception as exc:
+                logger.debug("Could not read %s: %s", rel_path, exc)
 
         if not source_context:
             # Fall back: try to read test file itself for context
@@ -86,8 +86,11 @@ class PatchGeneratorSkill(BaseSkill):
             test_file = nodeid.split("::")[0] if "::" in nodeid else nodeid
             if test_file:
                 test_path = root / test_file
-                if test_path.exists():
-                    source_context = f"\n--- File: {test_file} ---\n{test_path.read_text(errors='replace')[:3000]}\n"
+                try:
+                    if test_path.exists():
+                        source_context = f"\n--- File: {test_file} ---\n{test_path.read_text(errors='replace')[:3000]}\n"
+                except Exception as exc:
+                    logger.debug("Could not read test file %s: %s", test_file, exc)
 
         user_msg = (
             f"Failing tests:\n{failure_text}\n\n"
