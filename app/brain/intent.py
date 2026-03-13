@@ -30,6 +30,14 @@ Intents:
   chat             — general reasoning / writing / coding (no external action)
   arch_advisor     — analyse system architecture and produce an evolution report
   data_intelligence — analyze time series data, detect anomalies, discover patterns across systems
+  se_brainstorm    — brainstorm ideas, risks, and a sprint plan for a Sentinel self-improvement task or new project
+  se_spec          — write a detailed functional specification for a task or project
+  se_plan          — produce a numbered implementation plan + ADRs + implementation notes
+  se_implement     — write all code files and produce an implementation summary
+  se_review        — conduct a full audit/code-review and produce a verdict (APPROVED/NEEDS WORK/BLOCKED)
+  se_workflow      — run the full 5-phase SE pipeline (brainstorm → spec → plan → implement → review)
+  se_new_project   — build a new external client project from scratch (init git repo + full pipeline)
+  se_status        — list all SE workflow tasks and their current phase/status
 """
 
 import json
@@ -150,11 +158,28 @@ Intent-specific param examples:
                     "force": false,
                     "approved": false
                   }}}}
+  se_brainstorm:  {{"title": "Add Redis caching to the brain", "description": "cache LLM responses for repeated queries", "repo": "owner/sentinel", "slug": "", "project_type": "sentinel"}}
+  se_spec:        {{"title": "Add Redis caching to the brain", "description": "...", "slug": "add-redis-caching", "repo": "", "project_type": "sentinel"}}
+  se_plan:        {{"title": "Add Redis caching to the brain", "slug": "add-redis-caching", "description": "", "repo": "", "project_type": "sentinel"}}
+  se_implement:   {{"title": "Add Redis caching to the brain", "slug": "add-redis-caching", "description": "", "repo": "", "project_type": "sentinel"}}
+  se_review:      {{"title": "Add Redis caching to the brain", "slug": "add-redis-caching", "description": "", "repo": "", "project_type": "sentinel"}}
+  se_workflow:    {{"title": "Add Redis caching to the brain", "description": "cache LLM responses for repeated queries", "slug": "", "repo": "owner/sentinel", "project_type": "sentinel"}}
+  se_new_project: {{"title": "ClientCo Landing Page", "description": "Marketing site for ClientCo with contact form", "tech_stack": "static", "slug": "", "repo": ""}}
+  se_status:      {{}}
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
 
 Routing guidance:
+  SE Workflow Pipeline:
+  - "brainstorm X", "/brainstorm X", "brainstorm ideas for X" → se_brainstorm with title=X
+  - "/spec-task X", "spec out X", "write a spec for X", "specification for X" → se_spec with title=X
+  - "/plan-task X", "plan out X", "create a plan for X", "implementation plan for X" → se_plan with title=X
+  - "/implement-task X", "implement X", "code up X", "build X", "write the code for X" → se_implement with title=X
+  - "/review-task X", "audit X", "code review X", "review the implementation of X" → se_review with title=X
+  - "se workflow X", "full pipeline for X", "run the full se pipeline for X", "all 5 phases for X" → se_workflow with title=X
+  - "build me a X", "new project: X", "build a website for X", "build a new app X", "new external project X", "create a client project X" → se_new_project with title=X
+  - "se status", "show my se tasks", "show my projects", "list se workflow tasks", "se pipeline status" → se_status
   - "update the CLI", "improve the CLI", "rewrite the CLI", "edit the CLI", "fix the CLI", "make the CLI better", "update brain.py", "edit brain.py", "rewrite brain.py", "show me brain.py", "read brain.py", "open brain.py", "show the CLI code", "look at the CLI code", "read the CLI" → server_shell with action=read_file, path=brain.py
   - "update your code", "edit your own code", "improve yourself", "rewrite yourself", "change your code", "look at yourself", "read your own code" → server_shell with action=list_files, path=/root/sentinel-workspace
   - "deploy an ubuntu server", "provision a server", "spin up a VPS", "create a cloud server", "set up an ubuntu vps" → ionos_cloud action=provision_server
