@@ -20,12 +20,15 @@ IONOS deploy requires:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
 from datetime import datetime
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 _WORKSPACE = "/root/sentinel-workspace" if os.path.isdir("/root/sentinel-workspace") else "/app"
 _PROJECTS = f"{_WORKSPACE}/projects"
@@ -125,15 +128,12 @@ def _fmt_project(row: dict) -> str:
 class ProjectSkill(BaseSkill):
     name = "project"
     description = (
-        "Create, build, and deploy full coding projects autonomously. "
-        "Sentinel scaffolds the project in /root/projects/, writes code, runs tests, "
-        "and optionally provisions an IONOS Ubuntu staging server, SSHs in, installs "
-        "dependencies, deploys, and sends you the IP. "
-        "Actions: create, build, deploy, status, list. "
-        "Params for create: name, description, tech_stack "
-        "(python/fastapi/flask/django/node/react/nextjs/go/rust/static), deploy=true/false. "
-        "Params for deploy: project_id or slug, ionos_location (us/eu/uk), server_cores, server_ram_gb. "
-        "Tasks are queued to background workers — Sentinel reports back to Slack when done."
+        "Create and manage full software projects end-to-end: React frontends, FastAPI backends, "
+        "Go services, static sites, SaaS dashboards. Use when Anthony says 'create project', "
+        "'start a new project', 'build a [type] project', 'deploy project [name]', "
+        "'project status', or 'list my projects'. Scaffolds complete code including frontend, "
+        "backend, Docker, and CI/CD. NOT for: modifying Sentinel itself (use se_workflow) or "
+        "small code edits (use repo_write)."
     )
     trigger_intents = [
         "project_create",
@@ -193,8 +193,8 @@ class ProjectSkill(BaseSkill):
                 if ctx:
                     slack_channel = ctx.get("channel")
                     slack_thread_ts = ctx.get("thread_ts")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("ProjectSkill: failed to fetch Slack context: %s", e)
 
         # Insert project row
         try:
@@ -233,8 +233,8 @@ class ProjectSkill(BaseSkill):
         # Create the project directory
         try:
             os.makedirs(path, exist_ok=True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("ProjectSkill: could not create project directory %s: %s", path, e)
 
         # Queue the build Celery task
         from app.worker.project_tasks import build_project

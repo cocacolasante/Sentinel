@@ -69,7 +69,7 @@ Subject lines: A/B variant for each. Keep under 50 chars.""",
 
 class ContentDraftSkill(BaseSkill):
     name = "content_draft"
-    description = "Draft long-form content: blog posts, newsletters, YouTube scripts, Twitter threads, email sequences"
+    description = "Draft and write long-form content: blog posts, articles, technical documentation, emails, reports, essays, proposals. Use when Anthony says 'write a blog post', 'draft an article about', 'write content for', 'create a report on', 'draft a technical doc', or 'write a long-form piece about'. NOT for: social media captions (use social_caption), ad copy (use ad_copy), or repurposing existing content (use content_repurpose)."
     trigger_intents = ["content_draft"]
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:

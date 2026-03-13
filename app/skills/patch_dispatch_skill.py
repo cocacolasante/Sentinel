@@ -22,7 +22,7 @@ settings = get_settings()
 
 class PatchDispatchSkill(BaseSkill):
     name = "patch_dispatch"
-    description = "Sign and send a code patch to a remote Sentinel Mesh Agent"
+    description = "Sign and dispatch a code patch to a remote Sentinel Mesh Agent. Production agents require Slack approval before patching. Use when Anthony says 'dispatch patch to agent', 'send code patch to [server]', 'apply fix to remote agent', 'push patch to [app_name]', or 'deploy hotfix to [agent]'. Requires CRITICAL approval. NOT for: applying patches to the local Sentinel server (use repo_write), or running commands on agents (use agent_exec)."
     trigger_intents = ["patch_dispatch"]
     approval_category = ApprovalCategory.CRITICAL
 

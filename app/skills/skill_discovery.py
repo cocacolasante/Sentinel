@@ -15,8 +15,11 @@ Intent: skill_discover
 from __future__ import annotations
 
 import json
+import logging
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 _DISCOVERY_SYSTEM = """You are a skill gap analyzer for Sentinel, an AI assistant platform.
 You are analyzing Sentinel's own skill registry. The codebase lives at /root/sentinel-workspace on GitHub at cocacolasante/Sentinel.
@@ -46,8 +49,11 @@ Return ONLY valid JSON:
 class SkillDiscoverySkill(BaseSkill):
     name = "skill_discover"
     description = (
-        "Detect when no skill exists for a task — analyze the gap, find the closest "
-        "existing skill, or propose building a new one"
+        "Discover and request new capabilities: report missing skills, suggest improvements to existing skills, "
+        "or check what Sentinel can and cannot do. "
+        "Use when Anthony says 'can you [do something new]', 'I need you to learn to', "
+        "'add capability for', 'what skills do you have', 'what can't you do', or 'you should be able to'. "
+        "NOT for: executing existing skills (use the specific skill) or listing available skills (use the help command)."
     )
     trigger_intents = ["skill_discover"]
     approval_category = ApprovalCategory.NONE
@@ -168,8 +174,11 @@ class SkillDiscoverySkill(BaseSkill):
                             "UPDATE tasks SET blocked_by=%s::jsonb WHERE id=%s",
                             (json.dumps([build_task_id]), originating_task_id),
                         )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(
+                            "skill_discover: could not set blocked_by on task #%s: %s",
+                            originating_task_id, e,
+                        )
 
                 # DM owner
                 try:
@@ -182,8 +191,8 @@ class SkillDiscoverySkill(BaseSkill):
                         if originating_task_id:
                             _dm += f"\nYour original Task #{originating_task_id} is blocked until it deploys."
                         await post_dm(_dm)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("skill_discover: could not DM owner about new skill task #%s: %s", build_task_id, e)
 
                 lines.append(
                     f"\n**Auto-building new skill:** `{skill_name}` as Task #{build_task_id}\n"

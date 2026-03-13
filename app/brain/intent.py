@@ -38,6 +38,9 @@ Intents:
   se_workflow      — run the full 5-phase SE pipeline (brainstorm → spec → plan → implement → review)
   se_new_project   — build a new external client project from scratch (init git repo + full pipeline)
   se_status        — list all SE workflow tasks and their current phase/status
+  fleet_search     — alias for cross_agent_query: search across all mesh agents
+  agent_context_search — alias for cross_agent_query: find patterns/errors across agents
+  sentry_to_tasks  — alias for sentry_errors_create_approval_tasks: bulk-create tasks from Sentry errors
 """
 
 import json
@@ -178,7 +181,7 @@ Routing guidance:
   - "/implement-task X", "implement X", "code up X", "build X", "write the code for X" → se_implement with title=X
   - "/review-task X", "audit X", "code review X", "review the implementation of X" → se_review with title=X
   - "se workflow X", "full pipeline for X", "run the full se pipeline for X", "all 5 phases for X" → se_workflow with title=X
-  - "build me a X", "new project: X", "build a website for X", "build a new app X", "new external project X", "create a client project X" → se_new_project with title=X
+  - "build me a X", "new project: X", "build a website for X", "build a new app X", "new external project X", "create a client project X", "build a React app", "build me a website", "create a REST API", "scaffold a new project", "build a dashboard for", "write a FastAPI service", "create a Node app", "build a landing page for" → se_new_project with title=X
   - "se status", "show my se tasks", "show my projects", "list se workflow tasks", "se pipeline status" → se_status
   - "update the CLI", "improve the CLI", "rewrite the CLI", "edit the CLI", "fix the CLI", "make the CLI better", "update brain.py", "edit brain.py", "rewrite brain.py", "show me brain.py", "read brain.py", "open brain.py", "show the CLI code", "look at the CLI code", "read the CLI" → server_shell with action=read_file, path=brain.py
   - "update your code", "edit your own code", "improve yourself", "rewrite yourself", "change your code", "look at yourself", "read your own code" → server_shell with action=list_files, path=/root/sentinel-workspace
@@ -234,6 +237,7 @@ Routing guidance:
   - "scan logs", "analyze errors", "hunt for bugs", "check for errors", "bug hunt", "analyze errors from last Xh", "find bugs", "what errors are happening", "scan for issues", "run bug hunt", "SRE scan" → bug_hunt with hours extracted from message (default 24)
   - "analyse architecture", "analyze architecture", "architecture review", "architecture advice", "system design review", "review my architecture", "architecture improvements", "what are the bottlenecks", "system bottlenecks", "scale my system", "architecture evolution", "suggest architecture improvements", "analyse sentinel architecture", "analyze sentinel" → arch_advisor with target extracted (default "Sentinel AI platform"), focus extracted if mentioned (e.g. "scalability", "security", "performance", "reliability")
   - "create a task", "add a task", "track this", "new task", "remember to", "log a task" → task_create
+  - "remind me", "reminder for", "to-do", "to do list", "don't forget", "add to my reminders", "set alarm", "add a reminder" → task_create (with title from the reminder text and appropriate due_date)
   - "list tasks", "show tasks", "what tasks", "my tasks", "view tasks", "open tasks", "pending tasks" → task_read
   - "mark task done", "complete task", "update task", "change priority", "close task", "set task status" → task_update
   - "go to /path", "navigate to", "cd to", "list files in", "what's in this directory" → server_shell
@@ -256,6 +260,12 @@ Routing guidance:
   - "what env vars are set", "show configuration", "inspect the config", "what integrations are configured", "show me the env" → server_shell with action=inspect_env
   - "update and deploy", "push and restart", "commit push and deploy", "make it live" → use server_shell for git ops then intent=deploy
   - "show running services", "list docker containers", "docker status" → server_shell with command="docker ps"
+  ProjectSkill vs SE Workflow — important distinction:
+  - project_create / project_build / project_deploy / project_status / project_list are for the ProjectSkill:
+    full lifecycle management of named, tracked projects (stored in DB with build logs, deploy records, etc.)
+  - se_new_project / se_workflow are for the 5-phase SE pipeline (brainstorm→spec→plan→implement→review)
+    and are better suited for one-off tasks, Sentinel self-improvement, and structured engineering work.
+  - When in doubt and the request mentions an external client or "build me a [app type]", prefer se_new_project.
   - "build me a ...", "create a project", "build a project", "make a ... app", "build an app", "scaffold a project", "I want to build ...", "write a ... application", "create a ... service" → project_create with name=<project name>, description=<full description>, tech_stack=<detected stack>, deploy=<true if user mentions staging/deploy/server>
   - "build and deploy ...", "create and host ...", "build ... and spin up a server", "deploy to staging" included in creation → project_create with deploy=true, ionos_location=<detected or 'eu'>
   - "deploy project ...", "spin up a server for ...", "deploy ... to ionos", "host project ...", "put it on a server" → project_deploy with project_id or slug
@@ -318,6 +328,7 @@ Routing guidance:
   - "revoke agent" | "disconnect agent" | "remove agent" → agent_manage action=revoke, agent_id={{id}}
   - "dispatch patch to agent" | "patch remote server" | "send patch to agent" → patch_dispatch agent_id={{id}}
   - "cross-agent errors" | "same error on multiple agents" | "fleet-wide search" → cross_agent_query
+  - "across all agents", "cross-fleet", "fleet-wide", "search agent codebases", "all agents had this", "other servers had this", "find this error everywhere", "check all remotes" → cross_agent_query (fleet_search / agent_context_search aliases also map here)
   - "analyze agent logs" | "agent error analysis" | "remote log" → remote_log_analysis
   Tech stack detection for project_create:
     - "python", "fastapi", "flask", "django", "rest api" in description → tech_stack=python or fastapi/flask/django

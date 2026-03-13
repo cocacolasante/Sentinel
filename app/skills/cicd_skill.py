@@ -9,15 +9,21 @@ Intents:
 from __future__ import annotations
 
 import json
+import logging
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 
 class CICDReadSkill(BaseSkill):
     name = "cicd_read"
     description = (
-        "Check CI/CD pipelines: list GitHub Actions workflows, view run status, "
-        "see recent runs, check if tests/deploys are passing"
+        "Check CI/CD pipeline status via GitHub Actions: list workflows, view recent runs, "
+        "check pass/fail status, see logs for failed steps. Use when Anthony says 'check CI', "
+        "'is the pipeline passing', 'list GitHub Actions', 'show recent runs', 'did the tests pass', "
+        "or 'why did CI fail'. NOT for: triggering/running pipelines (use cicd_trigger) or "
+        "debugging failed runs in detail (use cicd_debug)."
     )
     trigger_intents = ["cicd_read"]
     approval_category = ApprovalCategory.NONE
@@ -52,7 +58,15 @@ class CICDReadSkill(BaseSkill):
             )
 
         if action == "list_workflows":
-            data = await client._get(f"/repos/{repo}/actions/workflows")
+            try:
+                data = await client._get(f"/repos/{repo}/actions/workflows")
+            except Exception as exc:
+                logger.exception("CICDReadSkill list_workflows repo=%s: %s", repo, exc)
+                return SkillResult(
+                    context_data=f"[CICD error listing workflows for '{repo}': {exc}]",
+                    skill_name=self.name,
+                    is_error=True,
+                )
             workflows = [
                 {
                     "id": w["id"],
@@ -70,7 +84,15 @@ class CICDReadSkill(BaseSkill):
             extra_params: dict = {"per_page": int(params.get("limit", 10))}
             if workflow_id:
                 path = f"/repos/{repo}/actions/workflows/{workflow_id}/runs"
-            data = await client._get(path, params=extra_params)
+            try:
+                data = await client._get(path, params=extra_params)
+            except Exception as exc:
+                logger.exception("CICDReadSkill list_runs repo=%s workflow_id=%s: %s", repo, workflow_id, exc)
+                return SkillResult(
+                    context_data=f"[CICD error listing runs for '{repo}': {exc}]",
+                    skill_name=self.name,
+                    is_error=True,
+                )
             runs = [
                 {
                     "id": r["id"],
@@ -89,7 +111,15 @@ class CICDReadSkill(BaseSkill):
             run_id = params.get("run_id", "")
             if not run_id:
                 return SkillResult(context_data="[get_run requires run_id]", skill_name=self.name)
-            data = await client._get(f"/repos/{repo}/actions/runs/{run_id}")
+            try:
+                data = await client._get(f"/repos/{repo}/actions/runs/{run_id}")
+            except Exception as exc:
+                logger.exception("CICDReadSkill get_run repo=%s run_id=%s: %s", repo, run_id, exc)
+                return SkillResult(
+                    context_data=f"[CICD error fetching run '{run_id}' for '{repo}': {exc}]",
+                    skill_name=self.name,
+                    is_error=True,
+                )
             summary = {
                 "id": data.get("id"),
                 "name": data.get("name"),
@@ -111,7 +141,12 @@ class CICDReadSkill(BaseSkill):
 
 class CICDTriggerSkill(BaseSkill):
     name = "cicd_trigger"
-    description = "Trigger a GitHub Actions workflow run manually"
+    description = (
+        "Manually trigger a GitHub Actions workflow run. Use when Anthony says 'trigger workflow', "
+        "'run CI', 'kick off pipeline', 'deploy via GitHub Actions', or 'run [workflow name]'. "
+        "Requires confirmation. NOT for: checking pipeline status (use cicd_read) or "
+        "debugging failures (use cicd_debug)."
+    )
     trigger_intents = ["cicd_trigger"]
     requires_confirmation = True
     approval_category = ApprovalCategory.CRITICAL

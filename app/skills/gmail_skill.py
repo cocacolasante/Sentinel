@@ -7,8 +7,11 @@ target a specific Gmail account.  Omitting it uses the primary account.
 from __future__ import annotations
 
 import json
+import logging
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 
 def _account_label(account_name: str | None) -> str:
@@ -18,8 +21,10 @@ def _account_label(account_name: str | None) -> str:
 class GmailReadSkill(BaseSkill):
     name = "gmail_read"
     description = (
-        "Read, check, search Gmail inbox — list emails, read full message, mark as read. "
-        "Supports multiple accounts via the 'account' param (e.g. account='work')."
+        "Read emails from Gmail: list inbox, search by sender/subject/keyword, get full email content with attachments. "
+        "Use when Anthony says 'check email', 'read my emails', 'any emails from [sender]', "
+        "'search inbox for [topic]', 'show unread emails', or 'what did [name] say'. "
+        "NOT for: sending email (use gmail_send) or calendar invites."
     )
     trigger_intents = ["gmail_read"]
 
@@ -81,8 +86,11 @@ class GmailReadSkill(BaseSkill):
 class GmailSendSkill(BaseSkill):
     name = "gmail_send"
     description = (
-        "Compose, draft, or send an email via Gmail. "
-        "Supports multiple accounts via the 'account' param (e.g. account='work')."
+        "Compose and send an email via Gmail. "
+        "Use when Anthony says 'send email to [person]', 'email [name] about [topic]', "
+        "'write an email to', or 'reply to this email'. "
+        "Drafts message if body not specified. Requires GOOGLE_CREDENTIALS_JSON. "
+        "NOT for: replying to a specific thread (use gmail_reply) or reading email."
     )
     trigger_intents = ["gmail_send"]
     requires_confirmation = True
@@ -134,8 +142,10 @@ class GmailSendSkill(BaseSkill):
 class GmailReplySkill(BaseSkill):
     name = "gmail_reply"
     description = (
-        "Reply to a specific email in-thread via Gmail. "
-        "Supports multiple accounts via the 'account' param (e.g. account='work')."
+        "Reply to a specific email thread in Gmail. "
+        "Use when Anthony says 'reply to [email/thread]', 'respond to [sender]'s email', "
+        "or 'follow up on the email about [topic]'. "
+        "NOT for: sending new emails (use gmail_send) or reading email (use gmail_read)."
     )
     trigger_intents = ["gmail_reply"]
     requires_confirmation = True
@@ -171,7 +181,8 @@ class GmailReplySkill(BaseSkill):
             email = await client.get_email(msg_id)
             from_addr = email.get("from", "?")
             subject = email.get("subject", "?")
-        except Exception:
+        except Exception as e:
+            logger.warning("gmail_reply: could not fetch email %s for preview: %s", msg_id, e)
             from_addr = "?"
             subject = "?"
 

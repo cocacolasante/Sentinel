@@ -9,8 +9,8 @@ from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
 class RemindersSkill(BaseSkill):
     name = "reminders"
-    description = "Create, manage, and track reminders and to-do items with notifications and persistence"
-    trigger_intents = ["set_reminder, create_todo, list_reminders, update_reminder, dismiss_reminder, snooze_reminder"]
+    description = "Create and manage reminders and to-do items via Google Tasks: set reminders with due dates, list pending reminders, mark done, snooze. Use when Anthony says 'remind me to', 'set a reminder for', 'add to my to-do list', 'create a task for', 'what reminders do I have', or 'show my to-dos'. NOTE: This skill is not yet implemented — returns a placeholder message. NOT for: Google Calendar events (use calendar_write) or task board items (use task_create)."
+    trigger_intents = ["set_reminder", "create_todo", "list_reminders", "update_reminder", "dismiss_reminder", "snooze_reminder"]
     approval_category = ApprovalCategory.NONE
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:

@@ -24,7 +24,8 @@ def _fmt_ts(ts: str | None) -> str:
         return "?"
     try:
         return datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
-    except Exception:
+    except Exception as e:
+        logger.warning("SlackReadSkill: could not parse timestamp %s: %s", ts, e)
         return str(ts)[:16]
 
 
@@ -41,9 +42,11 @@ def _clean_text(text: str) -> str:
 class SlackReadSkill(BaseSkill):
     name = "slack_read"
     description = (
-        "Read Slack channel history, DMs, or search messages. "
-        "Can fetch recent messages from sentinel-alerts, sentinel-evals, "
-        "sentinel-milestones, rmm-production, rmm-dev-staging, or any channel."
+        "Read Slack messages and channel history: fetch recent messages from channels, search "
+        "for keywords, read DMs, list channels, get channel member lists. Use when Anthony says "
+        "'check Slack', 'any Slack messages in [channel]', 'search Slack for [topic]', "
+        "'what was said in #[channel]', or 'show Slack DMs from [person]'. NOT for: sending "
+        "Slack messages (that's handled via slack_notifier directly) or managing Slack channels."
     )
     trigger_intents = ["slack_read"]
     approval_category = ApprovalCategory.NONE
@@ -167,7 +170,8 @@ class SlackReadSkill(BaseSkill):
                     or info["user"].get("name")
                     or uid
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning("SlackReadSkill: could not resolve user %s: %s", uid, e)
                 name = uid
             user_cache[uid] = name
             return name

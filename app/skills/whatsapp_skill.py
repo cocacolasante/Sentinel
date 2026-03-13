@@ -9,13 +9,16 @@ Intents:
 from __future__ import annotations
 
 import json
+import logging
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 
 class WhatsAppReadSkill(BaseSkill):
     name = "whatsapp_read"
-    description = "Read or check recent WhatsApp messages"
+    description = "Read recent WhatsApp messages via Twilio. Use when Anthony says 'check my WhatsApp', 'any WhatsApp messages', 'show WhatsApp from [contact]', or 'read WhatsApp'. NOT for: sending messages (use whatsapp_send)."
     trigger_intents = ["whatsapp_read"]
     approval_category = ApprovalCategory.NONE
 
@@ -40,12 +43,28 @@ class WhatsAppReadSkill(BaseSkill):
         sid = params.get("sid", "")
 
         if action == "get" and sid:
-            msg = await client.get_message(sid)
+            try:
+                msg = await client.get_message(sid)
+            except Exception as exc:
+                logger.exception("WhatsAppReadSkill get_message sid=%s: %s", sid, exc)
+                return SkillResult(
+                    context_data=f"[WhatsApp error fetching message '{sid}': {exc}]",
+                    skill_name=self.name,
+                    is_error=True,
+                )
             return SkillResult(context_data=json.dumps(msg, indent=2), skill_name=self.name)
 
         to = params.get("to", params.get("contact", ""))
         limit = int(params.get("limit", 20))
-        msgs = await client.list_messages(to=to or None, limit=limit)
+        try:
+            msgs = await client.list_messages(to=to or None, limit=limit)
+        except Exception as exc:
+            logger.exception("WhatsAppReadSkill list_messages to=%s: %s", to, exc)
+            return SkillResult(
+                context_data=f"[WhatsApp error listing messages: {exc}]",
+                skill_name=self.name,
+                is_error=True,
+            )
         if not msgs:
             return SkillResult(
                 context_data="[No WhatsApp messages found]",
@@ -56,7 +75,7 @@ class WhatsAppReadSkill(BaseSkill):
 
 class WhatsAppSendSkill(BaseSkill):
     name = "whatsapp_send"
-    description = "Send a WhatsApp message to a contact or phone number"
+    description = "Send a WhatsApp message to a contact or phone number via Twilio. Use when Anthony says 'send WhatsApp to', 'message [name] on WhatsApp', or 'WhatsApp [contact] saying'. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM. NOT for: reading messages (use whatsapp_read) or SMS (use a different skill)."
     trigger_intents = ["whatsapp_send"]
     requires_confirmation = True
     approval_category = ApprovalCategory.STANDARD

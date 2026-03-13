@@ -12,7 +12,13 @@ settings = get_settings()
 
 class GitHubReadSkill(BaseSkill):
     name = "github_read"
-    description = "Check GitHub issues, PRs, notifications, or repo info"
+    description = (
+        "Read GitHub repositories: list repos, view open issues and PRs, read code, search "
+        "commits, check branch status, view pull request details. Use when Anthony says "
+        "'list GitHub issues', 'show open PRs', 'check GitHub repo', 'what issues are open', "
+        "'show me the PR for [branch]', 'read [file] from repo', or 'search issues for [keyword]'. "
+        "NOT for: creating issues/PRs (use github_write) or CI/CD (use cicd_read)."
+    )
     trigger_intents = ["github_read"]
 
     def is_available(self) -> bool:
@@ -44,7 +50,13 @@ class GitHubReadSkill(BaseSkill):
 
 class GitHubWriteSkill(BaseSkill):
     name = "github_write"
-    description = "Create a GitHub issue, comment on a PR, or close an issue"
+    description = (
+        "Create and manage GitHub issues, pull requests, and comments: open issues, create PRs, "
+        "close issues, add labels, merge PRs. Use when Anthony says 'create GitHub issue', "
+        "'open a PR for [branch]', 'close issue #[N]', 'add label to issue', 'merge PR #[N]', "
+        "or 'comment on issue #[N]'. Requires CRITICAL approval. "
+        "NOT for: reading GitHub (use github_read) or CI/CD pipelines (use cicd_trigger)."
+    )
     trigger_intents = ["github_write"]
     approval_category = ApprovalCategory.CRITICAL
 
@@ -110,7 +122,13 @@ class GitHubWriteSkill(BaseSkill):
 
 class GitHubMonitorSkill(BaseSkill):
     name = "github_monitor"
-    description = "Add, remove, list, enable, disable, or assign GitHub repo monitors for issue auto-triage"
+    description = (
+        "Monitor GitHub for new issues and auto-triage them: fetch open issues, analyze severity "
+        "with LLM, classify and prioritize, post findings to Slack. Use when Anthony says "
+        "'monitor GitHub issues', 'triage new issues', 'check for new bug reports', "
+        "'auto-label GitHub issues', or 'summarize recent issues'. "
+        "NOT for: reading specific issues (use github_read) or creating issues (use github_write)."
+    )
     trigger_intents = ["github_monitor"]
     approval_category = ApprovalCategory.STANDARD
 

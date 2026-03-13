@@ -21,8 +21,12 @@ from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 class DeploySkill(BaseSkill):
     name = "deploy"
     description = (
-        "Rebuild the Brain's Docker image with the latest committed code and restart "
-        "the brain container — use this after repo_commit to apply code changes live"
+        "Deploy applications to production: trigger Docker Compose rebuilds, restart services, "
+        "run deployment scripts, hot-reload configs. Use when Anthony says 'deploy', "
+        "'deploy to production', 'restart the app', 'rebuild and deploy', 'hot reload', "
+        "or 'push to prod'. "
+        "NOT for: CI/CD pipeline triggers (use cicd_trigger), reading deploy status (use cicd_read), "
+        "or raw shell commands (use server_shell)."
     )
     trigger_intents = ["deploy"]
     requires_confirmation = True

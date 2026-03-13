@@ -123,9 +123,7 @@ B — Benefit:    why that matters to the customer (lead with this)""",
 
 class AdCopySkill(BaseSkill):
     name = "ad_copy"
-    description = (
-        "Write paid advertising copy for Meta, Google, LinkedIn, TikTok, and YouTube — character-limit accurate"
-    )
+    description = "Write persuasive advertising copy: Facebook/Instagram ads, Google Ads, landing page copy, email subject lines, CTAs, campaign messaging. Use when Anthony says 'write ad copy', 'create a Facebook ad', 'write a Google ad', 'write landing page copy', 'draft email subject lines', 'write a campaign for', or 'create marketing copy for'. NOT for: organic social captions (use social_caption), blog posts (use content_draft), or general content."
     trigger_intents = ["ad_copy"]
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:

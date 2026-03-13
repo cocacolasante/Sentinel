@@ -17,8 +17,8 @@ settings = get_settings()
 
 class CrossAgentContextSkill(BaseSkill):
     name = "cross_agent_query"
-    description = "Fleet-wide query: find similar errors or code patterns across all Sentinel agents"
-    trigger_intents = ["cross_agent_query"]
+    description = "Search across all Sentinel Mesh Agents for similar errors, code patterns, or patch history. Use when Anthony says 'find this error across all agents', 'did any other agents have this issue', 'search agent codebases for [pattern]', 'cross-fleet error search', or 'check if [issue] happened on other servers'. NOT for: listing agents (use agent_registry), sending commands to agents (use agent_exec), or searching the local codebase (use server_shell search_code)."
+    trigger_intents = ["cross_agent_query", "fleet_search", "agent_context_search"]
     approval_category = ApprovalCategory.NONE
 
     async def execute(self, params: dict, original_message: str) -> SkillResult:

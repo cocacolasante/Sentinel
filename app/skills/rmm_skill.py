@@ -8,9 +8,12 @@ RMMManageSkill — run commands, restart services/containers, manage agents
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
+
+logger = logging.getLogger(__name__)
 
 # ── Severity badges ───────────────────────────────────────────────────────────
 
@@ -41,8 +44,11 @@ def _fmt_ts(ts) -> str:
 class RMMReadSkill(BaseSkill):
     name = "rmm_read"
     description = (
-        "Read RMM infrastructure data: list managed servers, device health, "
-        "agent status, recent events, incidents, and inventory reports"
+        "Read remote machine management data: list all devices, check online/offline status, "
+        "view recent events, get system inventory (CPU, RAM, disk). Use when Anthony says "
+        "'check server status', 'list managed devices', 'which servers are online', "
+        "'show RMM inventory', or 'are any servers down'. NOT for: running commands on servers "
+        "(use rmm_manage or agent_exec) or patching code (use patch_dispatch)."
     )
     trigger_intents = ["rmm_read"]
     approval_category = ApprovalCategory.NONE
@@ -96,7 +102,8 @@ class RMMReadSkill(BaseSkill):
                 args.append(project)
             sql += " ORDER BY is_online DESC, name ASC"
             rows = postgres.execute(sql, tuple(args) if args else None)
-        except Exception:
+        except Exception as e:
+            logger.warning("RMMReadSkill: DB query failed in _list_devices: %s", e)
             rows = []
 
         if not rows:
@@ -150,7 +157,8 @@ class RMMReadSkill(BaseSkill):
                 "SELECT * FROM rmm_devices WHERE node_id = %s OR name ILIKE %s LIMIT 1",
                 (node_id, f"%{node_id}%"),
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("RMMReadSkill: DB query failed in _get_device: %s", e)
             row = None
 
         if not row:
@@ -343,8 +351,11 @@ class RMMReadSkill(BaseSkill):
 class RMMManageSkill(BaseSkill):
     name = "rmm_manage"
     description = (
-        "Manage remote servers via RMM: run shell commands, restart services or containers, "
-        "install or upgrade MeshCentral agents, reboot servers"
+        "Manage remote servers via MeshCentral RMM: run commands, restart services, reboot "
+        "servers, install agents. Use when Anthony says 'restart [service] on [server]', "
+        "'reboot [server]', 'run command on [server]', or 'install agent on [server]'. "
+        "Requires CRITICAL approval. NOT for: reading status (use rmm_read) or code patches "
+        "(use patch_dispatch)."
     )
     trigger_intents = ["rmm_manage"]
     approval_category = ApprovalCategory.CRITICAL

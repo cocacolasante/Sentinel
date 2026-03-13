@@ -96,9 +96,12 @@ def _extract_search_term(message: str) -> str:
 class ResearchSkill(BaseSkill):
     name = "research"
     description = (
-        "Research queries: searches semantic memory (Qdrant) and the live codebase "
-        "(grep/find on /app) to return real context. Never defers — always returns "
-        "the best available data immediately."
+        "Research any topic using web search and Qdrant vector memory: search the web, retrieve "
+        "relevant stored context, synthesize findings. Use when Anthony says 'research [topic]', "
+        "'look up [subject]', 'find information about', 'what is [term]', 'search for [query]', "
+        "or 'what do you know about [topic]'. "
+        "NOT for: deep multi-source reports with email delivery (use deep_research), "
+        "code analysis (use bug_hunt), or architecture review (use arch_advisor)."
     )
     trigger_intents = ["research"]
 

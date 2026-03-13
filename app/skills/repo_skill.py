@@ -17,15 +17,23 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import subprocess
 from pathlib import Path
 
 from app.skills.base import ApprovalCategory, BaseSkill, SkillResult
 
+logger = logging.getLogger(__name__)
+
 
 class RepoReadSkill(BaseSkill):
     name = "repo_read"
-    description = "Browse, read, diff, or check status of the Brain's own codebase"
+    description = (
+        "Read code repository content: list files, read specific files, search code, view "
+        "directory structure. Use when Anthony says 'show me the code', 'read file [path]', "
+        "'what's in [directory]', 'search codebase for [pattern]', or 'list files in [path]'. "
+        "NOT for: making code changes (use repo_write) or running shell commands (use server_shell)."
+    )
     trigger_intents = ["repo_read"]
     approval_category = ApprovalCategory.NONE
 
@@ -68,7 +76,12 @@ class RepoReadSkill(BaseSkill):
 
 class RepoWriteSkill(BaseSkill):
     name = "repo_write"
-    description = "Create or edit a file in the Brain's own codebase"
+    description = (
+        "Make targeted code changes to files in a repository: create, edit, or patch files. "
+        "Use when Anthony says 'edit file', 'update the code', 'change [file] to', "
+        "'fix [bug] in [file]', or 'add [feature] to [file]'. Requires CRITICAL approval. "
+        "NOT for: reading code (use repo_read) or committing changes (use repo_commit)."
+    )
     trigger_intents = ["repo_write"]
     requires_confirmation = True
     approval_category = ApprovalCategory.CRITICAL
@@ -133,7 +146,12 @@ class RepoWriteSkill(BaseSkill):
 
 class RepoCommitSkill(BaseSkill):
     name = "repo_commit"
-    description = "Commit and/or push changes in the Brain's repository to GitHub"
+    description = (
+        "Stage and commit code changes to git with a message. Use when Anthony says 'commit "
+        "changes', 'git commit', 'save changes to git', or 'commit with message [text]'. "
+        "NOT for: making code changes (use repo_write) or pushing to remote "
+        "(combine with server_shell for git push)."
+    )
     trigger_intents = ["repo_commit"]
     requires_confirmation = True
     approval_category = ApprovalCategory.CRITICAL
@@ -198,7 +216,12 @@ class CodeChangeSkill(BaseSkill):
     """
 
     name = "code_change"
-    description = "Full self-modification workflow: branch → patch file → commit → push → open PR + auto-merge"
+    description = (
+        "Apply comprehensive code changes with full safety checks: read → patch → validate → "
+        "commit workflow. Use for multi-file refactors, bug fixes, or feature additions that "
+        "require reading existing code before modifying. NOT for: simple single-file edits "
+        "(use repo_write) or reading-only (use repo_read)."
+    )
     trigger_intents = ["code_change"]
     approval_category = ApprovalCategory.CRITICAL
 
@@ -309,7 +332,18 @@ class CodeChangeSkill(BaseSkill):
             log.append(f"Patched: {path}")
 
             _sh("git add -A")
-            _sh(f'git commit -m "{message}"')
+            # Pass commit message as a list to avoid shell injection
+            r_commit = subprocess.run(
+                ["git", "commit", "-m", message],
+                cwd=str(ws),
+                capture_output=True,
+                text=True,
+                env=_git_env(),
+            )
+            commit_out = (r_commit.stdout + r_commit.stderr).strip()
+            log.append(f"$ git commit -m <message>\n{commit_out}" if commit_out else "$ git commit -m <message>")
+            if r_commit.returncode != 0:
+                raise RuntimeError(f"git commit failed (exit {r_commit.returncode}): {commit_out}")
             _sh(f"git push origin {branch}")
 
             pr_out = _sh(f'gh pr create --title "{pr_title}" --body "{pr_body}" --base main')

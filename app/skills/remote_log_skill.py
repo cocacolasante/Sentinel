@@ -19,7 +19,7 @@ settings = get_settings()
 
 class RemoteLogSkill(BaseSkill):
     name = "remote_log_analysis"
-    description = "Analyze error logs from a remote Sentinel agent and generate a patch suggestion"
+    description = "Analyze error logs from a remote Sentinel Mesh Agent: fetch stack traces, run LLM root-cause analysis, and generate a patch suggestion. Use when Anthony says 'analyze logs from [agent]', 'what\\'s causing errors on [server]', 'diagnose [agent] error', 'root cause analysis for [app]', or 'debug remote agent [name]'. NOT for: dispatching the patch (use patch_dispatch) or reading local logs (use server_shell with read_logs action)."
     trigger_intents = ["remote_log_analysis"]
     approval_category = ApprovalCategory.NONE
 
