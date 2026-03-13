@@ -293,15 +293,111 @@ CRITICAL — act now, never defer:
 - You may NEVER ask the user to run commands, paste output, or "send you" anything.
 """
 
-# ── Model roster (Phase 1 uses Claude only) ────────────────────────────────────
+# ── Model tier constants (resolved from config so .env can override) ──────────
+_HAIKU = settings.model_haiku    # "claude-haiku-4-5-20251001"
+_SONNET = settings.model_sonnet  # "claude-sonnet-4-6"
+_OPUS = settings.model_opus      # "claude-opus-4-6"
+
+# ── Model roster — 3-tier Anthropic-only routing ──────────────────────────────
 MODEL_MAP: dict[str, tuple[str, int]] = {
-    "code": ("claude-opus-4-6", 16_000),
-    "reasoning": ("claude-sonnet-4-6", 4096),
-    "writing": ("claude-sonnet-4-6", 4096),
-    "research": ("claude-sonnet-4-6", 4096),
-    "classify": ("claude-haiku-4-5-20251001", 512),
-    "default": ("claude-sonnet-4-6", 2048),
+    # Haiku 4.5 — speed layer: fast lookups, classification, triage, summaries
+    "classify":       (_HAIKU,  512),
+    "triage":         (_HAIKU,  1024),
+    "alert_summary":  (_HAIKU,  1024),
+    "ticket_summary": (_HAIKU,  1024),
+    "quick_qa":       (_HAIKU,  2048),
+    "status_check":   (_HAIKU,  512),
+    "short_script":   (_HAIKU,  2048),
+    # Sonnet 4.6 — default workhorse: code, planning, writing, multi-turn
+    "code":           (_SONNET, 4096),
+    "reasoning":      (_SONNET, 4096),
+    "writing":        (_SONNET, 4096),
+    "research":       (_SONNET, 4096),
+    "planning":       (_SONNET, 4096),
+    "debugging":      (_SONNET, 4096),
+    "documentation":  (_SONNET, 2048),
+    "default":        (_SONNET, 2048),
+    # Opus 4.6 — deep reasoning: architecture, complex refactoring, orchestration
+    "architecture":      (_OPUS, 8192),
+    "complex_refactor":  (_OPUS, 8192),
+    "codebase_analysis": (_OPUS, 8192),
+    "long_horizon":      (_OPUS, 4096),
+    "multi_agent":       (_OPUS, 4096),
 }
+
+# ── Intent → task_type mapping ────────────────────────────────────────────────
+# Maps classified intent names to MODEL_MAP task_type keys.
+# Intents not listed fall through to agent.preferred_model or "default" (Sonnet).
+_INTENT_TASK_TYPE: dict[str, str] = {
+    # Haiku-tier: fast reads, status checks, triage
+    "sentry_read":     "triage",
+    "rmm_read":        "status_check",
+    "task_read":       "status_check",
+    "cicd_read":       "status_check",
+    "github_read":     "status_check",
+    "calendar_read":   "quick_qa",
+    "contacts_read":   "quick_qa",
+    "reddit_read":     "ticket_summary",
+    "slack_read":      "ticket_summary",
+    # Sonnet-tier: code, planning, writing, research
+    "se_implement":    "code",
+    "se_plan":         "planning",
+    "se_spec":         "planning",
+    "repo_write":      "code",
+    "code":            "code",
+    "research":        "research",
+    "deep_research":   "research",
+    "content_draft":   "writing",
+    "social_caption":  "writing",
+    "ad_copy":         "writing",
+    "debugging":       "debugging",
+    "cicd_debug":      "debugging",
+    "bug_hunt":        "debugging",
+    "data_intelligence": "reasoning",
+    # Opus-tier: architecture, complex multi-phase work
+    "arch_advisor":    "architecture",
+    "se_workflow":     "architecture",
+    "se_review":       "complex_refactor",
+}
+
+# Intents that must NEVER auto-escalate to Opus (simple lookups only)
+_NO_AUTO_OPUS: frozenset[str] = frozenset({
+    "calendar_read", "task_read", "rmm_read", "slack_read",
+    "contacts_read", "reddit_read", "cicd_read", "github_read",
+    "sentry_read",
+})
+
+
+def _resolve_task_type(intent: str, confidence: float) -> str:
+    """
+    Map an intent + confidence score to a MODEL_MAP task_type key.
+
+    Low-confidence signals are escalated one tier up:
+      Haiku-tier → Sonnet ("default")
+      Sonnet-tier → Opus ("architecture") — only for intents allowed to escalate
+    """
+    s = get_settings()
+    base_type = _INTENT_TASK_TYPE.get(intent, "default")
+
+    if confidence < s.confidence_escalate_threshold and intent not in _NO_AUTO_OPUS:
+        base_model, _ = MODEL_MAP.get(base_type, MODEL_MAP["default"])
+        if base_model == _HAIKU:
+            logger.info(
+                "ESCALATION | intent={} confidence={:.2f} | Haiku→Sonnet",
+                intent, confidence,
+            )
+            return "default"
+        if base_model == _SONNET:
+            logger.info(
+                "ESCALATION | intent={} confidence={:.2f} | Sonnet→Opus",
+                intent, confidence,
+            )
+            return "architecture"
+
+    if confidence < s.confidence_review_threshold:
+        logger.debug("LOW_CONFIDENCE | intent={} confidence={:.2f} | flagged for review", intent, confidence)
+
+    return base_type
 
 # ── Agentic tool schemas (passed to Claude tool_use API) ───────────────────────
 AGENTIC_TOOLS: list[dict] = [
@@ -418,19 +514,128 @@ class LLMRouter:
         return MODEL_MAP.get(task_type, MODEL_MAP["default"])
 
     def _build_system_prompt(self, agent: "Agent | None" = None) -> str:
-        """Combine agent personality (or default) with TELOS context block."""
+        """Combine agent personality (or default) with TELOS context block (plain string)."""
         from app.agents.base import Agent  # avoid circular at module level
 
         if agent and agent.name != "default":
-            # Specialized agents use their own prompt but must still have guardrails
             agent_prompt = f"{agent.system_prompt}\n\n{_CAPABILITY_GUARDRAILS}"
         else:
-            agent_prompt = DEFAULT_AGENT_PROMPT  # already contains all rules
+            agent_prompt = DEFAULT_AGENT_PROMPT
 
         telos_block = _telos_loader.get_block()
         if telos_block:
             return f"{agent_prompt}\n\n{telos_block}"
         return agent_prompt
+
+    def _build_system_prompt_blocks(self, agent: "Agent | None" = None) -> list[dict]:
+        """
+        Return system prompt as structured content blocks with cache_control.
+
+        The large static persona/rules block is marked ephemeral so Anthropic
+        can cache it across requests — reducing input token cost by ~90% on cache hits.
+        """
+        if agent and agent.name != "default":
+            agent_prompt = f"{agent.system_prompt}\n\n{_CAPABILITY_GUARDRAILS}"
+        else:
+            agent_prompt = DEFAULT_AGENT_PROMPT
+
+        blocks: list[dict] = [
+            {
+                "type": "text",
+                "text": agent_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+
+        telos_block = _telos_loader.get_block()
+        if telos_block:
+            blocks.append({
+                "type": "text",
+                "text": telos_block,
+                "cache_control": {"type": "ephemeral"},
+            })
+
+        return blocks
+
+    @staticmethod
+    def _estimate_tokens(text: str) -> int:
+        """Fast token estimate: ~1.3 tokens per whitespace-separated word. No external deps."""
+        return int(len(text.split()) * 1.3)
+
+    def _opus_gate(
+        self,
+        model: str,
+        intent: str,
+        task_type: str,
+        confidence: float,
+    ) -> str:
+        """
+        Log all Opus routing decisions for cost review.
+
+        Writes to brain:opus:log:{today} Redis list (48h TTL).
+        Returns the model unchanged — this is a log-only gate in Phase 1.
+        """
+        if model != _OPUS:
+            return model
+
+        justification = (
+            f"intent={intent} task_type={task_type} confidence={confidence:.2f}"
+        )
+        logger.info("OPUS_GATE | {} | allowed=true", justification)
+
+        try:
+            today = cost_tracker._today()
+            cost_tracker._r.lpush(f"brain:opus:log:{today}", justification)
+            cost_tracker._r.expire(f"brain:opus:log:{today}", 172_800)
+        except Exception:
+            pass
+
+        return model
+
+    def escalate(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+        agent: "Agent | None" = None,
+        intent: str = "default",
+        from_model: str = "",
+        reason: str = "",
+    ) -> str:
+        """
+        Escalate to the next model tier when a lower-tier response was insufficient.
+
+        Logs the escalation to Redis for dashboard visibility.
+        Maps: Haiku→Sonnet, Sonnet→Opus.
+        """
+        from app.agents.base import Agent as _Agent
+
+        tier_up: dict[str, str] = {_HAIKU: "default", _SONNET: "architecture"}
+        current_model = from_model or MODEL_MAP.get(
+            _INTENT_TASK_TYPE.get(intent, "default"), MODEL_MAP["default"]
+        )[0]
+        escalated_task_type = tier_up.get(current_model, "architecture")
+        escalated_model, escalated_max_tokens = MODEL_MAP[escalated_task_type]
+
+        logger.warning(
+            "ESCALATION_RETRY | from={} to={} intent={} reason={}",
+            current_model, escalated_model, intent, reason,
+        )
+        try:
+            today = cost_tracker._today()
+            cost_tracker._r.incr(
+                f"brain:escalations:{today}:{current_model}:{escalated_model}"
+            )
+        except Exception:
+            pass
+
+        esc_agent = _Agent(
+            name=f"escalated_{escalated_task_type}",
+            display_name="Escalated",
+            system_prompt="",
+            preferred_model=escalated_model,
+            max_tokens=escalated_max_tokens,
+        )
+        return self.route(message, history, esc_agent, intent=intent, confidence=1.0)
 
     @retry(
         retry=retry_if_not_exception_type(anthropic.BadRequestError),
@@ -443,22 +648,33 @@ class LLMRouter:
         message: str,
         history: list[dict] | None = None,
         agent: "Agent | None" = None,
+        intent: str = "default",
+        confidence: float = 1.0,
     ) -> str:
         """
         Route a message to the appropriate LLM and return the response text.
 
         Args:
-            message: The user's message (may be augmented with context).
-            history: Prior turns in Anthropic message format.
-            agent:   Optional Agent personality — drives model, token budget, system prompt.
+            message:    The user's message (may be augmented with context).
+            history:    Prior turns in Anthropic message format.
+            agent:      Optional Agent personality — drives model, token budget, system prompt.
+            intent:     Classified intent name — used for intent-aware model selection.
+            confidence: Intent classification confidence (0–1) — low values escalate tier.
         """
-        if agent:
+        if agent and agent.name not in ("default", "") and agent.preferred_model != _SONNET:
+            # Specialized agents with an explicit non-default model are respected
             model = agent.preferred_model
             max_tokens = agent.max_tokens
         else:
-            model, max_tokens = self._select_model("default")
+            task_type = _resolve_task_type(intent, confidence)
+            model, max_tokens = self._select_model(task_type)
+            # Honor agent max_tokens override when set to a non-default value
+            if agent and agent.max_tokens != 2048:
+                max_tokens = agent.max_tokens
 
-        system = self._build_system_prompt(agent)
+        model = self._opus_gate(model, intent, _INTENT_TASK_TYPE.get(intent, "default"), confidence)
+
+        system_blocks = self._build_system_prompt_blocks(agent)
 
         messages: list[dict] = []
         if history:
@@ -473,7 +689,7 @@ class LLMRouter:
         response = self.client.messages.create(
             model=model,
             max_tokens=max_tokens,
-            system=system,
+            system=system_blocks,
             messages=messages,
         )
         latency_s = time.monotonic() - t0
@@ -494,7 +710,7 @@ class LLMRouter:
             )
 
             agent_name = agent.name if agent else "default"
-            LLM_REQUESTS.labels(model=model, agent=agent_name, source="chat", intent="default").inc()
+            LLM_REQUESTS.labels(model=model, agent=agent_name, source="chat", intent=intent).inc()
             LLM_COST_USD.labels(model=model, agent=agent_name).inc(call_cost.call_cost_usd)
             LLM_TOKENS.labels(model=model, direction="input").inc(input_tok)
             LLM_TOKENS.labels(model=model, direction="output").inc(output_tok)
@@ -535,6 +751,9 @@ class LLMRouter:
         agent: "Agent | None" = None,
         tool_executor: Callable[[str, dict], Awaitable[str]] | None = None,
         max_rounds: int = 8,
+        intent: str = "default",
+        confidence: float = 1.0,
+        extra_kwargs: dict | None = None,
     ) -> str:
         """
         Agentic tool-use loop.  Calls the LLM repeatedly until stop_reason is
@@ -547,14 +766,22 @@ class LLMRouter:
             tool_executor: Async callable(tool_name, params) → result string.
                            When None, tools are not passed and a single-shot call is made.
             max_rounds:    Safety ceiling on the tool-call loop.
+            intent:        Classified intent name — used for intent-aware model selection.
+            confidence:    Intent classification confidence (0–1).
+            extra_kwargs:  Additional kwargs merged into the API call (e.g. betas for 1M context).
         """
-        if agent:
+        if agent and agent.name not in ("default", "") and agent.preferred_model != _SONNET:
             model = agent.preferred_model
             max_tokens = agent.max_tokens
         else:
-            model, max_tokens = self._select_model("default")
+            task_type = _resolve_task_type(intent, confidence)
+            model, max_tokens = self._select_model(task_type)
+            if agent and agent.max_tokens != 2048:
+                max_tokens = agent.max_tokens
 
-        system = self._build_system_prompt(agent)
+        model = self._opus_gate(model, intent, _INTENT_TASK_TYPE.get(intent, "default"), confidence)
+
+        system_blocks = self._build_system_prompt_blocks(agent)
 
         messages: list[dict] = []
         if history:
@@ -572,11 +799,13 @@ class LLMRouter:
             kwargs: dict = dict(
                 model=model,
                 max_tokens=max_tokens,
-                system=system,
+                system=system_blocks,
                 messages=messages,
             )
             if tools:
                 kwargs["tools"] = tools
+            if extra_kwargs:
+                kwargs.update(extra_kwargs)
 
             try:
                 response = await asyncio.to_thread(self.client.messages.create, **kwargs)
@@ -599,7 +828,7 @@ class LLMRouter:
 
                 agent_name = agent.name if agent else "default"
                 LLM_REQUESTS.labels(
-                    model=model, agent=agent_name, source="chat", intent="agentic"
+                    model=model, agent=agent_name, source="chat", intent=intent
                 ).inc()
                 LLM_COST_USD.labels(model=model, agent=agent_name).inc(call_cost.call_cost_usd)
                 LLM_TOKENS.labels(model=model, direction="input").inc(input_tok)
