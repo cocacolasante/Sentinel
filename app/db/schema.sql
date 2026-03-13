@@ -408,3 +408,73 @@ CREATE TABLE IF NOT EXISTS github_issues (
 CREATE INDEX IF NOT EXISTS idx_github_issues_repo    ON github_issues (repo, received_at DESC);
 CREATE INDEX IF NOT EXISTS idx_github_issues_status  ON github_issues (triage_status, received_at DESC);
 CREATE INDEX IF NOT EXISTS idx_github_issues_task    ON github_issues (task_id);
+
+-- ── Phase 4 — Infrastructure & Autonomous Loop ───────────────────────────────
+
+CREATE TABLE IF NOT EXISTS sentinel_execution_log (
+    id              BIGSERIAL   PRIMARY KEY,
+    skill_name      TEXT        NOT NULL,
+    status          TEXT        NOT NULL,   -- "success" | "failure" | "error"
+    goal_id         TEXT,
+    duration_ms     FLOAT,
+    tokens_used     INT,
+    parameters      JSONB       DEFAULT '{}',
+    error_message   TEXT,
+    summary         TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_exec_log_skill    ON sentinel_execution_log (skill_name, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_exec_log_goal     ON sentinel_execution_log (goal_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_exec_log_status   ON sentinel_execution_log (status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS sentinel_goal_queue (
+    id          TEXT        PRIMARY KEY,
+    title       TEXT        NOT NULL,
+    description TEXT,
+    created_by  TEXT        NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    priority    FLOAT       NOT NULL DEFAULT 5.0,
+    status      TEXT        NOT NULL DEFAULT 'pending',
+    skill_hint  TEXT,
+    parent_goal_id TEXT,
+    deadline    TIMESTAMPTZ,
+    metadata    JSONB       DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_goal_queue_status ON sentinel_goal_queue (status, priority DESC);
+
+CREATE TABLE IF NOT EXISTS sentinel_reflection_reports (
+    id          BIGSERIAL   PRIMARY KEY,
+    report      JSONB       NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sentinel_audit (
+    id          BIGSERIAL   PRIMARY KEY,
+    session_id  TEXT,
+    action      TEXT        NOT NULL,
+    target      TEXT,
+    outcome     TEXT,
+    detail      JSONB       DEFAULT '{}',
+    pr_url      TEXT,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sentinel_audit_action  ON sentinel_audit (action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sentinel_audit_outcome ON sentinel_audit (outcome, created_at DESC);
+
+-- ── Phase 5 — Prompt A/B Testing ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS sentinel_prompt_ab_tests (
+    id              SERIAL PRIMARY KEY,
+    skill_name      TEXT NOT NULL,
+    variant         TEXT NOT NULL,           -- "control" | "treatment"
+    prompt_hash     TEXT NOT NULL,
+    calls_total     INT DEFAULT 0,
+    calls_success   INT DEFAULT 0,
+    avg_tokens      FLOAT DEFAULT 0,
+    avg_duration_ms FLOAT DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    last_updated    TIMESTAMPTZ DEFAULT NOW(),
+    is_active       BOOL DEFAULT TRUE,
+    UNIQUE(skill_name, variant, prompt_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_prompt_ab_skill ON sentinel_prompt_ab_tests (skill_name, is_active);

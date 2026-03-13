@@ -41,6 +41,24 @@ Intents:
   fleet_search     — alias for cross_agent_query: search across all mesh agents
   agent_context_search — alias for cross_agent_query: find patterns/errors across agents
   sentry_to_tasks  — alias for sentry_errors_create_approval_tasks: bulk-create tasks from Sentry errors
+  docker_drift     — check or auto-correct Docker Compose drift on a server
+  cert_check       — check SSL/TLS certificate expiry for domains
+  patch_audit      — audit and apply OS security patches on a server
+  dns_audit        — audit DNS records (SPF, DMARC, DKIM, MX) for domains
+  backup_check     — verify backup recency and optionally test restore
+  infra_snapshot   — snapshot server state to Redis for rollback
+  infra_rollback   — rollback server to a previous snapshot
+  goal             — add a goal to the autonomous execution queue
+  goal_status      — list or check goal queue and goal progress
+  wake             — manual trigger of wake loop / goal queue check
+  reflect          — run nightly reflection on last 24h execution data
+  plan_goal        — plan steps for a goal without executing (dry run)
+  autonomy_status       — check/display current autonomy gradient score and trend
+  proposal_status       — list pending or recently dispatched improvement proposals
+  prompt_refine         — propose, evaluate, or apply A/B prompt variant for a skill
+  skill_evolve          — write a new skill from a description (requires opt-in flag)
+  self_improvement_status — show Phase 4/5 self-improvement dashboard summary
+  post_merge_hook       — (internal) trigger post-merge reload after sentinel/ PR merges
 """
 
 import json
@@ -172,6 +190,21 @@ Intent-specific param examples:
   code:           {{}}
   skill_discover: {{}}
   chat:           {{}}
+  docker_drift:   {{"server": "localhost", "auto_correct": false, "dry_run": true}}
+  cert_check:     {{"action": "check_all" | "check" | "renew", "domain": "example.com", "server": "localhost"}}
+  patch_audit:    {{"server": "localhost", "auto_apply": false, "dry_run": true, "severity_threshold": "medium"}}
+  dns_audit:      {{"action": "audit_all" | "audit", "domain": "example.com"}}
+  backup_check:   {{"server": "localhost", "test_restore": false, "backup_path": "/var/backups/sentinel"}}
+  infra_rollback: {{"action": "rollback" | "list", "server": "localhost", "snapshot_key": ""}}
+  goal:           {{"title": "Check docker drift on all servers", "description": "...", "priority": 5.0, "skill_hint": "docker_drift"}}
+  goal_status:    {{"action": "list", "limit": 10}}
+  reflect:        {{"lookback_hours": 24}}
+  plan_goal:      {{"goal_id": "", "title": "Plan docker drift check", "description": "..."}}
+  autonomy_status:        {{}}
+  proposal_status:        {{"limit": 10}}
+  prompt_refine:          {{"skill_name": "docker_drift", "action": "propose" | "evaluate" | "apply"}}
+  skill_evolve:           {{"description": "A skill that does X", "title": "new_skill_name"}}
+  self_improvement_status: {{"period_hours": 24}}
 
 Routing guidance:
   SE Workflow Pipeline:
@@ -330,6 +363,29 @@ Routing guidance:
   - "cross-agent errors" | "same error on multiple agents" | "fleet-wide search" → cross_agent_query
   - "across all agents", "cross-fleet", "fleet-wide", "search agent codebases", "all agents had this", "other servers had this", "find this error everywhere", "check all remotes" → cross_agent_query (fleet_search / agent_context_search aliases also map here)
   - "analyze agent logs" | "agent error analysis" | "remote log" → remote_log_analysis
+  - "fix failing tests" | "auto-patch" | "self heal" | "heal tests" | "fix the tests" → self_heal, params: {{test_path, repo_path}}
+  - "scaffold a project" | "build me a X service" | "create a new project" → project_scaffold, params: {{description, slug}}
+  - "audit dependencies" | "check for CVEs" | "scan packages for vulnerabilities" → audit_deps, params: {{repo_path}}
+  - "generate tests for" | "write unit tests for" | "create tests for" → generate_tests, params: {{source_path, repo_path}}
+  - "verify the deploy" | "check deployment health" | "confirm deploy" → verify_deploy, params: {{base_url}}
+  - "check docker drift", "docker compose drift", "is docker drifted", "detect docker drift" → docker_drift with server extracted (default localhost)
+  - "auto-correct docker drift", "fix docker drift", "correct docker compose" → docker_drift with auto_correct=true
+  - "check ssl certs", "check certificates", "ssl expiry", "cert status", "tls expiry" → cert_check with action=check_all
+  - "audit dns", "check dns records", "spf check", "dmarc check", "dkim check", "dns health" → dns_audit
+  - "check backups", "verify backups", "backup status", "is backup recent", "backup health" → backup_check
+  - "test restore", "test backup restore" → backup_check with test_restore=true
+  - "rollback infra", "rollback server", "restore snapshot", "infra rollback" → infra_rollback
+  - "list snapshots", "show infra snapshots" → infra_rollback with action=list
+  - "add a goal", "queue a goal", "new goal", "schedule a goal" → goal with title extracted
+  - "show goals", "goal queue", "list goals", "pending goals", "what goals are queued" → goal_status
+  - "run wake cycle", "trigger wake", "check goal queue", "wake up" → wake
+  - "reflect on execution", "nightly reflection", "analyze last 24h", "skill patterns" → reflect
+  - "plan goal", "plan steps for", "create execution plan" → plan_goal
+  - "autonomy score", "check autonomy", "autonomy gradient", "autonomy status", "what's my autonomy score" → autonomy_status
+  - "pending proposals", "list proposals", "proposal queue", "improvement proposals" → proposal_status
+  - "refine prompt", "a/b test prompt", "improve skill prompt", "prompt variant" → prompt_refine
+  - "evolve a skill", "write a new skill", "create a skill", "generate skill" → skill_evolve
+  - "self improvement", "improvement dashboard", "improvement status", "show improvement metrics" → self_improvement_status
   Tech stack detection for project_create:
     - "python", "fastapi", "flask", "django", "rest api" in description → tech_stack=python or fastapi/flask/django
     - "react", "frontend", "ui" → tech_stack=react
@@ -388,6 +444,18 @@ patch_dispatch   — sign and send a code patch to a remote Sentinel Mesh Agent
 cross_agent_query — fleet-wide query: find similar errors across all agents
 code            — software engineering help, code review, debugging, architecture — no file edits
 skill_discover  — when no skill exists for a task, analyze the gap and propose a new skill
+docker_drift    — check or auto-correct Docker Compose drift on a server
+cert_check      — check SSL/TLS certificate expiry for domains
+patch_audit     — audit and apply OS security patches on a server
+dns_audit       — audit DNS records (SPF, DMARC, DKIM, MX) for domains
+backup_check    — verify backup recency and optionally test restore
+goal            — add a new goal to the autonomous execution queue
+goal_status     — list or check the goal queue and goal progress
+wake            — trigger the 15-minute wake loop / goal queue check
+reflect         — run nightly reflection and self-improvement analysis
+autonomy_status — check the current autonomy gradient score and trend
+proposal_status — list pending or recently dispatched improvement proposals
+self_improvement_status — show self-improvement dashboard summary
 chat            — anything else: analysis, writing, questions, conversation"""
 
 

@@ -1902,3 +1902,79 @@ async def _investigate_and_fix(task_id: int, issue_params: dict) -> dict:
         "github_url": gh_url,
         "status": final_status,
     }
+
+
+# ── Self-Heal Pipeline ─────────────────────────────────────────────────────────
+
+async def _self_heal_pipeline(task_id: int, params: dict) -> dict:
+    """
+    Autonomous self-heal pipeline:
+    1. Index code
+    2. Run tests
+    3. If failures: generate patch → validate → commit PR
+    4. If no failures: return early
+    """
+    import json as _json
+    repo_path: str = params.get("repo_path", "/root/sentinel-workspace")
+    max_retries: int = int(params.get("max_retries", 2))
+
+    from app.skills.code_index_skill import CodeIndexSkill
+    from app.skills.test_runner_skill import TestRunnerSkill
+    from app.skills.patch_generator_skill import PatchGeneratorSkill
+    from app.skills.sandbox_validator_skill import SandboxValidatorSkill
+    from app.skills.git_commit_skill import GitCommitSkill
+
+    # 1. Index repo
+    try:
+        idx = CodeIndexSkill()
+        await idx.execute({"repo_path": repo_path}, "")
+    except Exception:
+        pass
+
+    # 2. Run tests
+    runner = TestRunnerSkill()
+    run_result = await runner.execute({"repo_path": repo_path}, "")
+    try:
+        run_data = _json.loads(run_result.context_data)
+    except Exception:
+        run_data = {}
+
+    failures = run_data.get("failures", [])
+    if not failures:
+        return {"ok": True, "summary": "no patch needed — all tests pass", "task_id": task_id}
+
+    # 3. Generate + validate patch
+    patcher = PatchGeneratorSkill()
+    validator = SandboxValidatorSkill()
+
+    for attempt in range(max_retries):
+        patch_result = await patcher.execute(
+            {"failures": failures, "repo_path": repo_path, "attempt": attempt},
+            "",
+        )
+        if patch_result.is_error or not patch_result.context_data:
+            continue
+
+        diff = patch_result.context_data
+
+        # Validate in sandbox
+        val_result = await validator.execute({"diff": diff, "repo_path": repo_path}, "")
+        try:
+            val_data = _json.loads(val_result.context_data)
+        except Exception:
+            val_data = {}
+
+        if val_data.get("ok"):
+            # 4. Commit PR
+            committer = GitCommitSkill()
+            commit_result = await committer.execute(
+                {"diff": diff, "test_id": str(task_id), "repo_path": repo_path},
+                "",
+            )
+            return {
+                "ok": True,
+                "summary": f"patch applied and PR opened: {commit_result.context_data}",
+                "task_id": task_id,
+            }
+
+    return {"ok": False, "summary": "could not produce a valid patch after retries", "task_id": task_id}

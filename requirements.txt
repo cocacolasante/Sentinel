@@ -55,3 +55,12 @@ neo4j>=5.0
 
 # Cron schedule parsing (Reddit digest scheduler)
 croniter>=1.3
+
+# Infrastructure autonomy skills (Phase 4)
+dnspython>=2.6
+unidiff>=0.7
+boto3>=1.34        # BackupVerifySkill — S3 backup checks (optional)
+prometheus-client>=0.20
+
+# Async Redis client (Phase 4+5)
+# redis[asyncio] is already included via redis==5.2.1 above
