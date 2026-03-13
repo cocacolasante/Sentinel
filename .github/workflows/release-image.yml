@@ -1,25 +1,41 @@
 name: Release Image
 
 on:
+  # Fires when CI completes successfully on main (human-triggered pushes).
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    # Only fire when CI completes on main (i.e. after a PR is approved and merged).
-    # sentinel/* branch CI runs are validation-only — no image is built until
-    # the human approves and merges the PR.
+    branches: [main]
+
+  # Fires directly on push to main — catches auto-merge squashes made by
+  # GITHUB_TOKEN (those don't re-trigger CI, so workflow_run never fires).
+  push:
     branches: [main]
 
 jobs:
   push:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # For workflow_run: only run if CI passed.
+    # For push: always run (branch protection already enforced CI on the PR).
+    if: >
+      (github.event_name == 'push') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
+      - name: Resolve SHA
+        id: sha
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ steps.sha.outputs.sha }}
 
       - uses: docker/login-action@v3
         with:
@@ -47,8 +63,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            GIT_SHA=${{ github.event.workflow_run.head_sha }}
-            BUILD_TIMESTAMP=${{ github.event.workflow_run.updated_at }}
+            GIT_SHA=${{ steps.sha.outputs.sha }}
+            BUILD_TIMESTAMP=${{ github.run_started_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -57,4 +73,4 @@ jobs:
           curl -fsS -X POST https://sentinelai.cloud/webhooks/deploy \
             -H "Content-Type: application/json" \
             -H "X-Deploy-Secret: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}" \
-            -d "{\"image\": \"$IMAGE:latest\", \"sha\": \"${{ github.event.workflow_run.head_sha }}\"}"
+            -d "{\"image\": \"$IMAGE:latest\", \"sha\": \"${{ steps.sha.outputs.sha }}\"}"
